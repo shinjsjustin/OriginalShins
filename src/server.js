@@ -15,6 +15,7 @@ const ideaRoutes = require('./routes/ideas');
 const topicRoutes = require('./routes/topics');
 const searchRoutes = require('./routes/search');
 const overviewRoutes = require('./routes/overview');
+const pinRoutes = require('./routes/pins');
 // TODO: Import additional route files here as you build out the app:
 //   const itemRoutes = require('./routes/item');
 
@@ -91,6 +92,15 @@ app.use('/api/search', isAuth, searchRoutes);
 // rather than expiring, because the only thing that can make it wrong is a
 // write the same server just handled.
 app.use('/api/overview', isAuth, overviewRoutes);
+
+// The Thoughts page's pinned set. Deliberately WITHOUT `invalidatesOverview`,
+// unlike the four content mounts above: `pins` is not one of the six tables the
+// Overview payload is built from, so a pin can never make that cache wrong.
+// Running the middleware here would throw away a fully valid cached payload on
+// every pin click — the pin toggle is the most-clicked control on the page —
+// and buy nothing. If a later phase puts pinned state into the Overview
+// payload, this mount joins the list above; until then it must not.
+app.use('/api/pins', isAuth, pinRoutes);
 // TODO: Add more protected route groups here:
 //   app.use('/api/items', isAuth, itemRoutes);
 
