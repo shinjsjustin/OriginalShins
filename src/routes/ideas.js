@@ -18,6 +18,7 @@ const {
     updateIdea,
     removeIdea,
 } = require('../lib/ideas');
+const { removePinsForItem } = require('../lib/pins');
 const { findTopicsForIdeas } = require('../lib/topics');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { TREE_SPECS, reorderMembers, moveMember, inTransaction } = require('../lib/ordering');
@@ -175,6 +176,16 @@ router.delete('/:id', async (req, res) => {
         if (!removed) {
             return res.status(404).json({ error: 'Idea not found' });
         }
+
+        // Deliberately a second statement after the delete, NOT one transaction
+        // with it. A pin carries no foreign key to its item, so the window
+        // between these two lines cannot produce a wrong answer: findPins
+        // hydrates every pin through a join to the item's own table, and a pin
+        // pointing at an idea that no longer exists produces no joined row and
+        // so is already invisible to every reader. This call only stops dead
+        // rows accumulating — cleanup, not correctness. Please don't "fix" it
+        // into a transaction; there is no bug here to fix.
+        await removePinsForItem(req.user.id, 'idea', ideaId);
 
         res.status(204).end();
     } catch (err) {

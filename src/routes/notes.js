@@ -11,6 +11,7 @@ const {
 } = require('../lib/noteInput');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { findChapter } = require('../lib/chapters');
+const { removePinsForItem } = require('../lib/pins');
 const { findReferencesOverlappingChapter, insertReference } = require('../lib/references');
 const {
     findNoteById,
@@ -223,6 +224,16 @@ router.delete('/:id', async (req, res) => {
         if (!removed) {
             return res.status(404).json({ error: 'Note not found' });
         }
+
+        // Deliberately a second statement after the delete, NOT one transaction
+        // with it. A pin carries no foreign key to its item, so the window
+        // between these two lines cannot produce a wrong answer: findPins
+        // hydrates every pin through a join to the item's own table, and a pin
+        // pointing at a note that no longer exists produces no joined row and
+        // so is already invisible to every reader. This call only stops dead
+        // rows accumulating — cleanup, not correctness. Please don't "fix" it
+        // into a transaction; there is no bug here to fix.
+        await removePinsForItem(req.user.id, 'note', noteId);
 
         res.status(204).end();
     } catch (err) {
