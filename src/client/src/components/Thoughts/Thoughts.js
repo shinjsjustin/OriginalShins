@@ -1,6 +1,7 @@
 import React from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
+import TopicsField from './TopicsField';
 import useThoughtsData from './useThoughtsData';
 import usePins from './usePins';
 import useThoughtsView from './useThoughtsView';
@@ -12,11 +13,10 @@ import '../Styling/Thoughts.css';
 // ── What is here, and what is deliberately not ────────────────────────────
 //
 // This is the shell: the three hooks wired together, the top bar, the two
-// regions the rest of the page will fill, and the banners. The canvas is empty
-// on purpose — TopicsField and IdeaOrbit, the cards and their pins, and the
-// panel's rows and edit forms all arrive next, into the two slots below. The
-// shell is stood up first because it is what decides where the state lives,
-// and every piece that follows reads it from here rather than fetching again.
+// regions the rest of the page fills, and the banners. The topics view draws
+// itself now; IdeaOrbit and the panel's rows and edit forms arrive next, into
+// the same two slots. The shell decides where the state lives, and every piece
+// that follows reads it from here rather than fetching again.
 //
 // ── Three hooks, and why the page composes them rather than one of them ────
 //
@@ -44,8 +44,9 @@ import '../Styling/Thoughts.css';
 const noop = () => {};
 
 const Thoughts = () => {
-    const { ideaId, resetView } = useThoughtsView();
+    const { ideaId, showIdea, resetView } = useThoughtsView();
     const {
+        topics,
         ideas,
         isLoading,
         error: loadError,
@@ -55,6 +56,8 @@ const Thoughts = () => {
         pins,
         error: pinsError,
         actionError: pinsActionError,
+        isPinned,
+        togglePin,
     } = usePins();
 
     // The open idea comes out of the list the page already holds rather than a
@@ -96,9 +99,18 @@ const Thoughts = () => {
                         resizing under them. */}
                     <section className="thoughts-canvas" aria-label="Thoughts canvas">
                         {isLoading && <p className="thoughts-message">Loading your thoughts…</p>}
-                        {!isLoading && !error && (
+                        {!isLoading && !error && ideaId === null && (
+                            <TopicsField
+                                topics={topics}
+                                ideas={ideas}
+                                isPinned={isPinned}
+                                onTogglePin={togglePin}
+                                onShowIdea={showIdea}
+                            />
+                        )}
+                        {!isLoading && !error && ideaId !== null && (
                             <p className="thoughts-message">
-                                The cards are not drawn yet.
+                                The idea view is not drawn yet.
                             </p>
                         )}
                     </section>

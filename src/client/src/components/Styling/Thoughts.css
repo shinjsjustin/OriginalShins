@@ -157,3 +157,278 @@
 .thoughts-message--error {
   color: var(--color-danger);
 }
+
+/* ─── The topics field ───────────────────────────────────────────────────────
+
+   Everything below draws the topics view: the field of topic cards, and the
+   spotlight that opens one of them into a fan of its ideas.
+
+   ── The one rule this section must not break ───────────────────────────────
+
+   `.thoughts-cluster` is the hover region for a topic AND its fan AND the gaps
+   between them, and when it is open it is large enough to cover its
+   neighbours. It stays out of the way of those neighbours by never painting
+   above them: it takes no `z-index`, so it creates no stacking context, and
+   the cards inside it declare their own depth directly in the canvas's.
+
+   That means `.thoughts-cluster` may never be given `transform`, `opacity`
+   below 1, `filter`, `perspective`, `isolation` or `will-change`. Any one of
+   them makes it a stacking context, its whole box starts painting above the
+   cards behind it, and the topics under an open fan become unhoverable — the
+   exact failure the cluster exists to avoid. Animate the cards, not the
+   region.
+
+   ── Depths ────────────────────────────────────────────────────────────────
+
+     2  a topic card at rest — above every cluster region, including open ones
+     5  the open fan: its idea cards and its chip, above the faded field
+     6  the spotlit topic itself
+
+   Motion is `transform` and `opacity` only, both cheap to composite, and the
+   whole page's reduced-motion preference is already honoured globally in
+   index.css.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.thoughts-field {
+  /* The canvas's whole region, ignoring its padding: the layout functions keep
+     their own margin off the edges (FIELD_PADDING, FAN_EDGE_PADDING) and they
+     can only do that if the box they are measured against is the real one. */
+  position: absolute;
+  inset: 0;
+}
+
+.thoughts-cluster {
+  position: absolute;
+  /* No z-index. See above — this is load-bearing. */
+}
+
+/* ─── A card ─────────────────────────────────────────────────────────────── */
+
+.thoughts-bubble {
+  position: absolute;
+  z-index: 2;
+  border-radius: var(--radius-lg);
+  /* Rounded rectangle, not a circle: these carry a phrase, and a circle spends
+     its width on corners the text cannot use. */
+  background-color: var(--bg-alt);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  transform: scale(var(--bubble-lift, 1));
+  transition:
+    transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 200ms ease,
+    box-shadow 260ms ease;
+}
+
+.thoughts-bubble-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background: none;
+  border-radius: inherit;
+  color: inherit;
+  text-align: center;
+  overflow: hidden;
+}
+
+.thoughts-bubble-title {
+  /* Sized from the card rather than fixed: fieldLayout shrinks the cards when
+     a field has more topics than the canvas holds, and text that did not shrink
+     with them would be the thing that overflowed instead. */
+  font-size: calc(var(--font-base) * var(--bubble-scale, 1));
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.thoughts-bubble-subtitle {
+  font-size: calc(var(--font-sm) * var(--bubble-scale, 1));
+  color: var(--text-muted);
+}
+
+/* ─── The three kinds ────────────────────────────────────────────────────── */
+
+.thoughts-bubble--topic {
+  color: var(--text-primary);
+}
+
+/* Not a topic and drawn like one would be a lie about the corpus: there is no
+   "Unfiled" row anywhere, it is the absence of rows. Dashed and untinted, so it
+   reads as a gap in the field that happens to be clickable. */
+.thoughts-bubble--unfiled {
+  background-color: transparent;
+  border: 1px dashed var(--color-accent);
+  color: var(--text-secondary);
+}
+
+.thoughts-bubble--unfiled .thoughts-bubble-title {
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* The fan is the page's foreground while it is open, and it opens over a field
+   that has faded to almost nothing. Dark on the canvas's paper, which is the
+   strongest contrast this palette has and the reason the fan reads as lit. */
+.thoughts-bubble--idea {
+  background-color: var(--ground-raised);
+  border-color: var(--ground-line);
+  color: var(--on-ground);
+  box-shadow: var(--shadow-md);
+}
+
+.thoughts-bubble--idea .thoughts-bubble-subtitle {
+  color: var(--on-ground-soft);
+}
+
+.thoughts-bubble--note {
+  background-color: var(--bg-card);
+  border-color: var(--note-marker);
+}
+
+/* ─── Spotlight ──────────────────────────────────────────────────────────── */
+
+.thoughts-cluster.is-active .thoughts-bubble--topic,
+.thoughts-cluster.is-active .thoughts-bubble--unfiled {
+  --bubble-lift: 1.12;
+
+  z-index: 6;
+  box-shadow: var(--shadow-lg);
+}
+
+.thoughts-bubble.is-selected {
+  border-color: var(--color-primary);
+}
+
+/* Near-invisible, not gone. The field keeps its shape while one topic is lit,
+   and — the practical half — a card at 0.08 is still a hit target, so hovering
+   another topic is still how the reader moves the spotlight. */
+.thoughts-bubble.is-faded {
+  opacity: 0.08;
+  box-shadow: none;
+}
+
+/* ─── The fan ────────────────────────────────────────────────────────────── */
+
+.thoughts-fan {
+  position: absolute;
+  inset: 0;
+  /* Every fan on the field is mounted at all times so its cards have a closed
+     state to animate out of. `visibility` is what keeps the closed ones out of
+     the tab order and out of the accessibility tree — opacity alone would leave
+     a screen reader with every idea of every topic, all at once. It is delayed
+     on the way out so the closing animation is seen, and immediate on the way
+     in so the first card is focusable as it appears. */
+  visibility: hidden;
+  transition: visibility 0s linear 320ms;
+}
+
+.thoughts-cluster.is-active .thoughts-fan {
+  visibility: visible;
+  transition: visibility 0s linear 0s;
+}
+
+.thoughts-fan-item,
+.thoughts-fan-chip {
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  /* --fan-dx/--fan-dy are the vector back to the topic's centre, written per
+     card by TopicsField: closed, every card sits ON its topic, so opening is
+     one movement outwards rather than fifteen fades in place. */
+  transform: translate(var(--fan-dx, 0), var(--fan-dy, 0)) scale(0.55);
+  transition:
+    transform 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--fan-delay, 0ms),
+    opacity 180ms ease var(--fan-delay, 0ms);
+}
+
+.thoughts-cluster.is-active .thoughts-fan-item,
+.thoughts-cluster.is-active .thoughts-fan-chip {
+  z-index: 5;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.thoughts-cluster.is-active .thoughts-fan-item:hover {
+  transform: scale(1.06);
+}
+
+/* ─── Overflow: the second arc, and the chip that holds it ───────────────── */
+
+/* Past what one arc fits, fanLayout puts the rest on a second, wider arc and
+   asks for a chip at the end of the first. Those cards are placed and mounted
+   like any other — they are simply stowed under the chip until it is pressed,
+   which is why pressing it is an animation and not a load.
+
+   Stowed cards are hidden outright rather than on a delay: the direction that
+   matters is opening, and a card that is on its way back under the chip is
+   travelling behind the chip anyway. */
+.thoughts-fan-item.is-stowed {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(var(--fan-dx, 0), var(--fan-dy, 0)) scale(0.55);
+}
+
+.thoughts-fan-chip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background-color: var(--ground);
+  color: var(--on-ground-soft);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+.thoughts-cluster.is-active .thoughts-fan-chip:hover {
+  background-color: var(--ground-hover);
+  color: var(--on-ground);
+}
+
+/* ─── The pin ────────────────────────────────────────────────────────────── */
+
+/* Top-right of every card, on hover and while pinned — the spec's rule for all
+   three tiers. It is mounted and unmounted by the card rather than faded, so
+   there is no transition here to write: what would be animated does not exist
+   yet at the moment the animation would start. */
+.thoughts-bubble-pin {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  background-color: transparent;
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.thoughts-bubble-pin:hover {
+  opacity: 1;
+  background-color: var(--select-tint);
+}
+
+.thoughts-bubble.is-pinned .thoughts-bubble-pin {
+  opacity: 1;
+}
+
+.thoughts-bubble.is-pinned {
+  border-color: var(--color-accent);
+}
