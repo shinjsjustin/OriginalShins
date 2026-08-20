@@ -1,0 +1,778 @@
+/* ─── Overview ────────────────────────────────────────────────────────────────
+   /overview: the whole canon as one vertical axis, with three rails beside it.
+   As of 6d all three rails carry both halves of a tier — one stem per anchor,
+   and one chained arc path per group joining those anchors. The three are the
+   same references grouped by note, by idea and by topic, drawn by the same two
+   components; everything below that differs between them is a colour, and the
+   colour is one custom property looked up from `data-rail`.
+
+   Everything inside the <svg> is drawn in the fixed 560 x 1000 world defined
+   in overviewLayout.js. The viewBox fits that world to the page, and one <g>
+   inside it carries the pan/zoom transform.
+
+   ── The two custom properties that make zoom work ──────────────────────────
+
+   usePanZoom writes these onto the <svg> on every wheel notch and every drag,
+   and they are the only reason a zoom does not need a re-render:
+
+     --ov-inverse-scale   the reciprocal of the zoom. Every stroke width and
+                          font size below is `design size * this`, so a 4x
+                          zoom draws a 1/4 stroke and the reader sees a line
+                          that has not changed thickness.
+
+     data-detail-tier     the highest label tier the zoom has reached. Each
+                          label carries the tier at which it has room to be
+                          read (see tierForGap in axisModel.js); the rules at
+                          the foot of this file hide the ones that do not fit
+                          yet. That is a comparison CSS makes on its own, so
+                          Obadiah emerging from a crowd of one-chapter books
+                          costs React nothing.
+
+   Every colour, space and radius resolves to a token from :root in index.css.
+   The sizes that belong to this drawing and nothing else — tick weights, the
+   label type scale — are local custom properties here rather than literals in
+   the rules.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.overview-page {
+  --overview-navbar-clearance: 64px;
+  --overview-max-width: 1100px;
+  /* Whatever the header and the page's own padding leave, capped so the
+     drawing does not become absurd on a very tall display. */
+  --overview-svg-height: min(calc(100vh - 160px), 1200px);
+
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  padding: var(--overview-navbar-clearance) var(--space-md) var(--space-lg);
+}
+
+.overview-main {
+  max-width: var(--overview-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.overview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.overview-title {
+  margin: 0;
+  color: var(--text-white);
+  font-size: var(--font-xl);
+}
+
+.overview-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.overview-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+/* ─── Tier toggles ───────────────────────────────────────────────────────── */
+
+/* Which rails are drawn. Checkboxes rather than a segmented control because
+   the rails are not alternatives — the picture's whole claim is that one
+   passage appears on more than one of them at once.
+
+   The swatch takes its fill from --ov-rail-color, the same property the rail,
+   its stems and its arcs read, so a checkbox is the colour of the thing it
+   turns on by construction rather than by two literals that agree today. */
+
+.overview-toggles {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.overview-toggles-legend {
+  /* The group needs a name for a screen reader; sighted readers have three
+     labelled colour swatches, which say it faster than the word would. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.overview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.overview-toggle-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background-color: var(--ov-rail-color);
+  opacity: 0.35;
+}
+
+/* The swatch is the input's next sibling, so the checked state reaches it with
+   an adjacent-sibling selector rather than :has() — the one rule here that has
+   to work everywhere, since it is what says which rails are on. The label
+   colour below uses :has() and is a pure enhancement: without it the text
+   stays muted and the checkbox and swatch still say the same thing. */
+.overview-toggle input:checked + .overview-toggle-swatch {
+  opacity: 1;
+}
+
+.overview-toggle:has(input:checked) {
+  color: var(--text-primary);
+}
+
+/* ─── The search box ─────────────────────────────────────────────────────── */
+
+/* 6e's filter over titles. It sits in the same control row as the toggles and
+   the reset button because all three are answers to "what am I looking at?" —
+   and unlike /search, this box navigates nowhere: it dims the page it is on.
+
+   The status line under it is not decoration. A term that matches nothing dims
+   every arc on the diagram, which is the honest answer and looks exactly like
+   a page that has lost its data; this is the line that tells the two apart. */
+
+.overview-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.overview-search-label {
+  /* The same muted grey as the hint beside it, not --text-secondary: this row
+     sits on --bg-dark, and the darker token disappears into it. */
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.overview-search-input {
+  width: 12rem;
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.overview-search-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  /* Its own line under the box, and a line's worth of height reserved whether
+     or not it says anything. The status appears and disappears as the reader
+     types, and one sharing the control row would push the hint and the reset
+     button sideways and then down on the first keystroke — a row whose buttons
+     move under the cursor while it is being used. */
+  flex-basis: 100%;
+  min-height: 1.2em;
+}
+
+/* ─── The topic filter ───────────────────────────────────────────────────── */
+
+/* The plan's open question 2: a topic like "Faith" spans nearly the full
+   height of the canon, and enough of those read as static. ?topicId= narrows
+   every rail to one topic at once, and this banner is what keeps that state
+   from being invisible — an unexplained near-empty diagram is the one failure
+   a filter can produce that looks exactly like an empty corpus. */
+.overview-filter {
+  margin: 0;
+  padding: var(--space-xs) var(--space-md);
+  background-color: var(--color-warning-light);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.overview-filter-clear {
+  background: none;
+  padding: 0;
+  color: var(--color-accent);
+  font-size: var(--font-sm);
+  text-decoration: underline;
+}
+
+.overview-reset {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.overview-reset:hover {
+  background-color: var(--bg-alt);
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────────── */
+
+.overview-message {
+  margin: 0;
+  padding: var(--space-md);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.overview-message--error {
+  color: var(--color-danger);
+}
+
+/* ─── The drawing ────────────────────────────────────────────────────────── */
+
+.overview-figure {
+  margin: 0;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  /* The tooltip is `fixed`, so this is not what positions it. It is here
+     because the figure is the reader's frame of reference for the drawing and
+     anything added inside it later should be measured against this box. */
+  position: relative;
+}
+
+.overview-svg {
+  /* Written by usePanZoom; declared here so the page is correct for the one
+     frame before the first write, and so the fallback is the resting view. */
+  --ov-inverse-scale: 1;
+
+  /* Design sizes, in world units. Each is multiplied by the inverse scale
+     wherever it is used, which is what holds them still under zoom. */
+  --ov-axis-stroke: 1.6px;
+  --ov-book-stroke: 1.5px;
+  --ov-chapter-stroke: 1.1px;
+  --ov-rail-stroke: 1.2px;
+  --ov-stem-stroke: 0.9px;
+  --ov-arc-stroke: 1.1px;
+  /* The invisible stroke that catches the pointer. A chain is about a pixel
+     wide, which nobody can hit; this is the target around it. */
+  --ov-arc-hit-stroke: 12px;
+  --ov-book-font: 13px;
+  --ov-chapter-font: 11px;
+  --ov-rail-font: 14px;
+
+  /* The world is taller than it is wide and the page is not, so the <svg> is
+     given the world's own proportions and centred rather than stretched to the
+     card. Letting it fill the width instead would letterbox the drawing into a
+     sliver down the middle with the axis a few pixels wide.
+
+     These two numbers are WORLD.width / WORLD.height from overviewLayout.js.
+     They are the one place that geometry is repeated, and they are repeated
+     here because a viewBox cannot size its own element. */
+  display: block;
+  height: var(--overview-svg-height);
+  aspect-ratio: 560 / 1000;
+  width: auto;
+  max-width: 100%;
+  /* The reader drags the diagram, so the browser must not also try to scroll
+     or text-select it. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.overview-svg:active {
+  cursor: grabbing;
+}
+
+/* ─── Undoing the sideways half of the zoom ──────────────────────────────── */
+
+/* The zoom is uniform, because a wheel gesture centred on the cursor has to
+   be. But nothing on this page is worth magnifying horizontally: the axis is
+   one line, its labels sit beside it, the rails a fixed distance to the right.
+   Left alone, a 20x zoom stretches a 16-unit tick into a rule across the whole
+   panel and carries every book name off the left edge.
+
+   So the two groups that have a fixed horizontal relationship to the axis
+   counter-transform themselves out of it, from the same --ov-inverse-scale
+   that holds the strokes and the type still. Both are one CSS rule over a
+   custom property written once at render, so a wheel notch still costs two
+   attribute writes and no re-render.
+
+   The counter-transform is a *translation* for labels rather than a scale,
+   which matters: a scaleX would squash the glyphs. */
+
+.overview-ticks,
+.overview-stems,
+.overview-arcs,
+.overview-pinned {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+/* Ticks are marks, not measurements, so they keep their length; stems span two
+   fixed x values — the axis and the notes rail — and have to keep both ends.
+   One scale back along x undoes the scene's, leaving each of them exactly the
+   width it was drawn.
+
+   The pinning translation below cannot do this job: it holds ONE x still and
+   lets everything else drift from it by the zoom factor, so at 10x the axis end
+   of a stem would sit a thousand units off the left of the world.
+
+   The arcs are here for the same reason as the stems: an arc's two endpoints
+   sit on the rail and its apex a fixed distance beyond it, so all three x
+   values have to be held.
+
+   Only plain strokes live in these three groups, which is what makes a scaleX
+   safe here: it would squash glyphs, but a horizontal line's stroke width is
+   measured in y and is untouched by it. The labels get a translation instead.
+   An arc's stroke is the one thing this scale cannot size correctly — see the
+   arcs section below for what it uses instead. */
+.overview-ticks,
+.overview-stems,
+.overview-arcs {
+  transform: scaleX(var(--ov-inverse-scale));
+}
+
+/* Anything sitting at one fixed x — the axis, a column of labels, a rail —
+   stays where it is instead of being flung sideways. Moving a feature at x to
+   x/s in its own coordinates puts it back at x once the scene scales it, and
+   `--ov-x-offset` is that x (see pinnedX in overviewLayout.js). */
+.overview-pinned {
+  transform: translateX(calc(var(--ov-x-offset) * (var(--ov-inverse-scale) - 1)));
+}
+
+/* ─── Axis ───────────────────────────────────────────────────────────────── */
+
+.overview-axis-line {
+  stroke: var(--text-secondary);
+  stroke-width: calc(var(--ov-axis-stroke) * var(--ov-inverse-scale));
+}
+
+.overview-book-tick {
+  stroke: var(--text-primary);
+  stroke-width: calc(var(--ov-book-stroke) * var(--ov-inverse-scale));
+}
+
+.overview-book-label {
+  fill: var(--text-primary);
+  font-size: calc(var(--ov-book-font) * var(--ov-inverse-scale));
+  text-anchor: end;
+  dominant-baseline: middle;
+}
+
+.overview-chapter-tick {
+  stroke: var(--text-muted);
+  stroke-width: calc(var(--ov-chapter-stroke) * var(--ov-inverse-scale));
+}
+
+.overview-chapter-label {
+  fill: var(--text-muted);
+  font-size: calc(var(--ov-chapter-font) * var(--ov-inverse-scale));
+  text-anchor: start;
+  dominant-baseline: middle;
+}
+
+/* ─── Rails ──────────────────────────────────────────────────────────────── */
+
+/* One colour per tier, keyed on data-rail rather than on the rail group's
+   class, so anything belonging to a tier inherits it by declaring which tier
+   it is. The stems and the arcs are siblings of the rails rather than children
+   (they need a different counter-transform — see above), and so are the
+   toggles, the tooltip and the drawer, which are not even inside the <svg>;
+   all of them carry data-rail and get the colour from it. Three distinct hues,
+   far enough apart that a chain on one rail is never mistaken for a chain on
+   the next. */
+[data-rail="notes"]  { --ov-rail-color: var(--color-primary); }
+[data-rail="ideas"]  { --ov-rail-color: var(--color-accent); }
+[data-rail="topics"] { --ov-rail-color: var(--color-warning); }
+
+.overview-rail {
+  stroke: var(--ov-rail-color);
+  stroke-width: calc(var(--ov-rail-stroke) * var(--ov-inverse-scale));
+  /* A rail is a guide, not content. It stays behind its stems rather than
+     competing with them for the same colour at full strength. */
+  opacity: 0.45;
+}
+
+.overview-rail-label {
+  fill: var(--ov-rail-color);
+  font-size: calc(var(--ov-rail-font) * var(--ov-inverse-scale));
+  text-anchor: middle;
+  dominant-baseline: middle;
+  letter-spacing: 0.08em;
+}
+
+/* ─── Stems ──────────────────────────────────────────────────────────────── */
+
+/* One per anchor point: a note's reference, drawn from the axis across to the
+   notes rail at the y of its verse_index.
+
+   Thin and translucent on purpose. Genesis 1 and Romans 8 attract notes in
+   clusters, and a cluster of a dozen stems within a chapter is a normal thing
+   to have; at full opacity that reads as a solid block, while at this weight
+   it reads as a density — several faint lines summing to a darker band —
+   which is the thing the page exists to show. Overlap is information here, so
+   it is drawn as information. */
+.overview-stem {
+  stroke: var(--ov-rail-color);
+  stroke-width: calc(var(--ov-stem-stroke) * var(--ov-inverse-scale));
+  opacity: 0.55;
+}
+
+/* ─── Arcs ───────────────────────────────────────────────────────────────── */
+
+/* One path per note, joining its anchor points in a chain and bulging away
+   from the axis. The path is continuous — `M` once, then one `Q` per
+   consecutive pair — so a note is one element however many references it has;
+   see arcModel.js for why chained and not pairwise.
+
+   ── Why these strokes are not `design * --ov-inverse-scale` ────────────────
+
+   Every other stroke on the page is, and for a stem it is exactly right: a
+   stem is horizontal, its stroke is measured vertically, and the vertical half
+   of the zoom is the half that survives. An arc is neither horizontal nor
+   vertical. Under the scene's scale(s) followed by this group's scaleX(1/s),
+   x is left alone and y is multiplied by s — so the width of a near-vertical
+   stretch of an arc comes out unchanged and the width of a near-horizontal one
+   comes out s times bigger, and no single multiplier fixes both. Multiplying
+   by the inverse scale would make the vertical stretches vanish at high zoom,
+   which is most of a long arc.
+
+   vector-effect is the answer the format already has for this: the stroke is
+   computed after the transform, so it is constant on screen everywhere along
+   the curve, at every zoom, with no per-frame work of any kind. */
+
+.overview-arc {
+  fill: none;
+  stroke: var(--ov-rail-color);
+  stroke-width: var(--ov-arc-stroke);
+  vector-effect: non-scaling-stroke;
+  /* Lighter than the stems, and measured against a rendered page rather than
+     guessed. An arc is long where a stem is short, so a few hundred of them
+     cover far more of the rail than a few hundred stems do; at the stems'
+     weight the notes tier reads as one solid slab with an edge on it instead
+     of as a field with dense and thin parts. This is also the limit of what
+     opacity can do — a corpus whose notes mostly span the testaments is the
+     "cross-testament noise" the plan flags, and its answer is the filtering of
+     6e, not a thinner line. */
+  opacity: 0.35;
+  /* Nothing points at the visible path; the hit path below is the target, and
+     letting both take the pointer would double the work per move. */
+  pointer-events: none;
+}
+
+/* The pointer's target: the same curve, wide and invisible.
+
+   `pointer-events: stroke` is load-bearing. Without it the browser also fills
+   the region a curve encloses for hit-testing purposes, and a long arc's sweep
+   covers a large part of the rail — every short chain drawn inside it would
+   become unclickable, and the reader would be pointing at one note and
+   hovering another. */
+.overview-arc-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: var(--ov-arc-hit-stroke);
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+/* Stems are drawn, not pointed at. They light up with the note a reader is
+   hovering, but the thing being hovered is always the arc: a rail with a
+   thousand hair-thin stems on it would otherwise flicker between notes on
+   every pixel of travel. */
+.overview-stems {
+  pointer-events: none;
+}
+
+/* ─── The search filter ──────────────────────────────────────────────────── */
+
+/* "Search — filter to matching arcs rather than hiding others outright." The
+   plan's own wording, and the reason nothing here uses `display`: this page's
+   entire content is WHERE a chain falls, and an arc removed from the drawing
+   takes its position with it. Every remaining chain would then look equally
+   central against an axis with nothing else on it.
+
+   The mechanism is the highlight's, exactly: `data-searching` on the <svg> from
+   useArcSearch turns the tiers down, `data-match` on the groups that matched
+   turns those back up. Different attribute names because the two states are
+   independent — a reader can hover a chain while a search is running — and the
+   rules are HERE, above the highlight, so that hovering wins. That order is
+   what makes the two compose: a search narrows the field, and a hover then
+   picks one thing out of what is left, including out of what the search dimmed.
+
+   Dimmed a little harder than a hover dims, because a search may leave dozens
+   of matches lit where a hover leaves one. */
+
+.overview-svg[data-searching] .overview-arc,
+.overview-svg[data-searching] .overview-stem {
+  opacity: 0.06;
+}
+
+.overview-svg[data-searching] [data-match] .overview-arc,
+.overview-svg[data-searching] .overview-stem[data-match] {
+  opacity: 1;
+}
+
+/* ─── The zoom band ──────────────────────────────────────────────────────── */
+
+/* What a shift-drag pulls out: the stretch of canon the view is about to fly
+   to. It lives outside the transformed scene, so it takes no counter-transform
+   and no inverse scale — its coordinates are the fitted viewBox's, which is
+   where the pointer already is. Full width because the gesture selects a range
+   of the axis, not a rectangle of the picture; there is nothing to magnify
+   sideways.
+
+   Invisible until `data-active`, rather than mounted and unmounted, so a
+   marquee at pointer speed is an attribute write and never a render. */
+.overview-zoom-band {
+  fill: var(--color-primary);
+  stroke: var(--color-primary);
+  stroke-width: 1;
+  opacity: 0;
+  /* It is drawn on top of everything, so it must not take the pointer that is
+     drawing it. */
+  pointer-events: none;
+}
+
+.overview-zoom-band[data-active] {
+  opacity: 0.16;
+}
+
+/* While a band is being pulled, the arcs stop answering the pointer: dragging
+   across a dense rail would otherwise trail a tooltip behind the marquee and
+   light a different chain every few pixels. */
+.overview-svg[data-selecting] {
+  cursor: crosshair;
+}
+
+.overview-svg[data-selecting] .overview-arc-hit {
+  pointer-events: none;
+}
+
+/* ─── The highlight ──────────────────────────────────────────────────────── */
+
+/* Hovering one note lights its whole structure — every arc of the chain and
+   every stem hanging off it — and turns the rest of the tier down.
+
+   Two attributes do all of it, both written straight onto the DOM by
+   useArcInteraction: `data-focused` on the <svg> while something is focused,
+   and `data-active` on the handful of elements belonging to that one note. So
+   changing the highlight touches only the elements entering or leaving it, and
+   the dimming of the other few thousand is a selector rather than a render.
+
+   What is deliberately NOT dimmed: the axis, its ticks and its labels. The
+   question a highlighted chain answers is "where in the canon does this note
+   land?", and the answer is read off the book names beside it. Greying those
+   out would dim the thing the highlight exists to be read against. */
+
+.overview-svg[data-focused] .overview-arc,
+.overview-svg[data-focused] .overview-stem {
+  opacity: 0.08;
+}
+
+.overview-svg[data-focused] [data-active] .overview-arc {
+  opacity: 1;
+  stroke-width: calc(var(--ov-arc-stroke) * 1.8);
+}
+
+/* Written separately from the arcs above rather than folded into one selector:
+   a stem is horizontal and keeps the page's `design * --ov-inverse-scale`
+   sizing rule, while an arc uses the vector-effect exception and must not be
+   handed that multiplier. */
+.overview-svg[data-focused] .overview-stem[data-active] {
+  opacity: 1;
+  stroke-width: calc(var(--ov-stem-stroke) * 1.8 * var(--ov-inverse-scale));
+}
+
+/* ─── The hover tooltip ──────────────────────────────────────────────────── */
+
+/* Positioned in client coordinates at the pointer, so it is outside the world
+   the <svg> draws in and untouched by the pan/zoom transform. It hangs down
+   and to the right of the cursor and never takes the pointer itself — catching
+   it would end the hover that produced the tooltip the instant it appeared. */
+.overview-tooltip {
+  position: fixed;
+  z-index: 20;
+  transform: translate(12px, 12px);
+  max-width: min(320px, 90vw);
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--bg-alt);
+  border-radius: var(--radius-sm);
+  /* The figure behind it is --bg-card, which is white, so the tooltip is
+     separated from it by its shadow rather than by its fill. */
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
+/* The tier, above the title. With three rails drawn the same way in three
+   colours, "which of these am I pointing at?" is a question the tooltip should
+   answer in words rather than leave to a colour match against a heading at the
+   top of the diagram. */
+.overview-tooltip-rail {
+  margin: 0 0 2px;
+  color: var(--ov-rail-color);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-tooltip-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-base);
+}
+
+.overview-tooltip-references {
+  margin: var(--space-xs) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+/* ─── The note drawer ────────────────────────────────────────────────────── */
+
+/* A panel down the right of the page rather than a modal over the middle of
+   it: the reader clicked a point on the diagram and the diagram is the context
+   for what they are about to read, so covering it would answer the question
+   and hide what was asked. Nothing behind it is blocked — there is no backdrop
+   and no focus trap, and a second click on another chain simply swaps the
+   note. */
+.overview-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: min(420px, 100vw);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--overview-navbar-clearance) var(--space-md) var(--space-lg);
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+
+.overview-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.overview-drawer-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-lg);
+}
+
+.overview-drawer-close {
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--font-lg);
+  line-height: 1;
+  padding: 0 var(--space-xs);
+}
+
+.overview-drawer-close:hover {
+  color: var(--text-primary);
+}
+
+.overview-drawer-body {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.overview-drawer-body :is(h1, h2, h3, h4) {
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  margin: var(--space-sm) 0 var(--space-xs);
+}
+
+.overview-drawer-body p {
+  margin: 0 0 var(--space-sm);
+}
+
+.overview-drawer-body :is(ul, ol) {
+  margin: 0 0 var(--space-sm);
+  padding-left: var(--space-md);
+}
+
+.overview-drawer-heading {
+  margin: 0 0 var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-drawer-item-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.overview-drawer-item {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.overview-drawer-item a {
+  color: var(--color-accent);
+}
+
+/* Which tier the open group belongs to, above its title. The drawer is the one
+   place a reader stops and reads, and by then the arc that opened it is behind
+   a panel — so the tier has to be said rather than shown. */
+.overview-drawer-rail {
+  margin: 0 0 2px;
+  color: var(--ov-rail-color);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.overview-drawer-link {
+  align-self: flex-start;
+  color: var(--color-primary);
+  font-size: var(--font-base);
+}
+
+/* ─── Label crowding ─────────────────────────────────────────────────────── */
+
+/* A label appears once the zoom has reached the tier its neighbours leave it
+   room at. Tier 0 is legible at rest; tier k needs 2^k. The <svg> publishes
+   the tier reached, and these six rules resolve the rest with no JavaScript
+   and no re-render.
+
+   Rendered as one rule per current tier rather than one per label tier so the
+   selectors stay readable: "at tier n, everything above n is still hidden". */
+.overview-svg[data-detail-tier="0"] :is([data-tier="1"], [data-tier="2"], [data-tier="3"], [data-tier="4"], [data-tier="5"]),
+.overview-svg[data-detail-tier="1"] :is([data-tier="2"], [data-tier="3"], [data-tier="4"], [data-tier="5"]),
+.overview-svg[data-detail-tier="2"] :is([data-tier="3"], [data-tier="4"], [data-tier="5"]),
+.overview-svg[data-detail-tier="3"] :is([data-tier="4"], [data-tier="5"]),
+.overview-svg[data-detail-tier="4"] [data-tier="5"] {
+  display: none;
+}

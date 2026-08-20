@@ -1,0 +1,170 @@
+/* ─── Search ─────────────────────────────────────────────────────────────────
+   /search: one input and four groups of links. It borrows the shape of the
+   library pages on purpose — the same header, the same card, the same message
+   rules — because it is the fifth view of that same body of work, and a reader
+   arriving from /ideas should not have to learn a new page.
+
+   Every colour, space and radius resolves to a token from :root in index.css.
+   Values with no token of their own (the column width, the navbar clearance)
+   are local custom properties here rather than literals in the rules.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.search-page {
+  --search-navbar-clearance: 64px;
+  --search-max-width: 900px;
+  --search-border-width: 1px;
+  --search-transition: 0.15s ease;
+
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  padding: var(--search-navbar-clearance) var(--space-md) var(--space-xl);
+}
+
+.search-main {
+  max-width: var(--search-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.search-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.search-title {
+  margin: 0;
+  color: var(--text-white);
+  font-size: var(--font-xl);
+}
+
+/* ─── The box ────────────────────────────────────────────────────────────── */
+
+.search-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.search-label {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.search-input {
+  width: 100%;
+  padding: var(--space-sm);
+  border: var(--search-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--font-md);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* Holds its height whether or not it has something to say, so the results
+   below do not jump a line every time a search starts or finishes. */
+.search-status {
+  margin: 0;
+  min-height: var(--space-lg);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────────── */
+
+.search-message {
+  margin: 0;
+  padding: var(--space-md);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.search-message--error {
+  color: var(--color-danger);
+}
+
+/* ─── Groups ─────────────────────────────────────────────────────────────── */
+
+.search-group {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-md);
+}
+
+.search-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-lg);
+  color: var(--text-primary);
+}
+
+.search-group-count {
+  font-size: var(--font-sm);
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* The whole row is the link, not just the title: a result is a way to reach
+   the thing, so every part of it should take you there. */
+.search-result-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border: var(--search-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-alt);
+  text-decoration: none;
+  transition: border-color var(--search-transition), background-color var(--search-transition);
+}
+
+.search-result-link:hover,
+.search-result-link:focus-visible {
+  border-color: var(--color-primary);
+  background-color: var(--bg-input);
+}
+
+.search-result-title {
+  color: var(--text-primary);
+  font-size: var(--font-md);
+}
+
+/* The excerpt the server built around the match. One line: it is there to show
+   why the row matched, and a paragraph of it would bury the next result. */
+.search-result-detail {
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

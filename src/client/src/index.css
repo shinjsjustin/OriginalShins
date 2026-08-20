@@ -1,0 +1,180 @@
+/* ─── Design Tokens ───────────────────────────────────────────────────────────
+   The page is a desk at night: a deep slate ground, with the scripture set on
+   paper columns laid on top of it. Two accents and no more, each meaning one
+   thing everywhere it appears:
+
+     gold   — marks already made. Notes, their anchors, the rail beside a verse.
+     lapis  — live intent. What is selected right now, and the button that acts
+              on it.
+
+   Furniture is slate; scripture is paper and ink. A third hue would have to
+   mean a third thing, and there isn't one.
+
+   Every pair below is checked for contrast: body text on paper clears 12:1,
+   the faintest muted text clears 5:1, and no text is set on its own accent.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* ── Ground: the desk ────────────────────────────────────────────────── */
+  --ground-deep:   #0f131b;   /* the page behind everything */
+  --ground:        #171d28;   /* panel chrome: headers, footers, spines */
+  --ground-raised: #222b3a;   /* a control resting on the chrome */
+  --ground-hover:  #2d3849;
+  --ground-line:   #303c4f;
+
+  /* ── Paper: the reading surface ──────────────────────────────────────── */
+  --paper:      #fbfaf7;
+  --paper-alt:  #f1efe8;
+  --paper-line: #dcd7cb;
+
+  /* ── Ink: type on paper ──────────────────────────────────────────────── */
+  --ink:       #1b1a17;   /* 14.9:1 on paper */
+  --ink-soft:  #4a4740;   /*  8.4:1 */
+  --ink-faint: #6f6a60;   /*  5.3:1 — the floor, and it clears AA */
+
+  /* ── Type on the ground ──────────────────────────────────────────────── */
+  --on-ground:       #eef1f6;   /* 15.4:1 on the chrome */
+  --on-ground-soft:  #b6bfcd;   /*  9.1:1 */
+  --on-ground-faint: #8b96a7;   /*  5.5:1 */
+
+  /* ── Gold leaf: marks already made ───────────────────────────────────── */
+  --gold:        #96690c;   /* on paper — rails, markers, accents */
+  --gold-strong: #7a5409;
+  --gold-lit:    #e8b54a;   /* on the ground */
+
+  /* ── Lapis: live intent ──────────────────────────────────────────────── */
+  --lapis:        #3757d4;
+  --lapis-strong: #2a44b0;
+  --lapis-deep:   #22369a;
+  --lapis-lit:    #8fa8ff;   /* on the ground */
+
+  /* ── Madder: destructive ─────────────────────────────────────────────── */
+  --madder:        #b3261e;
+  --madder-strong: #8f1d17;
+  --madder-lit:    #ff9b8f;
+
+  /* ── Roles ───────────────────────────────────────────────────────────────
+     What the rest of the app asks for by name. Every one resolves to a
+     pigment above, so the palette is changed in one place. */
+  --color-primary:        var(--lapis);
+  --color-primary-hover:  var(--lapis-strong);
+  --color-primary-active: var(--lapis-deep);
+  --color-accent:         var(--gold);
+  --color-accent-hover:   var(--gold-strong);
+  --color-danger:         var(--madder);
+  --color-danger-hover:   var(--madder-strong);
+  --color-warning:        #9a6508;
+  --color-warning-light:  #fdf3dd;
+
+  /* Text */
+  --text-primary:   var(--ink);
+  --text-secondary: var(--ink-soft);
+  --text-muted:     var(--ink-faint);
+  --text-white:     #fff;
+
+  /* Backgrounds */
+  --bg-dark:  var(--ground-deep);
+  --bg-page:  var(--paper-alt);
+  --bg-card:  var(--paper);
+  --bg-alt:   var(--paper-alt);
+  --bg-input: #fff;
+
+  /* Highlight tints — a verse is tinted by how many notes reference it.
+     Kept as tokens because the depth ramp is a palette decision, not a
+     component one: one note is a wash, several is unmistakable, and the linked
+     tint is what a hovered note lights up in the opposite panel. All three are
+     gold, because all three mean "a note is here". */
+  --note-tint-1:        rgba(150, 105, 12, 0.10);
+  --note-tint-2:        rgba(150, 105, 12, 0.22);
+  --note-tint-linked:   rgba(150, 105, 12, 0.34);
+  --note-marker:        var(--gold);
+  --note-marker-active: var(--gold-strong);
+
+  /* Selection is lapis and never gold: what you are choosing now must not be
+     confusable with what you chose before. */
+  --select-tint:  rgba(55, 87, 212, 0.13);
+  --select-edge:  var(--lapis);
+
+  /* Borders */
+  --border:     var(--paper-line);
+  --border-alt: #cfc9bb;
+
+  /* Shadows — a paper column lifted off a dark desk needs more than a hairline
+     of shadow to read as lifted. */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.38);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.48);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 32px;
+
+  /* Border Radius */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-pill: 16px;
+
+  /* ── Typography ──────────────────────────────────────────────────────────
+     Two voices. Scripture is set in an old-style serif with real leading,
+     because it is the one thing on this page meant to be *read* rather than
+     operated. Everything else — labels, buttons, verse numbers — is a compact
+     sans, so the instrument never competes with the text.
+
+     The serif stack names faces that ship with macOS and Windows before
+     falling back to Georgia, so it costs no request and degrades to something
+     with the same proportions. */
+  --font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-scripture: 'Iowan Old Style', 'Palatino Linotype', Palatino, Charter,
+    'Source Serif 4', Georgia, 'Times New Roman', serif;
+
+  --font-sm:   12px;
+  --font-base: 14px;
+  --font-md:   16px;
+  --font-lg:   18px;
+  --font-xl:   24px;
+}
+
+/* ─── Base Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+  color: var(--text-primary);
+  background-color: var(--bg-dark);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+button {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  font-family: var(--font-family);
+}
+
+/* A visible focus ring is not optional on a page driven this much by keyboard:
+   every verse number, marker and tab is a control. */
+:focus-visible {
+  outline: 2px solid var(--lapis-lit);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

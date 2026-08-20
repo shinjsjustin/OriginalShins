@@ -1,0 +1,283 @@
+/* ─── Ideas & Topics ─────────────────────────────────────────────────────────
+   The two management pages. Both render the same furniture — a header with the
+   section nav, a card holding the create form, and a card holding the list —
+   so one stylesheet serves them and the classes are named for the shared
+   shapes rather than for either page.
+
+   Every colour, space and radius resolves to a token from :root in index.css.
+   Values with no token of their own (the column width, the navbar clearance)
+   are local custom properties on .library-page rather than literals sprinkled
+   through the rules.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.library-page {
+  --library-navbar-clearance: 64px;
+  --library-max-width: 900px;
+  --library-border-width: 1px;
+  --library-transition: 0.15s ease;
+
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  padding: var(--library-navbar-clearance) var(--space-md) var(--space-xl);
+}
+
+.library-main {
+  max-width: var(--library-max-width);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+
+.library-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.library-title {
+  margin: 0;
+  color: var(--text-white);
+  font-size: var(--font-xl);
+}
+
+.library-nav {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.library-nav-link {
+  color: var(--text-white);
+  text-decoration: none;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-base);
+  transition: background-color var(--library-transition);
+}
+
+.library-nav-link:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.library-nav-link--current {
+  background-color: var(--color-primary);
+}
+
+/* ─── Cards ──────────────────────────────────────────────────────────────── */
+
+.library-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-md);
+}
+
+.library-subtitle {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+}
+
+/* ─── Forms ──────────────────────────────────────────────────────────────── */
+
+.library-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.library-label {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.library-input,
+.library-textarea {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border: var(--library-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+}
+
+.library-textarea {
+  resize: vertical;
+}
+
+.library-actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.library-button {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: var(--library-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  transition: background-color var(--library-transition),
+              color var(--library-transition);
+}
+
+.library-button:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: var(--text-white);
+}
+
+.library-button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.library-button--primary {
+  background-color: var(--color-primary);
+  color: var(--text-white);
+  border-color: var(--color-primary);
+}
+
+.library-button--danger:hover:not(:disabled) {
+  background-color: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--text-white);
+}
+
+/* ─── Lists ──────────────────────────────────────────────────────────────── */
+
+.library-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.library-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background-color: var(--bg-alt);
+  border: var(--library-border-width) solid var(--border-alt);
+  border-radius: var(--radius-sm);
+}
+
+/* The editing state stacks its form and multi-select rather than sitting them
+   side by side with the row's action buttons. */
+.library-list-item > .library-form {
+  flex: 1 1 100%;
+}
+
+.library-list-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.library-list-title {
+  margin: 0;
+  font-size: var(--font-md);
+  color: var(--text-primary);
+}
+
+.library-list-body {
+  margin: var(--space-xs) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-base);
+  overflow-wrap: anywhere;
+}
+
+.library-slug {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.library-counts {
+  margin: var(--space-xs) 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.library-list-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+/* ─── Chips ──────────────────────────────────────────────────────────────── */
+
+.library-chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+}
+
+.library-chip {
+  padding: 0 var(--space-sm);
+  background-color: var(--bg-card);
+  border: var(--library-border-width) solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+/* ─── Multi-select ───────────────────────────────────────────────────────── */
+
+.library-multiselect {
+  flex: 1 1 100%;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: var(--library-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.library-multiselect-legend {
+  padding: 0 var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.library-multiselect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.library-multiselect-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  cursor: pointer;
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────────── */
+
+.library-message {
+  margin: var(--space-xs) 0;
+  color: var(--text-muted);
+  font-size: var(--font-base);
+}
+
+.library-message--error {
+  padding: var(--space-sm);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+}

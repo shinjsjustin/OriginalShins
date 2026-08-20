@@ -1,0 +1,928 @@
+/* ─── Analyze Page ───────────────────────────────────────────────────────────
+   A desk at night. Three paper columns lie on a slate ground: a passage to
+   compare on the left, the passage under study in the centre, and everything
+   written about it on the right. The two side columns can be pushed aside,
+   where they stand on end as spines, and the centre takes the room.
+
+   Two accents, each meaning one thing (see index.css):
+     gold  — marks already made: a note, its anchor, the rail beside a verse.
+     lapis — live intent: the verses selected right now and the button that
+             acts on them.
+
+   Every colour, space and radius here resolves to a token from :root in
+   index.css. Values with no token of their own (panel widths, rail widths,
+   line heights) are named as local custom properties on .analyze-page rather
+   than being scattered through the rules as literals.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.analyze-page {
+  /* Layout constants, local to this page. */
+  --analyze-navbar-clearance: 64px;
+  --analyze-panel-min-width:  300px;
+  --analyze-spine-width:      46px;
+
+  /* The verse rail. Deliberately narrow: it is a margin mark, not a column,
+     and everything left of the text is space taken from the text. */
+  --analyze-rail-width:   4px;
+  --analyze-select-edge:  2px;
+  --analyze-verse-number-width: 22px;
+  --analyze-verse-line-height:  1.62;
+  --analyze-verse-size:   17px;
+
+  --analyze-modal-max-width:  720px;
+  --analyze-modal-max-height: 80vh;
+  --analyze-book-cell-width:  120px;
+  --analyze-chapter-cell-width: 44px;
+  --analyze-border-width: 1px;
+  --analyze-transition: 0.15s ease;
+  /* A panel opening or closing is the one movement on the page worth seeing. */
+  --analyze-panel-transition: 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  min-height: 100vh;
+  /* A faint lift behind the centre column, so the three panels read as lying
+     on something rather than floating on a flat fill. */
+  background-color: var(--ground-deep);
+  background-image: radial-gradient(
+    120% 78% at 50% 0%,
+    #1b2331 0%,
+    var(--ground-deep) 62%
+  );
+  padding: var(--analyze-navbar-clearance) var(--space-md) var(--space-md);
+}
+
+/* ─── Panel Row ──────────────────────────────────────────────────────────── */
+
+.analyze-panels {
+  display: flex;
+  gap: var(--space-md);
+  align-items: stretch;
+  /* Fill the viewport below the navbar so each panel scrolls internally
+     instead of the page scrolling as a whole. */
+  height: calc(100vh - var(--analyze-navbar-clearance) - var(--space-md) * 2);
+}
+
+.analyze-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background-color: var(--paper);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* The centre panel is the one in charge, and it is wider for it. */
+.analyze-panel--primary {
+  flex: 1.45 1 0;
+  min-width: var(--analyze-panel-min-width);
+  /* A hairline of gold along the top edge: the mark of the panel everything
+     else on the page answers to. */
+  box-shadow: inset 0 2px 0 0 var(--gold), var(--shadow-lg);
+}
+
+.analyze-panel--side {
+  flex: 1 1 0;
+  min-width: var(--analyze-panel-min-width);
+}
+
+.analyze-panel--notes {
+  background-color: var(--paper-alt);
+}
+
+/* ─── Spine ──────────────────────────────────────────────────────────────────
+   What a side panel becomes once it is pushed aside: turned on its end like a
+   book back on the shelf, still naming the passage it will return to. */
+
+.analyze-spine {
+  flex: 0 0 var(--analyze-spine-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0 var(--space-md);
+  background-color: var(--ground);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-md);
+  color: var(--on-ground-soft);
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition);
+}
+
+.analyze-spine:hover {
+  background-color: var(--ground-raised);
+  color: var(--on-ground);
+}
+
+.analyze-spine-arrow {
+  flex: 0 0 auto;
+  padding: var(--space-xs) 0;
+  color: var(--gold-lit);
+  font-size: var(--font-sm);
+}
+
+/* Sideways, reading bottom-to-top on the left spine and top-to-bottom on the
+   right, so both run away from the centre the way a shelved book does. */
+.analyze-spine-text {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  /* Turned on its side, the main axis runs down the spine — this is what
+     centres the label along it. */
+  justify-content: center;
+  gap: var(--space-md);
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.analyze-spine--left .analyze-spine-text {
+  transform: rotate(180deg);
+}
+
+.analyze-spine-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--on-ground);
+}
+
+.analyze-spine-caption {
+  font-family: var(--font-scripture);
+  font-size: var(--font-base);
+  color: var(--on-ground-faint);
+}
+
+/* ─── Panel Header ───────────────────────────────────────────────────────── */
+
+.analyze-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--ground);
+  border-bottom: var(--analyze-border-width) solid var(--ground-line);
+}
+
+.analyze-panel-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.analyze-panel-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--on-ground-faint);
+}
+
+.analyze-panel--primary .analyze-panel-label {
+  color: var(--gold-lit);
+}
+
+.analyze-panel-title {
+  margin: 2px 0 0;
+  font-family: var(--font-scripture);
+  font-size: var(--font-lg);
+  font-weight: 400;
+  color: var(--on-ground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Collapse Tab ───────────────────────────────────────────────────────────
+   In the panel's outer corner, pointing the way the panel travels when it
+   closes. It sits in the header row rather than over it, so it can never land
+   on the heading however long the book name runs. */
+
+.analyze-collapse-tab {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background-color: var(--ground-raised);
+  color: var(--on-ground-soft);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  line-height: 1;
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition);
+}
+
+.analyze-collapse-tab:hover {
+  background-color: var(--ground-hover);
+  color: var(--gold-lit);
+}
+
+/* ─── Panel Body ─────────────────────────────────────────────────────────── */
+
+.analyze-panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  /* Tight on the left: the rail and the verse number already stand between the
+     edge and the text, and every pixel here is taken from the reading column. */
+  padding: var(--space-md) var(--space-md) var(--space-lg) var(--space-sm);
+}
+
+.analyze-panel--notes .analyze-panel-body {
+  padding-left: var(--space-md);
+}
+
+.analyze-message {
+  margin: 0;
+  padding: var(--space-sm) 0;
+  color: var(--text-muted);
+  font-size: var(--font-base);
+}
+
+.analyze-message--error {
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+/* ─── Verses ─────────────────────────────────────────────────────────────── */
+
+/* A measure cap, not a width. With both side panels open it never binds; once
+   they are pushed aside and the centre takes the room, it is what stops a line
+   of scripture running the full width of a desktop and becoming unreadable. */
+.analyze-verses {
+  display: flex;
+  flex-direction: column;
+  max-width: 76ch;
+  margin: 0 auto;
+}
+
+/* One row per verse: [mark rail][number][text], with the selection edge drawn
+   into the padding to their left. Both edges are always reserved — the rail as
+   a column, the selection edge as padding — so marking or selecting a verse
+   never reflows the text beside it. */
+.analyze-verse {
+  display: grid;
+  grid-template-columns:
+    var(--analyze-rail-width)
+    var(--analyze-verse-number-width)
+    1fr;
+  align-items: stretch;
+  column-gap: var(--space-xs);
+  padding: 3px var(--space-xs) 3px var(--analyze-select-edge);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  cursor: pointer;
+  transition: background-color var(--analyze-transition);
+}
+
+.analyze-verse:hover {
+  background-color: rgba(27, 26, 23, 0.045);
+}
+
+.analyze-verse-text {
+  font-family: var(--font-scripture);
+  font-size: var(--analyze-verse-size);
+  line-height: var(--analyze-verse-line-height);
+  color: var(--ink);
+}
+
+.analyze-verse-number {
+  align-self: start;
+  padding: 0;
+  background: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  /* Sit the small number on the first line's baseline. */
+  line-height: calc(var(--analyze-verse-size) * var(--analyze-verse-line-height));
+  transition: color var(--analyze-transition);
+}
+
+.analyze-verse:hover .analyze-verse-number {
+  color: var(--ink-soft);
+}
+
+/* ─── Marks: gold ────────────────────────────────────────────────────────────
+   One note on this verse is a wash; two or more and it deepens. Both resolve
+   to tokens in index.css — the ramp is a palette decision, not a local one. */
+
+.analyze-verse--tint-1 {
+  background-color: var(--note-tint-1);
+}
+
+.analyze-verse--tint-2 {
+  background-color: var(--note-tint-2);
+}
+
+/* The verse's note is hovered in the notes panel. This wins over both tints,
+   because "this is the one you are pointing at" is the more urgent signal. */
+.analyze-verse--linked,
+.analyze-verse--tint-1.analyze-verse--linked,
+.analyze-verse--tint-2.analyze-verse--linked {
+  background-color: var(--note-tint-linked);
+}
+
+/* The rail: a single narrow bar down the left of the verse, cut into one
+   segment per note. Three notes on a verse read as three stacked segments
+   without the rail ever growing wider — which is what keeps the margin tight
+   however heavily a passage is worked over. */
+.analyze-verse-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 0;
+}
+
+.analyze-gutter-marker {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 1px;
+  background-color: var(--note-marker);
+  transition: background-color var(--analyze-transition);
+}
+
+/* The bar is 4px wide; the thing you have to hit is not. */
+.analyze-gutter-marker::after {
+  content: '';
+  position: absolute;
+  inset: -2px -6px;
+}
+
+.analyze-gutter-marker:hover,
+.analyze-gutter-marker--active {
+  background-color: var(--note-marker-active);
+}
+
+/* ─── Selection: lapis ───────────────────────────────────────────────────────
+   Wins over every gold state. What is being chosen right now has to be
+   unmistakable against what was chosen before. */
+
+.analyze-verse--selected,
+.analyze-verse--selected.analyze-verse--tint-1,
+.analyze-verse--selected.analyze-verse--tint-2,
+.analyze-verse--selected.analyze-verse--linked {
+  background-color: var(--select-tint);
+  /* The lapis edge fills the first grid column, outside the gold rail, so the
+     two marks stack rather than fight. */
+  box-shadow: inset var(--analyze-select-edge) 0 0 0 var(--select-edge);
+}
+
+.analyze-verse--selected .analyze-verse-number {
+  color: var(--lapis-strong);
+}
+
+/* ─── Selection Actions ──────────────────────────────────────────────────────
+   Pinned to the panel's top-right corner: a selection can run past the fold,
+   and scrolling down to click a fifth verse must not mean scrolling back up to
+   act on the first four. */
+
+.analyze-selection-actions {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background-color: var(--ground-raised);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+}
+
+.analyze-selection-count {
+  padding: 0 var(--space-xs);
+  color: var(--on-ground-soft);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+
+.analyze-selection-button {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: transparent;
+  color: var(--on-ground-soft);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  white-space: nowrap;
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition);
+}
+
+.analyze-selection-button:hover {
+  background-color: var(--ground-hover);
+  color: var(--on-ground);
+}
+
+.analyze-selection-button--primary {
+  background-color: var(--lapis);
+  color: var(--text-white);
+  border-color: var(--lapis);
+  font-weight: 500;
+}
+
+.analyze-selection-button--primary:hover {
+  background-color: var(--lapis-lit);
+  color: var(--ground-deep);
+  border-color: var(--lapis-lit);
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+
+.analyze-footer {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background-color: var(--ground);
+  border-top: var(--analyze-border-width) solid var(--ground-line);
+}
+
+.analyze-footer-button {
+  padding: var(--space-sm);
+  background-color: var(--ground-raised);
+  color: var(--on-ground-soft);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition);
+}
+
+.analyze-footer-button:hover:not(:disabled) {
+  background-color: var(--ground-hover);
+  color: var(--gold-lit);
+}
+
+.analyze-footer-button:disabled {
+  color: var(--on-ground-faint);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.analyze-footer-button--arrow {
+  flex: 0 0 auto;
+  min-width: 38px;
+}
+
+/* The book name takes the slack; the chapter number stays narrow. */
+.analyze-footer-button--book {
+  flex: 1 1 auto;
+  font-family: var(--font-scripture);
+  font-size: var(--font-md);
+  color: var(--on-ground);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.analyze-footer-button--chapter {
+  flex: 0 0 auto;
+  min-width: 42px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notes-panel variant: no arrows, and the book/chapter read as a label rather
+   than as buttons — they still open the pickers, which move the PRIMARY panel,
+   because that is the one this panel is showing the notes for. */
+.analyze-footer--label .analyze-footer-button {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.analyze-footer--label .analyze-footer-button:hover:not(:disabled) {
+  background-color: var(--ground-raised);
+  color: var(--gold-lit);
+}
+
+/* ─── Modal ──────────────────────────────────────────────────────────────── */
+
+.analyze-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background-color: rgba(8, 11, 16, 0.72);
+  z-index: 10;
+}
+
+.analyze-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--analyze-modal-max-width);
+  max-height: var(--analyze-modal-max-height);
+  background-color: var(--paper);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.analyze-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--ground);
+  border-bottom: var(--analyze-border-width) solid var(--ground-line);
+}
+
+.analyze-modal-title {
+  margin: 0;
+  font-family: var(--font-scripture);
+  font-size: var(--font-md);
+  font-weight: 400;
+  color: var(--on-ground);
+}
+
+.analyze-modal-close {
+  padding: 0 var(--space-sm);
+  background-color: transparent;
+  color: var(--on-ground-soft);
+  font-size: var(--font-xl);
+  line-height: 1;
+}
+
+.analyze-modal-close:hover {
+  color: var(--madder-lit);
+}
+
+.analyze-modal-body {
+  overflow-y: auto;
+  padding: var(--space-md);
+}
+
+/* ─── Picker Grids ───────────────────────────────────────────────────────── */
+
+.analyze-picker-section + .analyze-picker-section {
+  margin-top: var(--space-lg);
+}
+
+.analyze-picker-heading {
+  margin: 0 0 var(--space-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--ink-faint);
+}
+
+.analyze-grid {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.analyze-grid--books {
+  grid-template-columns: repeat(auto-fill, minmax(var(--analyze-book-cell-width), 1fr));
+}
+
+.analyze-grid--chapters {
+  grid-template-columns: repeat(auto-fill, minmax(var(--analyze-chapter-cell-width), 1fr));
+}
+
+.analyze-grid-cell {
+  padding: var(--space-sm);
+  background-color: var(--paper-alt);
+  color: var(--ink);
+  border: var(--analyze-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  text-align: center;
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition),
+              border-color var(--analyze-transition);
+}
+
+.analyze-grid-cell:hover {
+  background-color: var(--lapis);
+  color: var(--text-white);
+  border-color: var(--lapis);
+}
+
+.analyze-grid-cell--selected {
+  background-color: var(--lapis-deep);
+  color: var(--text-white);
+  border-color: var(--lapis-deep);
+  font-weight: 600;
+}
+
+/* ─── Notes and Ideas ────────────────────────────────────────────────────── */
+
+.analyze-new-idea {
+  width: 100%;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background-color: transparent;
+  color: var(--lapis-strong);
+  border: var(--analyze-border-width) dashed var(--border-alt);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  font-weight: 500;
+  transition: background-color var(--analyze-transition),
+              border-color var(--analyze-transition);
+}
+
+.analyze-new-idea:hover {
+  background-color: var(--select-tint);
+  border-color: var(--lapis);
+  border-style: solid;
+}
+
+.analyze-note-section + .analyze-note-section {
+  margin-top: var(--space-lg);
+}
+
+/* A note row is a button and an idea row a link, so both are keyboard-reachable;
+   these rules undo the inline, centred defaults each would otherwise bring.
+   The two share everything but their rail, which is the one thing that tells
+   them apart. */
+.analyze-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-bottom: var(--space-xs);
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-md);
+  background-color: var(--paper);
+  border: var(--analyze-border-width) solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  text-decoration: none;
+  transition: background-color var(--analyze-transition),
+              border-color var(--analyze-transition);
+}
+
+.analyze-entry:hover {
+  background-color: var(--paper-alt);
+}
+
+/* Gold rail: a note is anchored in the text. */
+.analyze-note {
+  border-left-color: var(--note-marker);
+}
+
+.analyze-note:hover,
+.analyze-note--highlighted {
+  background-color: var(--paper-alt);
+  border-left-color: var(--note-marker-active);
+}
+
+/* An idea answers to no verse, so it wears no gold. */
+.analyze-idea {
+  border-left-color: var(--border-alt);
+}
+
+.analyze-idea:hover {
+  border-left-color: var(--ink-soft);
+}
+
+.analyze-entry-title {
+  color: var(--ink);
+  font-size: var(--font-base);
+  font-weight: 600;
+}
+
+.analyze-entry-references {
+  color: var(--gold-strong);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.analyze-entry-excerpt {
+  color: var(--ink-soft);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+
+/* ─── Note Editor and Idea Composer ──────────────────────────────────────── */
+
+.analyze-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.analyze-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.analyze-editor-button {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--paper);
+  color: var(--ink);
+  border: var(--analyze-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  transition: background-color var(--analyze-transition),
+              color var(--analyze-transition),
+              border-color var(--analyze-transition);
+}
+
+.analyze-editor-button:hover:not(:disabled) {
+  background-color: var(--lapis);
+  color: var(--text-white);
+  border-color: var(--lapis);
+}
+
+.analyze-editor-button:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.analyze-editor-button--primary {
+  background-color: var(--lapis);
+  color: var(--text-white);
+  border-color: var(--lapis);
+  font-weight: 500;
+}
+
+.analyze-editor-button--danger:hover:not(:disabled) {
+  background-color: var(--madder);
+  border-color: var(--madder);
+}
+
+.analyze-editor-form,
+.analyze-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* The composer is a card, not a bare form: it stands in for the button it
+   replaced, so it has to occupy the same corner of the panel visibly. */
+.analyze-composer {
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background-color: var(--paper);
+  border: var(--analyze-border-width) solid var(--lapis);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.analyze-editor-label {
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+}
+
+.analyze-editor-input,
+.analyze-editor-textarea {
+  width: 100%;
+  padding: var(--space-sm);
+  background-color: var(--bg-input);
+  color: var(--ink);
+  border: var(--analyze-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+}
+
+.analyze-editor-input:focus,
+.analyze-editor-textarea:focus {
+  border-color: var(--lapis);
+  outline-offset: 0;
+}
+
+.analyze-editor-textarea {
+  /* Markdown is written in lines; wrapping mid-word would fight that. */
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.analyze-editor-actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.analyze-editor-title {
+  margin: 0;
+  font-family: var(--font-scripture);
+  font-size: var(--font-xl);
+  font-weight: 400;
+  color: var(--ink);
+}
+
+/* Rendered markdown. Descendant selectors rather than classes, because the
+   HTML comes from marked and carries no class names of ours. */
+.analyze-editor-rendered {
+  color: var(--ink);
+  font-size: var(--font-md);
+  line-height: 1.6;
+  /* A long URL or code span must scroll, not widen the panel. */
+  overflow-wrap: break-word;
+}
+
+.analyze-editor-rendered > :first-child {
+  margin-top: 0;
+}
+
+.analyze-editor-rendered a {
+  color: var(--lapis-strong);
+}
+
+.analyze-editor-rendered pre {
+  overflow-x: auto;
+  padding: var(--space-sm);
+  background-color: var(--paper-alt);
+  border-radius: var(--radius-sm);
+}
+
+.analyze-editor-rendered blockquote {
+  margin-left: 0;
+  padding-left: var(--space-sm);
+  border-left: 3px solid var(--gold);
+  color: var(--ink-soft);
+}
+
+/* ─── Reference List ─────────────────────────────────────────────────────── */
+
+.analyze-reference-list {
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.analyze-reference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--paper);
+  border: var(--analyze-border-width) solid var(--border);
+  border-left: 3px solid var(--note-marker);
+  border-radius: var(--radius-sm);
+}
+
+.analyze-reference + .analyze-reference {
+  margin-top: var(--space-xs);
+}
+
+.analyze-reference-label {
+  color: var(--ink);
+  font-size: var(--font-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.analyze-reference-remove {
+  padding: 0 var(--space-xs);
+  background-color: transparent;
+  color: var(--ink-faint);
+  font-size: var(--font-lg);
+  line-height: 1;
+}
+
+.analyze-reference-remove:hover {
+  color: var(--madder);
+}
+
+/* ─── Narrow Screens ─────────────────────────────────────────────────────── */
+
+/* Below three panel widths plus gaps, stack instead of squeezing. A stacked
+   spine lies flat again — there is no side to be pushed to. */
+@media (max-width: 980px) {
+  .analyze-panels {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .analyze-panel {
+    /* Each panel keeps a usable reading height once stacked. */
+    height: 70vh;
+  }
+
+  .analyze-spine {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: center;
+    padding: var(--space-sm);
+  }
+
+  .analyze-spine-text {
+    flex: 0 0 auto;
+    writing-mode: horizontal-tb;
+  }
+
+  .analyze-spine--left .analyze-spine-text {
+    transform: none;
+  }
+}

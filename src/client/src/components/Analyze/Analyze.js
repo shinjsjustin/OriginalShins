@@ -1,0 +1,318 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import Navbar from '../Navbar';
+import ScripturePanel from './ScripturePanel';
+import NotesPanel from './NotesPanel';
+import PanelSpine from './PanelSpine';
+import useBooks from './useBooks';
+import usePanelPositions from './usePanelPositions';
+import useNotes from './useNotes';
+import useActiveNote from './useActiveNote';
+import useSelectedVerses from './useSelectedVerses';
+import useIdeas from '../Library/useIdeas';
+import { describePosition } from './navigation';
+import { NOTE_PARAM } from './panelParams';
+import '../Styling/Analyze.css';
+
+// The Analyze page: one passage in the centre with a second to compare it
+// against on the left and everything written about it on the right.
+//
+// The centre panel is the primary one. It is the passage under study, and it is
+// what the notes panel follows — move it and the notes move with it, which is
+// the only cascade on the page. The compare panel is deliberately outside that:
+// a second passage read *against* the first is no use if it is dragged along.
+//
+// Both side panels can be pushed aside, and the centre takes the room.
+//
+// The note the editor should open on arrives as ?note=<id>, e.g.
+// /analyze?l=43.15&note=12. Unlike ?l= and ?r= it is a one-shot instruction
+// rather than state: nothing writes it back, and closing the editor leaves it
+// in the URL without reopening the note. The name lives in panelParams.js
+// beside the panel params, because the pages that build these links — the topic
+// tree and search — read it from there.
+
+// Panel positions live in the URL (?l=1.1&r=40.1), so this component holds no
+// navigation state. What it does own is everything that spans panels: the notes
+// for the primary chapter, which note is hovered, which is open, and the verse
+// selection. Those cross the boundary between the scripture and notes panels,
+// so neither of them can hold the copy.
+const PRIMARY = 'primary';
+const COMPARE = 'compare';
+
+const NO_REFERENCES = [];
+
+const Analyze = () => {
+    const { books, isLoading, error } = useBooks();
+    const { primary, compare, setPrimary, setCompare } = usePanelPositions(books);
+    const notes = useNotes(primary);
+
+    // The ideas a note can be filed under, and the standalone ideas the notes
+    // panel lists. Loaded once for the page rather than per note: the editor
+    // opens on whichever note you click, and a picker that fetched its options
+    // on open would show an empty list for a moment every time.
+    const { ideas, createIdea } = useIdeas();
+
+    const [hoveredNoteId, setHoveredNoteId] = useState(null);
+    const [activeNoteId, setActiveNoteId] = useState(null);
+    const [scrollRequest, setScrollRequest] = useState(null);
+    const [isComposingIdea, setIsComposingIdea] = useState(false);
+
+    // Which side panels are pushed aside. View state rather than URL state: it
+    // is how one reader has arranged the room right now, not part of the
+    // passage a shared link is about.
+    const [collapsed, setCollapsed] = useState({ compare: false, notes: false });
+
+    const toggleCollapsed = useCallback((panel) => {
+        setCollapsed(previous => ({ ...previous, [panel]: !previous[panel] }));
+    }, []);
+
+    // ?note=<id> opens the editor on one note. It is how the Topic page's tree
+    // hands a note over: that row links to this page positioned at the note's
+    // first anchor, and without this param it would arrive at the right chapter
+    // with the note still closed.
+    //
+    // The effect depends on the param and not on activeNoteId, so it fires once
+    // per navigation. Closing the editor therefore stays closed rather than
+    // being reopened by a param still sitting in the URL.
+    const [searchParams] = useSearchParams();
+    const requestedNoteId = searchParams.get(NOTE_PARAM);
+
+    useEffect(() => {
+        const noteId = Number(requestedNoteId);
+        if (Number.isInteger(noteId) && noteId > 0) {
+            setActiveNoteId(noteId);
+        }
+    }, [requestedNoteId]);
+
+    const { toggleVerse, clearSelection, selectedVersesIn } = useSelectedVerses();
+
+    const togglePrimaryVerse = useCallback(
+        verseIndex => toggleVerse(PRIMARY, primary, verseIndex),
+        [toggleVerse, primary]
+    );
+    const toggleCompareVerse = useCallback(
+        verseIndex => toggleVerse(COMPARE, compare, verseIndex),
+        [toggleVerse, compare]
+    );
+
+    // Resolving clicked verses into references needs the chapter each panel has
+    // loaded, which only that panel holds — so the panels report the references
+    // upward and this is where the editor picks them up.
+    const [referencesByPanel, setReferencesByPanel] = useState({
+        [PRIMARY]: NO_REFERENCES,
+        [COMPARE]: NO_REFERENCES,
+    });
+
+    const setPanelReferences = useCallback((panel, references) => {
+        setReferencesByPanel(previous => ({ ...previous, [panel]: references }));
+    }, []);
+
+    const handlePrimaryReferences = useCallback(
+        references => setPanelReferences(PRIMARY, references),
+        [setPanelReferences]
+    );
+    const handleCompareReferences = useCallback(
+        references => setPanelReferences(COMPARE, references),
+        [setPanelReferences]
+    );
+
+    // At most one panel holds the selection, so at most one of these is filled.
+    const pendingReferences = referencesByPanel[PRIMARY].length > 0
+        ? referencesByPanel[PRIMARY]
+        : referencesByPanel[COMPARE];
+
+    // The picker's shape: id plus the label to show. The editor never sees an
+    // idea's body, so this is everything it needs.
+    const ideaOptions = ideas.map(idea => ({ id: idea.id, label: idea.title }));
+
+    // The open note comes from the current lists whenever they hold it, so the
+    // editor always shows the latest fetch. It survives navigating to a chapter
+    // the note does not touch, which is what makes anchoring a note across a
+    // chapter boundary possible at all — see useActiveNote.
+    const { activeNote, retain } = useActiveNote(
+        activeNoteId,
+        notes.notes,
+        notes.unreferenced
+    );
+
+    // Clicking a gutter marker both opens the note and scrolls to it. The token
+    // makes a repeat click on the same marker a new request; the note id on its
+    // own would not change and the scroll effect would not re-run.
+    const handleOpenNote = useCallback((noteId) => {
+        setActiveNoteId(noteId);
+        setScrollRequest(previous => ({ noteId, token: (previous ? previous.token : 0) + 1 }));
+    }, []);
+
+    const handleCloseNote = useCallback(() => setActiveNoteId(null), []);
+
+    // Anchors are added one at a time: POST /notes takes a single reference,
+    // and a selection with a gap in it is genuinely several anchors on one note.
+    // Sequential rather than parallel so the note that comes back last is the
+    // one carrying every anchor.
+    const anchorAll = useCallback(async (noteId, references) => {
+        let latest = null;
+        for (const reference of references) {
+            const updated = await notes.addReference(noteId, reference);
+            if (updated) {
+                latest = updated;
+            }
+        }
+        return latest;
+    }, [notes]);
+
+    // A note is created from what is selected, empty and untitled, and opened
+    // straight away — an empty note's whole point is the editor. The response
+    // is retained as well as selected, so the editor opens on this copy instead
+    // of waiting for the list refetch to catch up.
+    const handleCreateFromSelection = useCallback(async (references) => {
+        if (references.length === 0) return;
+
+        const created = await notes.createNote({ reference: references[0] });
+        if (!created) return;
+
+        const anchored = await anchorAll(created.id, references.slice(1));
+
+        retain(anchored || created);
+        setActiveNoteId(created.id);
+        clearSelection();
+    }, [notes, anchorAll, retain, clearSelection]);
+
+    // Anchoring a note while reading a chapter it does not yet touch returns
+    // the updated note before the list containing it reloads; retain it so the
+    // new references appear in the editor immediately.
+    const handleAddReferences = useCallback(async (noteId, references) => {
+        const anchored = await anchorAll(noteId, references);
+        if (anchored) {
+            retain(anchored);
+        }
+        clearSelection();
+    }, [anchorAll, retain, clearSelection]);
+
+    // The multi-select hands over the complete set, which goes straight to
+    // PUT /notes/:id/ideas. Retained for the same reason a new reference is:
+    // the response is the freshest copy of the note, and the list refetch that
+    // follows has not landed yet.
+    const handleSaveIdeas = useCallback(async (noteId, ideaIds) => {
+        const note = await notes.setNoteIdeas(noteId, ideaIds);
+        if (note) {
+            retain(note);
+        }
+    }, [notes, retain]);
+
+    const handleDeleteNote = useCallback(async (noteId) => {
+        const removed = await notes.removeNote(noteId);
+        if (removed) {
+            setActiveNoteId(null);
+        }
+    }, [notes]);
+
+    const compareLabel = 'Compare';
+    const primaryLabel = 'Passage';
+
+    return (
+        <div className="analyze-page">
+            <Navbar />
+
+            {error && (
+                <p className="analyze-message analyze-message--error" role="alert">
+                    {error}
+                </p>
+            )}
+
+            {!error && isLoading && (
+                <p className="analyze-message">Loading scripture…</p>
+            )}
+
+            {!error && !isLoading && (
+                <main className="analyze-panels">
+                    {collapsed.compare ? (
+                        <PanelSpine
+                            side="left"
+                            label={compareLabel}
+                            caption={describePosition(books, compare)}
+                            onExpand={() => toggleCollapsed('compare')}
+                        />
+                    ) : (
+                        <ScripturePanel
+                            label={compareLabel}
+                            collapse={{ side: 'left', onCollapse: () => toggleCollapsed('compare') }}
+                            books={books}
+                            position={compare}
+                            onChange={setCompare}
+                            notesRevision={notes.revision}
+                            hoveredNoteId={hoveredNoteId}
+                            onHoverNote={setHoveredNoteId}
+                            onOpenNote={handleOpenNote}
+                            selectedVerseIndexes={selectedVersesIn(COMPARE, compare)}
+                            onToggleVerse={toggleCompareVerse}
+                            onSelectionReferencesChange={handleCompareReferences}
+                            onCreateNoteFromSelection={handleCreateFromSelection}
+                            onClearSelection={clearSelection}
+                        />
+                    )}
+
+                    {/* The centre panel. Everything else on the page answers to
+                        it: the notes panel renders its chapter, and it is the
+                        one panel that cannot be pushed aside. */}
+                    <ScripturePanel
+                        label={primaryLabel}
+                        isPrimary
+                        books={books}
+                        position={primary}
+                        onChange={setPrimary}
+                        notesRevision={notes.revision}
+                        hoveredNoteId={hoveredNoteId}
+                        onHoverNote={setHoveredNoteId}
+                        onOpenNote={handleOpenNote}
+                        selectedVerseIndexes={selectedVersesIn(PRIMARY, primary)}
+                        onToggleVerse={togglePrimaryVerse}
+                        onSelectionReferencesChange={handlePrimaryReferences}
+                        onCreateNoteFromSelection={handleCreateFromSelection}
+                        onClearSelection={clearSelection}
+                    />
+
+                    {collapsed.notes ? (
+                        <PanelSpine
+                            side="right"
+                            label="Notes"
+                            caption={describePosition(books, primary)}
+                            onExpand={() => toggleCollapsed('notes')}
+                        />
+                    ) : (
+                        <NotesPanel
+                            books={books}
+                            position={primary}
+                            onChange={setPrimary}
+                            collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
+                            notes={notes.notes}
+                            unreferenced={notes.unreferenced}
+                            ideas={ideas}
+                            isLoading={notes.isLoading}
+                            error={notes.error}
+                            actionError={notes.actionError}
+                            activeNote={activeNote}
+                            hoveredNoteId={hoveredNoteId}
+                            scrollRequest={scrollRequest}
+                            isComposingIdea={isComposingIdea}
+                            pendingReferences={pendingReferences}
+                            ideaOptions={ideaOptions}
+                            onHoverNote={setHoveredNoteId}
+                            onOpenNote={setActiveNoteId}
+                            onCloseNote={handleCloseNote}
+                            onStartIdea={() => setIsComposingIdea(true)}
+                            onCancelIdea={() => setIsComposingIdea(false)}
+                            onCreateIdea={createIdea}
+                            onSaveNote={notes.updateNote}
+                            onDeleteNote={handleDeleteNote}
+                            onAddReferences={handleAddReferences}
+                            onRemoveReference={notes.removeReference}
+                            onSaveIdeas={handleSaveIdeas}
+                        />
+                    )}
+                </main>
+            )}
+        </div>
+    );
+};
+
+export default Analyze;
