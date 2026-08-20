@@ -57,6 +57,12 @@ export const pinLabelFor = (title, isPinned) =>
  * @param kind        'topic' | 'idea' | 'note' | 'unfiled' — styling only
  * @param title       the card's line of text; the pin's label uses it too
  * @param subtitle    the quieter second line, if the card has one
+ * @param body        a node to put under the title instead of a subtitle, for
+ *                    a card whose second half is not a line of text — the idea
+ *                    at the centre of the orbit renders its markdown body here.
+ *                    A card given one must not also be given `onActivate`: the
+ *                    face is a button when it activates, and rendered markdown
+ *                    inside a button is markup no browser agrees on
  * @param position    { x, y, width, height } from a layout function, in the
  *                    coordinates of whatever this card is rendered inside
  * @param scale       how big this card is relative to its full size, which is
@@ -76,6 +82,7 @@ const BubbleCard = ({
     kind = 'idea',
     title = '',
     subtitle = '',
+    body = null,
     position,
     scale = 1,
     isSelected = false,
@@ -113,6 +120,17 @@ const BubbleCard = ({
         ...style,
     };
 
+    // Written once and rendered into whichever element the face turns out to
+    // be, so the two branches below cannot drift apart.
+    const faceContent = (
+        <>
+            <span className="thoughts-bubble-title">{title}</span>
+            {body || (subtitle
+                ? <span className="thoughts-bubble-subtitle">{subtitle}</span>
+                : null)}
+        </>
+    );
+
     // onFocus and onBlur rather than :focus-within, because the pin has to be
     // MOUNTED by the time focus reaches the card — a CSS rule can only reveal
     // an element that is already there. React's focus events bubble, so this
@@ -137,14 +155,10 @@ const BubbleCard = ({
         >
             {onActivate ? (
                 <button type="button" className="thoughts-bubble-face" onClick={onActivate}>
-                    <span className="thoughts-bubble-title">{title}</span>
-                    {subtitle && <span className="thoughts-bubble-subtitle">{subtitle}</span>}
+                    {faceContent}
                 </button>
             ) : (
-                <div className="thoughts-bubble-face">
-                    <span className="thoughts-bubble-title">{title}</span>
-                    {subtitle && <span className="thoughts-bubble-subtitle">{subtitle}</span>}
-                </div>
+                <div className="thoughts-bubble-face">{faceContent}</div>
             )}
 
             {/* A sibling of the face, never a child of it: the face is a

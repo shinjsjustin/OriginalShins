@@ -2,6 +2,7 @@ import React from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
 import TopicsField from './TopicsField';
+import IdeaOrbit from './IdeaOrbit';
 import useThoughtsData from './useThoughtsData';
 import usePins from './usePins';
 import useThoughtsView from './useThoughtsView';
@@ -13,10 +14,20 @@ import '../Styling/Thoughts.css';
 // ── What is here, and what is deliberately not ────────────────────────────
 //
 // This is the shell: the three hooks wired together, the top bar, the two
-// regions the rest of the page fills, and the banners. The topics view draws
-// itself now; IdeaOrbit and the panel's rows and edit forms arrive next, into
-// the same two slots. The shell decides where the state lives, and every piece
-// that follows reads it from here rather than fetching again.
+// regions the rest of the page fills, and the banners. Both views draw
+// themselves now; the panel's rows and edit forms arrive next, into the same
+// slot. The shell decides where the state lives, and every piece that follows
+// reads it from here rather than fetching again.
+//
+// ── Why the canvas is not a plain either/or ───────────────────────────────
+//
+// The topics field is mounted only in the topics view, but IdeaOrbit is
+// mounted in both and draws nothing when it has nothing to draw. That is the
+// one concession the reverse animation asks for: leaving an idea is a change
+// to the query string, and a view that were swapped out on that change would
+// disappear rather than close. IdeaOrbit holds the idea it was last given for
+// as long as its exit takes and then renders null, so "which view" stays a
+// question about the URL and never about a timer this component has to keep.
 //
 // ── Three hooks, and why the page composes them rather than one of them ────
 //
@@ -48,6 +59,7 @@ const Thoughts = () => {
     const {
         topics,
         ideas,
+        notes,
         isLoading,
         error: loadError,
         actionError: dataActionError,
@@ -108,11 +120,18 @@ const Thoughts = () => {
                                 onShowIdea={showIdea}
                             />
                         )}
-                        {!isLoading && !error && ideaId !== null && (
-                            <p className="thoughts-message">
-                                The idea view is not drawn yet.
-                            </p>
-                        )}
+
+                        {/* Outside the guards above on purpose: an orbit that
+                            is closing has already lost its idea, and a load
+                            error is not a reason to yank a view out from under
+                            the reader mid-animation. It draws nothing at all
+                            unless it has an idea in hand. */}
+                        <IdeaOrbit
+                            idea={error ? null : openIdea}
+                            notes={notes}
+                            isPinned={isPinned}
+                            onTogglePin={togglePin}
+                        />
                     </section>
 
                     {/* Slot two: the pinned panel — the page's editing surface,

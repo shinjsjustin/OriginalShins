@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BubbleCard from './BubbleCard';
 import buildField, { TOPIC_CARD } from './fieldLayout';
 import buildFan from './fanLayout';
+import useCanvasSize from './useCanvasSize';
+import { centreOf, collapseOnto, relativeTo } from './cardGeometry';
 import { UNTITLED_IDEA_LABEL } from './TopBar';
 import { countLabel } from '../Library/format';
 
@@ -54,13 +56,6 @@ import { countLabel } from '../Library/format';
 export const UNFILED_ID = 'unfiled';
 export const UNFILED_TITLE = 'Unfiled ideas';
 
-// The size the field is drawn at before anything has been measured — a canvas
-// that has not been laid out yet is 0×0, and the layout functions correctly
-// refuse to place cards on nothing. The measurement below runs before paint,
-// so this is what a test environment sees and what the very first frame of a
-// zero-height container would get, rather than a blank canvas.
-const FALLBACK_CANVAS = Object.freeze({ width: 960, height: 560 });
-
 // How much later each card leaves the topic than the one before it. Small on
 // purpose: enough that the fan sweeps rather than appears, short enough that
 // the last card of fifteen is not a quarter-second behind the first.
@@ -102,47 +97,6 @@ export const buildClusters = (topics, ideas) => {
     return unfiled.length === 0
         ? clusters
         : [...clusters, { id: UNFILED_ID, kind: 'unfiled', title: UNFILED_TITLE, ideas: unfiled }];
-};
-
-/** The canvas region's size in pixels, remeasured when the window changes. */
-const useCanvasSize = (ref) => {
-    const [size, setSize] = useState(null);
-
-    useLayoutEffect(() => {
-        const measure = () => {
-            const node = ref.current;
-            if (!node) return;
-
-            const { width, height } = node.getBoundingClientRect();
-            setSize(width > 0 && height > 0 ? { width, height } : null);
-        };
-
-        measure();
-        window.addEventListener('resize', measure);
-        return () => window.removeEventListener('resize', measure);
-    }, [ref]);
-
-    return size || FALLBACK_CANVAS;
-};
-
-const centreOf = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
-
-/** The box `inner` occupies inside `outer`, both given in canvas coordinates. */
-const relativeTo = (outer, inner) => ({
-    x: inner.x - outer.x,
-    y: inner.y - outer.y,
-    width: inner.width,
-    height: inner.height,
-});
-
-/** The custom properties that collapse a card onto `target` when it is closed. */
-const collapseOnto = (target, box) => {
-    const from = centreOf(box);
-
-    return {
-        '--fan-dx': `${target.x - from.x}px`,
-        '--fan-dy': `${target.y - from.y}px`,
-    };
 };
 
 /**
@@ -244,7 +198,7 @@ const TopicCluster = ({
                                 // Cards nearest the start of the arc leave
                                 // first, so the fan reads as one movement out
                                 // of the topic rather than fifteen at once.
-                                '--fan-delay': `${card.index * FAN_STAGGER_MS}ms`,
+                                '--card-delay': `${card.index * FAN_STAGGER_MS}ms`,
                             }}
                         />
                     );

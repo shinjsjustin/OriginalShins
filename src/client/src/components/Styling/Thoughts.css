@@ -340,13 +340,13 @@
   z-index: 1;
   opacity: 0;
   pointer-events: none;
-  /* --fan-dx/--fan-dy are the vector back to the topic's centre, written per
+  /* --card-dx/--card-dy are the vector back to the topic's centre, written per
      card by TopicsField: closed, every card sits ON its topic, so opening is
      one movement outwards rather than fifteen fades in place. */
-  transform: translate(var(--fan-dx, 0), var(--fan-dy, 0)) scale(0.55);
+  transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(0.55);
   transition:
-    transform 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--fan-delay, 0ms),
-    opacity 180ms ease var(--fan-delay, 0ms);
+    transform 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--card-delay, 0ms),
+    opacity 180ms ease var(--card-delay, 0ms);
 }
 
 .thoughts-cluster.is-active .thoughts-fan-item,
@@ -375,7 +375,7 @@
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translate(var(--fan-dx, 0), var(--fan-dy, 0)) scale(0.55);
+  transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(0.55);
 }
 
 .thoughts-fan-chip {
@@ -431,4 +431,204 @@
 
 .thoughts-bubble.is-pinned {
   border-color: var(--color-accent);
+}
+
+/* ─── The idea orbit ─────────────────────────────────────────────────────────
+
+   The idea view: one idea enlarged at the centre of the canvas with its notes
+   ringing it, and the animation that opens and closes the whole view.
+
+   ── In is an animation, out is a transition ────────────────────────────────
+
+   Every card here plays `orbit-in` when it MOUNTS, rather than transitioning on
+   a class the way the fan does, because the notes do not all arrive together:
+   the idea is in hand immediately and each note is a request behind it. A
+   transition needs a from-state that was rendered; a keyframe animation runs
+   whenever its element appears, which is the only rule that covers a card
+   mounting a beat late. `backwards` fill holds the from-state through the
+   card's stagger delay so a waiting card is invisible rather than briefly
+   whole.
+
+   Closing is the other case entirely — every card is present and `.is-closing`
+   lands on all of them at once — so it is a transition, and it reuses the one
+   `.thoughts-bubble` already declares. `animation: none` there cancels an entry
+   still in flight, because an animation outranks a transition in the cascade
+   and a reader who presses back mid-open must still see the view leave.
+
+   ── The backdrop ──────────────────────────────────────────────────────────
+
+   The page mounts the topics field again the moment the query string loses its
+   idea, which is 320ms before this view has finished leaving. `::before` is
+   what stands between the two: the canvas's own colour, over the field,
+   fading out as the orbit collapses. It is a pseudo-element rather than
+   opacity on the region itself so that fading the backdrop cannot fade the
+   cards travelling over it.
+
+   ── Depths ────────────────────────────────────────────────────────────────
+
+     0  the backdrop
+     1  the "no notes" line
+     2  a note card (from .thoughts-bubble)
+     3  the centred idea, above the ring it is the subject of
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.thoughts-orbit {
+  /* The canvas's whole region, as the field takes it: orbitLayout keeps its own
+     margin off the edges (ORBIT_RING_PADDING) and can only do that if the box
+     it was measured against is the real one. */
+  position: absolute;
+  inset: 0;
+}
+
+.thoughts-orbit::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: var(--bg-card);
+  transition: opacity 260ms ease;
+}
+
+.thoughts-orbit.is-closing::before {
+  opacity: 0;
+}
+
+@keyframes orbit-in {
+  from {
+    opacity: 0;
+    /* --card-dx/--card-dy put the card on the centred idea; the centred idea
+       itself has neither and so simply grows in place. */
+    transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(var(--card-from-scale, 0.55));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.thoughts-orbit .thoughts-bubble {
+  animation: orbit-in 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--card-delay, 0ms) backwards;
+}
+
+.thoughts-orbit.is-closing .thoughts-bubble {
+  animation: none;
+  opacity: 0;
+  transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(var(--card-from-scale, 0.55));
+}
+
+/* ─── The centred idea ───────────────────────────────────────────────────── */
+
+.thoughts-orbit-centre {
+  --card-from-scale: 0.4;
+
+  z-index: 3;
+  box-shadow: var(--shadow-lg);
+}
+
+/* A document, not a label: the body reads from the top left like every other
+   piece of prose in the app, so the face stops centring its contents. */
+.thoughts-orbit-centre .thoughts-bubble-face {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+}
+
+.thoughts-orbit-centre .thoughts-bubble-title {
+  font-size: calc(var(--font-md) * var(--bubble-scale, 1));
+}
+
+/* Neither card here is a label with room to spare: the centre holds a body
+   longer than itself and a note holds three lines of one, so the face's flex
+   column has more content than height in the normal case. Without this the
+   title is the item that gives — it is shrunk to a few crushed pixels while the
+   thing it names goes on scrolling underneath. The title keeps its size; the
+   body is the part that was always going to be cut. */
+.thoughts-orbit .thoughts-bubble-title {
+  flex: 0 0 auto;
+}
+
+/* Rendered markdown. Descendant selectors rather than classes, because the HTML
+   comes from marked and carries no class names of ours — the same arrangement
+   the note editor uses.
+
+   It scrolls rather than clipping: this is the one place the whole body is
+   read, and a body longer than the card is the normal case rather than the
+   exception. */
+.thoughts-orbit-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  color: var(--on-ground-soft);
+  font-size: calc(var(--font-sm) * var(--bubble-scale, 1));
+  line-height: 1.5;
+  /* A long URL or code span must scroll the card's own body, not widen it. */
+  overflow-wrap: break-word;
+}
+
+.thoughts-orbit-body > :first-child {
+  margin-top: 0;
+}
+
+.thoughts-orbit-body a {
+  color: var(--color-accent);
+}
+
+.thoughts-orbit-body pre {
+  overflow-x: auto;
+  padding: var(--space-xs);
+  background-color: var(--ground);
+  border-radius: var(--radius-sm);
+}
+
+.thoughts-orbit-body blockquote {
+  margin-left: 0;
+  padding-left: var(--space-sm);
+  border-left: 3px solid var(--ground-line);
+}
+
+/* ─── The ring ───────────────────────────────────────────────────────────── */
+
+/* A note card is title over body, and the body is the reason it is taller than
+   anything on the topics field. Left-aligned for the same reason the centre is:
+   three lines of prose centred is three ragged lines. */
+.thoughts-orbit-note .thoughts-bubble-face {
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* The spec's three lines and its "…". The clamp is the browser's because only
+   the browser knows where three lines of this width end — the card is handed
+   the raw body and cuts nothing itself. */
+.thoughts-orbit-note .thoughts-bubble-subtitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  /* Markdown source, so a body may arrive with its own line breaks; they are
+     what the clamp counts. */
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+/* ─── An idea with nothing under it yet ──────────────────────────────────── */
+
+.thoughts-orbit-empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+.thoughts-orbit.is-closing .thoughts-orbit-empty {
+  opacity: 0;
+  transition: opacity 200ms ease;
 }
