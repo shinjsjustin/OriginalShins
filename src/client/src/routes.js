@@ -10,6 +10,7 @@ import TopicsPage from './components/Library/TopicsPage';
 import TopicTree from './components/Topics/TopicTree';
 import SearchPage from './components/Search/SearchPage';
 import Overview from './components/Overview/Overview';
+import Thoughts from './components/Thoughts/Thoughts';
 
 import ProtectedRoute from './config/ProtectedRoute';
 import UnprotectedRoute from './config/UnprotectedRoute';
@@ -60,6 +61,12 @@ const routes = [
     // topic. Which rails are drawn and which topic the diagram is restricted to
     // live in the query string, e.g. /overview?tiers=notes,topics&topicId=3
     { path: '/overview', element: <ProtectedRoute><Overview /></ProtectedRoute> },
+
+    // The topic -> idea -> note hierarchy as one canvas: topic cards that fan
+    // their ideas out on hover, an idea centred with its notes orbiting it, and
+    // the pinned panel beside them where anything pinned is edited. Which of
+    // the two views is showing lives in the query string, e.g. /thoughts?idea=7
+    { path: '/thoughts', element: <ProtectedRoute><Thoughts /></ProtectedRoute> },
 
     // TODO: Add more protected routes here, e.g.:
     // { path: '/jobs',          element: <ProtectedRoute><JobList /></ProtectedRoute> },

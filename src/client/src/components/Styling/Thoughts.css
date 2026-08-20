@@ -1,0 +1,159 @@
+/* ─── Thoughts ────────────────────────────────────────────────────────────────
+   /thoughts: the topic → idea → note hierarchy as one canvas, with the pinned
+   panel docked to its right.
+
+   This file is the page's frame only — the two regions, the top bar and the
+   banners. The cards, the spotlight fan, the orbit and the panel's rows bring
+   their own rules as they arrive; every one of them sits inside the boxes laid
+   out here.
+
+   ── Why the canvas is a fixed height and not a growing one ─────────────────
+
+   Card positions come from pure layout functions that are handed a canvas
+   size, so the canvas must have one before anything is drawn in it. A region
+   that grows with its content cannot answer that question — the content is
+   positioned from the answer. So the body claims whatever the viewport leaves
+   under the bar, and the canvas fills it.
+
+   Colours, spaces and radii resolve to tokens from :root in index.css.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.thoughts-page {
+  /* The Navbar's profile icon is fixed at the top right; this is the room the
+     page leaves for it, as on /overview. */
+  --thoughts-navbar-clearance: 64px;
+  --thoughts-panel-width: 320px;
+
+  min-height: 100vh;
+  background-color: var(--bg-dark);
+  padding: var(--thoughts-navbar-clearance) var(--space-md) var(--space-lg);
+}
+
+.thoughts-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  /* Full width on purpose, unlike the reading pages: the canvas is a field of
+     cards and every pixel of it is somewhere a card can be. */
+  max-width: none;
+}
+
+/* ─── Top bar ────────────────────────────────────────────────────────────── */
+
+.thoughts-topbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.thoughts-topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.thoughts-topbar-creates {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.thoughts-action {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--font-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.thoughts-action:hover {
+  background-color: var(--bg-alt);
+}
+
+/* ─── Breadcrumb ─────────────────────────────────────────────────────────── */
+
+/* Under the bar, and quiet: it says where you are, and the reader's attention
+   belongs on the idea at the centre of the canvas rather than on its label. */
+.thoughts-breadcrumb {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  color: var(--on-ground-soft);
+  font-size: var(--font-sm);
+}
+
+.thoughts-breadcrumb-separator {
+  color: var(--on-ground-faint);
+}
+
+.thoughts-breadcrumb-idea {
+  color: var(--on-ground);
+}
+
+/* ─── The two regions ────────────────────────────────────────────────────── */
+
+.thoughts-body {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-md);
+  /* Whatever the bar and the page's own padding leave. The canvas is the one
+     thing here that wants every pixel it can have. */
+  height: calc(100vh - var(--thoughts-navbar-clearance) - 120px);
+  min-height: 420px;
+}
+
+.thoughts-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  /* Cards are absolutely positioned from the layout functions, and a fan or an
+     orbit may reach past the edge mid-animation. Clipped rather than scrolled:
+     the field is meant to fit, and a scrollbar appearing on hover would move
+     everything under the cursor. */
+  overflow: hidden;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-md);
+}
+
+.thoughts-panel {
+  flex: 0 0 var(--thoughts-panel-width);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: var(--ground);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.thoughts-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--ground-line);
+}
+
+.thoughts-panel-title {
+  margin: 0;
+  color: var(--on-ground);
+  font-size: var(--font-md);
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────────── */
+
+.thoughts-message {
+  margin: 0;
+  padding: var(--space-md);
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.thoughts-message--error {
+  color: var(--color-danger);
+}

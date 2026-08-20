@@ -50,6 +50,7 @@ const Navbar = () => {
                             { path: '/topics', label: 'Topics' },
                             { path: '/search', label: 'Search' },
                             { path: '/overview', label: 'Overview' },
+                            { path: '/thoughts', label: 'Thoughts' },
                         ].map(link => (
                             <button
                                 key={link.path}
