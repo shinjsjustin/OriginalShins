@@ -29,8 +29,9 @@ import { countLabel } from './format';
 //
 // An open cluster's box is wide enough to cover its neighbours, and a hit
 // region sitting on top of a neighbour is a topic the reader can no longer
-// hover — the spec asks that hovering another topic switches the spotlight, so
-// that would break it. The fix is stacking order rather than geometry: the
+// reach — hovering another topic moves the spotlight to it, and clicking one
+// locks it open, so a box that swallowed its neighbours would take both away.
+// The fix is stacking order rather than geometry: the
 // cluster element takes no `z-index`, so it does not create a stacking context
 // and does not paint above anything; the cards inside it declare their own,
 // and they land in the canvas's stacking context alongside every other card.
@@ -39,6 +40,17 @@ import { countLabel } from './format';
 // Nothing on the cluster element may ever set `transform`, `opacity`, `filter`
 // or `will-change` — any of those would make it a stacking context and put the
 // dead zone back.
+//
+// ── Hover opens a fan; a click sticks it open ──────────────────────────────
+//
+// Hovering is enough to READ a topic's ideas and not enough to REACH one. The
+// petals sit on an arc wide enough to overlap the neighbouring topic cards,
+// which by the paragraph above paint on top of the open cluster's empty
+// region — so the cursor's trip out to a petal crosses cards belonging to
+// other clusters. Clicking the topic locks its fan open so that trip can be
+// made, and while the lock is held no amount of hovering elsewhere disturbs
+// it. Only a second click on the same topic, a click on a different one, or
+// Esc lets it go.
 //
 // ── Every fan is mounted, all the time ─────────────────────────────────────
 //
@@ -247,8 +259,11 @@ const TopicsField = ({
     const [lockedId, setLockedId] = useState(null);
     const [expandedId, setExpandedId] = useState(null);
 
-    // A lock outranks the pointer: that is what "locks the fan open" means, and
-    // it is why leaving a locked cluster leaves it open.
+    // A lock outranks the pointer: that is what "locks the fan open" means. It
+    // is why leaving a locked cluster leaves it open, and why hovering any
+    // other one while a lock is held changes nothing on screen. `hoveredId` is
+    // still tracked underneath, so that releasing the lock hands the spotlight
+    // to whatever the cursor is actually on rather than closing everything.
     const activeId = lockedId !== null ? lockedId : hoveredId;
 
     const clusters = useMemo(() => buildClusters(topics, ideas), [topics, ideas]);
@@ -259,18 +274,27 @@ const TopicsField = ({
         (box, index) => buildFan(clusters[index].ideas.length, centreOf(box), canvas)
     ), [field, clusters, canvas]);
 
+    // A hover is recorded whatever else is going on, but it does not touch the
+    // lock. It used to: hovering another topic was a third way to unlock,
+    // alongside a second click and Esc — and it defeated the lock's whole
+    // purpose. The fan's petals sit on an arc wide enough to overlap the
+    // neighbouring topic cards, and those cards paint ABOVE the open cluster's
+    // region by design, so the cursor's trip out to a petal crosses them. With
+    // hover unlocking, that crossing shut the fan a card short of the one the
+    // reader was reaching for, which is the exact journey the lock exists to
+    // make possible. Ending it is now a deliberate act and nothing else: a
+    // second click on the locked topic, a click on a different one, or Esc.
     const handleEnter = useCallback((id) => {
         setHoveredId(id);
-        // Hovering a different topic is the third way to unlock, alongside a
-        // second click and Esc. Hovering the LOCKED one is not: that would
-        // undo the lock the moment the reader's cursor returned to it.
-        setLockedId(locked => (locked !== null && locked !== id ? null : locked));
     }, []);
 
     const handleLeave = useCallback((id) => {
         setHoveredId(hovered => (hovered === id ? null : hovered));
     }, []);
 
+    // Click to stick, click again to unstick — and clicking a different topic
+    // moves the lock rather than adding a second one, so there is never more
+    // than one fan held open.
     const handleTopicClick = useCallback((id) => {
         setLockedId(locked => (locked === id ? null : id));
     }, []);

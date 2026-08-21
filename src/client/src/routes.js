@@ -1,9 +1,10 @@
+import { Navigate } from 'react-router-dom';
+
 import Home from './components/Home';
 import Login from './components/Authentication/Login';
 import Register from './components/Authentication/Register';
 import AccessDenied from './components/Authentication/AccessDenied';
 import PostRegisterPage from './components/Authentication/PostRegisterPage';
-import Dashboard from './components/Dashboard/Dashboard';
 import Analyze from './components/Analyze/Analyze';
 import SearchPage from './components/Search/SearchPage';
 import Overview from './components/Overview/Overview';
@@ -26,15 +27,18 @@ const routes = [
     { path: '/access-denied', element: <AccessDenied /> },
     { path: '/post-register', element: <PostRegisterPage /> },
 
-    // Auth pages — redirect to /dashboard if already logged in
+    // Auth pages — redirect to /analyze if already logged in
     { path: '/login',    element: <UnprotectedRoute><Login /></UnprotectedRoute> },
     { path: '/register', element: <UnprotectedRoute><Register /></UnprotectedRoute> },
 
     // Protected pages — redirect to /login if no valid token
     // requiredAccessLevel defaults to 1 (approved user)
-    { path: '/dashboard', element: <ProtectedRoute><Dashboard /></ProtectedRoute> },
 
-    // Analyze — two independent scripture panels plus a notes panel.
+    // Analyze — two independent scripture panels plus a notes panel, and the
+    // page a login lands on. There was a /dashboard between the two: a page
+    // that printed the JWT's email and a "Quick Links" placeholder, so every
+    // session began with a click through it to get to the work. Reading is the
+    // work, so the login goes straight here.
     // Panel positions live in the query string, e.g. /analyze?l=1.1&r=40.1
     { path: '/analyze',   element: <ProtectedRoute><Analyze /></ProtectedRoute> },
 
@@ -58,6 +62,13 @@ const routes = [
     // the same two tiers — one to create, one to file, one to read. The server
     // routes they ran on are unchanged and this page runs on them.
     { path: '/thoughts', element: <ProtectedRoute><Thoughts /></ProtectedRoute> },
+
+    // Anything else, including /dashboard — the page that used to sit between
+    // the login and the work. Without this the router matches nothing and
+    // renders an empty document, so a stale bookmark or a typo is a white
+    // screen with no way out of it. `replace` keeps the dead URL from sitting
+    // in history where Back would land on it again.
+    { path: '*', element: <Navigate to="/" replace /> },
 
     // TODO: Add more protected routes here, e.g.:
     // { path: '/jobs',          element: <ProtectedRoute><JobList /></ProtectedRoute> },

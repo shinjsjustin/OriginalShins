@@ -44,7 +44,6 @@ const Navbar = () => {
                             in step with the protected entries in routes.js —
                             a page nothing links to is a page nobody finds. */}
                         {[
-                            { path: '/dashboard', label: 'Dashboard' },
                             { path: '/analyze', label: 'Analyze' },
                             { path: '/search', label: 'Search' },
                             { path: '/overview', label: 'Overview' },

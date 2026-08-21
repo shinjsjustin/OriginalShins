@@ -104,7 +104,11 @@ set).
   positions from `fanLayout.js`.
 - The hover region is the whole cluster (topic + fan + gaps between), so the
   fan survives cursor travel. Clicking the topic locks the fan open; clicking
-  again (or Esc, or hovering another topic) unlocks.
+  it again, clicking a different topic, or Esc unlocks. **Hovering another
+  topic does not unlock.** The petals overlap the neighbouring topic cards,
+  which paint above the open cluster's empty region, so hover-to-unlock closed
+  the fan on the way out to a petal — the exact reach the lock exists to make
+  possible.
 - Overflow: up to ~15 ideas the arc tightens and cards shrink one step; past
   what fits, a `+N more` chip at the fan's end expands a second arc row.
 - Clicking an idea card navigates to `?idea=<id>`.

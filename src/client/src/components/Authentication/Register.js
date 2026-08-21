@@ -36,7 +36,9 @@ const Register = () => {
 
             if (response.status === 201) {
                 // New accounts default to access_level 0 (pending approval).
-                // Redirect to a post-register confirmation page instead of /dashboard.
+                // Redirect to a post-register confirmation page rather than into the app:
+                // a fresh account is access level 0 and every page behind the login
+                // needs 1, so landing there would bounce straight to /access-denied.
                 navigate('/post-register');
             } else if (response.status === 409) {
                 setError('An account with that email already exists.');

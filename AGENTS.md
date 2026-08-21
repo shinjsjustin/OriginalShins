@@ -81,7 +81,7 @@ BibleApp/
             ├── reportWebVitals.js
             ├── config/
             │   ├── ProtectedRoute.js   # Redirects to /login if no valid JWT
-            │   ├── UnprotectedRoute.js # Redirects to /dashboard if logged in
+            │   ├── UnprotectedRoute.js # Redirects to /analyze if logged in
             │   └── api.js              # fetchJson: Bearer auth + status→message
             └── components/
                 ├── Navbar.js           # Profile icon + dropdown panel
@@ -92,8 +92,6 @@ BibleApp/
                 │   ├── Logout.js
                 │   ├── AccessDenied.js
                 │   └── PostRegisterPage.js
-                ├── Dashboard/
-                │   └── Dashboard.js    # Protected home after login
                 ├── Analyze/            # The Analyze page: scripture + notes
                 │   ├── Analyze.js          # Page shell; owns cross-panel state only
                 │   ├── ScripturePanel.js   # One chapter + its footer (controlled)
@@ -233,7 +231,7 @@ BibleApp/
       ├─ bcrypt.compare(password, hash)
       └─ jwt.sign({ email, id, access }, JWT_SECRET, { expiresIn: '8h' })
          └─ 200 { token } → localStorage.setItem('token', token)
-                          → navigate('/dashboard')
+                          → navigate('/analyze')
 
 4. Protected API calls
    └─ fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -1769,7 +1767,6 @@ scope, a `PUT` returning 400 and a `GET` dropped none.
 | `src/server.js` | route imports | Add new route files as you build features |
 | `src/client/src/components/Home.js` | Logo, tagline, CTAs | Brand assets |
 | `src/client/src/components/Navbar.js` | SVG icon, nav links | Your profile icon and navigation |
-| `src/client/src/components/Dashboard/Dashboard.js` | Quick links section | Real feature pages |
 | `src/client/src/index.css` | `--color-primary` etc. | Your brand color palette |
 
 ---

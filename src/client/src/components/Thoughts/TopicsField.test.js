@@ -37,8 +37,17 @@ const IDEAS = [
 
 const topicCard = (name) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
 
+/** The cluster element a topic's card sits in — the thing that opens and closes. */
+const clusterOf = (name) => topicCard(name).closest('.thoughts-cluster');
+
+const isOpen = (name) => clusterOf(name).classList.contains('is-active');
+
 /** What a reader does to open a topic: put the cursor anywhere on its cluster. */
 const hoverTopic = (name) => fireEvent.mouseOver(topicCard(name));
+
+const unhoverTopic = (name) => fireEvent.mouseOut(clusterOf(name));
+
+const clickTopic = (name) => fireEvent.click(topicCard(name));
 
 describe('buildClusters', () => {
     test('gives every topic the ideas filed under it', () => {
@@ -115,6 +124,83 @@ describe('TopicsField', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Pin Faith' }));
 
         expect(onTogglePin).toHaveBeenCalledWith('topic', 1, 'Faith');
+    });
+});
+
+// ─── The lock ───────────────────────────────────────────────────────────────
+//
+// A fan opens under the cursor and closes when the cursor goes, which is fine
+// for reading a topic's ideas and useless for reaching one: the petals sit on
+// an arc that overlaps the neighbouring topic cards, so the trip out to the
+// far end of the fan crosses cards belonging to other clusters. Clicking the
+// topic pins the fan open so that trip can be made, and clicking it again puts
+// it away.
+//
+// The assertion that matters is the second one. An earlier version of this
+// cluster also unlocked on hovering another topic, and that undid the whole
+// point: the neighbour the cursor crossed on its way to a petal closed the fan
+// out from under it, so the locked state was reachable and the petals still
+// were not. Only a second click, Esc, or locking a different topic ends it.
+
+describe('locking a topic open', () => {
+    beforeEach(() => {
+        render(<TopicsField topics={TOPICS} ideas={IDEAS} />);
+    });
+
+    test('a hovered fan closes again when the cursor leaves', () => {
+        hoverTopic('Faith');
+        expect(isOpen('Faith')).toBe(true);
+
+        unhoverTopic('Faith');
+        expect(isOpen('Faith')).toBe(false);
+    });
+
+    test('clicking a topic holds its fan open after the cursor leaves', () => {
+        hoverTopic('Faith');
+        clickTopic('Faith');
+        unhoverTopic('Faith');
+
+        expect(isOpen('Faith')).toBe(true);
+    });
+
+    test('a locked fan survives the cursor crossing another topic', () => {
+        hoverTopic('Faith');
+        clickTopic('Faith');
+
+        unhoverTopic('Faith');
+        hoverTopic('Law');
+
+        expect(isOpen('Faith')).toBe(true);
+        expect(isOpen('Law')).toBe(false);
+    });
+
+    test('clicking the locked topic again closes its fan', () => {
+        hoverTopic('Faith');
+        clickTopic('Faith');
+        clickTopic('Faith');
+        unhoverTopic('Faith');
+
+        expect(isOpen('Faith')).toBe(false);
+    });
+
+    test('clicking a different topic moves the lock to it', () => {
+        hoverTopic('Faith');
+        clickTopic('Faith');
+        clickTopic('Law');
+        unhoverTopic('Law');
+
+        expect(isOpen('Law')).toBe(true);
+        expect(isOpen('Faith')).toBe(false);
+    });
+
+    test('Escape releases the lock', () => {
+        hoverTopic('Faith');
+        clickTopic('Faith');
+        unhoverTopic('Faith');
+
+        fireEvent.keyDown(window, { key: 'Escape' });
+
+        expect(isOpen('Faith')).toBe(false);
     });
 });
 

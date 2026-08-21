@@ -3,7 +3,9 @@ import { Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 
 // Wraps auth pages (login, register) so that already-logged-in users
-// are redirected to the dashboard instead of seeing the form again.
+// are redirected to the first page behind the login instead of seeing the
+// form again. That page is /analyze, and it is the same destination Login
+// navigates to on success — one landing page, named in both places.
 const UnprotectedRoute = ({ children }) => {
     const token = localStorage.getItem('token');
 
@@ -22,7 +24,7 @@ const UnprotectedRoute = ({ children }) => {
             return children;
         }
 
-        return <Navigate to="/dashboard" />;
+        return <Navigate to="/analyze" />;
     }
 
     return children;

@@ -6,7 +6,7 @@ import { jwtDecode } from 'jwt-decode';
 // with a sufficient access level.
 //
 // Usage in routes.js:
-//   { path: "/dashboard", element: <ProtectedRoute><Dashboard /></ProtectedRoute> }
+//   { path: "/analyze", element: <ProtectedRoute><Analyze /></ProtectedRoute> }
 //   { path: "/admin", element: <ProtectedRoute requiredAccessLevel={2}><Admin /></ProtectedRoute> }
 //
 // access_level values (customize to match your schema):

@@ -25,7 +25,7 @@ const Login = () => {
 
             if (response.status === 200) {
                 localStorage.setItem('token', data.token);
-                navigate('/dashboard');
+                navigate('/analyze');
             } else if (response.status === 404) {
                 setError('No account found with that email.');
             } else if (response.status === 400) {
