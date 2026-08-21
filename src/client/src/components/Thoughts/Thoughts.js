@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
 import TopicsField from './TopicsField';
 import IdeaOrbit from './IdeaOrbit';
+import PinnedPanel from './PinnedPanel';
 import useThoughtsData from './useThoughtsData';
 import usePins from './usePins';
 import useThoughtsView from './useThoughtsView';
@@ -15,9 +16,9 @@ import '../Styling/Thoughts.css';
 //
 // This is the shell: the three hooks wired together, the top bar, the two
 // regions the rest of the page fills, and the banners. Both views draw
-// themselves now; the panel's rows and edit forms arrive next, into the same
-// slot. The shell decides where the state lives, and every piece that follows
-// reads it from here rather than fetching again.
+// themselves, and the pinned panel fills the second region. The shell decides
+// where the state lives, and every piece reads it from here rather than
+// fetching again.
 //
 // ── Why the canvas is not a plain either/or ───────────────────────────────
 //
@@ -39,7 +40,18 @@ import '../Styling/Thoughts.css';
 //
 // None of the three knows about the others. Joining them is this component's
 // entire job, and it is why the panel and the canvas cannot disagree: they are
-// handed the same arrays from the same two hooks.
+// handed the same arrays from the same two hooks. An edit saved in the panel
+// bumps useThoughtsData's revision and the whole page reloads from the server,
+// so a renamed topic changes on the card behind the panel in the same beat.
+//
+// ── Three tiers, three pairs of writes, one panel ──────────────────────────
+//
+// The panel edits whatever is pinned, and what is pinned may be any of the
+// three kinds — but the API has a separate endpoint per kind, and so does
+// useThoughtsData. The two dispatchers below are where a pin's `itemType`
+// becomes a call. They are here rather than in the panel because this is the
+// component that holds the hook: the panel is handed two functions and never
+// learns that there are six.
 //
 // ── Two kinds of failure, two banners ─────────────────────────────────────
 //
@@ -63,13 +75,23 @@ const Thoughts = () => {
         isLoading,
         error: loadError,
         actionError: dataActionError,
+        updateTopic,
+        updateIdea,
+        updateNote,
+        removeTopic,
+        removeIdea,
+        removeNote,
+        linkPairs,
     } = useThoughtsData(ideaId);
     const {
         pins,
+        isLoading: arePinsLoading,
         error: pinsError,
         actionError: pinsActionError,
         isPinned,
         togglePin,
+        unpinMany,
+        clearPins,
     } = usePins();
 
     // The open idea comes out of the list the page already holds rather than a
@@ -80,6 +102,28 @@ const Thoughts = () => {
     const openIdea = ideaId === null
         ? null
         : ideas.find(idea => idea.id === ideaId) || null;
+
+    const saveItem = useCallback((pin, changes) => {
+        if (pin.itemType === 'topic') return updateTopic(pin.itemId, changes);
+        if (pin.itemType === 'idea') return updateIdea(pin.itemId, changes);
+        return updateNote(pin.itemId, changes);
+    }, [updateTopic, updateIdea, updateNote]);
+
+    // The item goes, and its pin goes with it. The server already dropped the
+    // pin row inside the delete's transaction, so the unpin that follows
+    // removes nothing there — it is sent so that usePins' list, which is held
+    // on the client and reloads only on demand, does not go on showing a row
+    // pointing at something that is gone.
+    const deleteItem = useCallback(async (pin) => {
+        const remove = { topic: removeTopic, idea: removeIdea, note: removeNote }[pin.itemType];
+        const removed = await remove(pin.itemId);
+
+        if (removed) {
+            await unpinMany([pin]);
+        }
+
+        return removed;
+    }, [removeTopic, removeIdea, removeNote, unpinMany]);
 
     const error = loadError || pinsError;
     const actionError = dataActionError || pinsActionError;
@@ -136,11 +180,15 @@ const Thoughts = () => {
 
                     {/* Slot two: the pinned panel — the page's editing surface,
                         and the only place an item can be changed. */}
-                    <aside className="thoughts-panel" aria-label="Pinned">
-                        <header className="thoughts-panel-header">
-                            <h2 className="thoughts-panel-title">Pinned ({pins.length})</h2>
-                        </header>
-                    </aside>
+                    <PinnedPanel
+                        pins={pins}
+                        isLoading={arePinsLoading}
+                        onUnpin={unpinMany}
+                        onClear={clearPins}
+                        onLink={linkPairs}
+                        onSave={saveItem}
+                        onDelete={deleteItem}
+                    />
                 </div>
             </main>
         </div>

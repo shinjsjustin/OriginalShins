@@ -123,7 +123,11 @@
   flex: 0 0 var(--thoughts-panel-width);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  /* The panel does not scroll; its list does. The header and the selection
+     actions have to stay put while the reader scrolls down to a twentieth row
+     to check it — the actions are above the fold precisely so that a selection
+     can outrun it. */
+  overflow: hidden;
   background-color: var(--ground);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
@@ -631,4 +635,312 @@
 .thoughts-orbit.is-closing .thoughts-orbit-empty {
   opacity: 0;
   transition: opacity 200ms ease;
+}
+
+/* ─── The pinned panel ────────────────────────────────────────────────────────
+   Docked right, open by default, and the only place on this page where a topic,
+   an idea or a note can be changed.
+
+   The collapse is Analyze's, restated: a tab in the panel's outer top corner
+   whose arrow points the way the panel travels, and, once it has gone, a spine
+   standing on its end like a book back on a shelf. The class names are local
+   because the rules are — .analyze-spine is sized from custom properties that
+   only exist inside .analyze-page, so the components themselves cannot travel.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.thoughts-page {
+  --thoughts-spine-width: 46px;
+  --thoughts-transition: 0.15s ease;
+}
+
+.thoughts-spine {
+  flex: 0 0 var(--thoughts-spine-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0 var(--space-md);
+  background-color: var(--ground);
+  border: 1px solid var(--ground-line);
+  border-radius: var(--radius-md);
+  color: var(--on-ground-soft);
+  transition: background-color var(--thoughts-transition),
+              color var(--thoughts-transition);
+}
+
+.thoughts-spine:hover {
+  background-color: var(--ground-raised);
+  color: var(--on-ground);
+}
+
+.thoughts-spine-arrow {
+  flex: 0 0 auto;
+  padding: var(--space-xs) 0;
+  color: var(--gold-lit);
+  font-size: var(--font-sm);
+}
+
+/* Turned on its side, the main axis runs down the spine — this is what centres
+   the label along it. Right-docked, so it reads top-to-bottom, away from the
+   canvas it left. */
+.thoughts-spine-text {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.thoughts-spine-label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--on-ground);
+}
+
+.thoughts-spine-caption {
+  font-size: var(--font-base);
+  color: var(--on-ground-faint);
+}
+
+.thoughts-collapse-tab {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background-color: var(--ground-raised);
+  color: var(--on-ground-soft);
+  border: 1px solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  line-height: 1;
+  transition: background-color var(--thoughts-transition),
+              color var(--thoughts-transition);
+}
+
+.thoughts-collapse-tab:hover {
+  background-color: var(--ground-hover);
+  color: var(--gold-lit);
+}
+
+.thoughts-panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+/* ─── Panel buttons ──────────────────────────────────────────────────────── */
+
+.thoughts-panel-button {
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--ground-raised);
+  color: var(--on-ground-soft);
+  border: 1px solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  transition: background-color var(--thoughts-transition),
+              color var(--thoughts-transition);
+}
+
+.thoughts-panel-button:hover:not(:disabled) {
+  background-color: var(--ground-hover);
+  color: var(--on-ground);
+}
+
+/* Lapis is live intent on this page as on Analyze: the button that acts on
+   what is selected right now. */
+.thoughts-panel-button--primary:not(:disabled) {
+  background-color: var(--lapis);
+  border-color: var(--lapis-strong);
+  color: var(--text-white);
+}
+
+.thoughts-panel-button--primary:hover:not(:disabled) {
+  background-color: var(--lapis-strong);
+  color: var(--text-white);
+}
+
+.thoughts-panel-button--danger {
+  color: var(--madder-lit);
+}
+
+/* Dimmed rather than hidden: Link is the action the selection is being built
+   toward, and a control that vanished would take the hint under it away too. */
+.thoughts-panel-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.thoughts-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.thoughts-confirm-question {
+  font-size: var(--font-sm);
+  color: var(--on-ground-soft);
+}
+
+/* ─── The selection's actions ────────────────────────────────────────────── */
+
+.thoughts-selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  background-color: var(--ground-raised);
+  border-bottom: 1px solid var(--ground-line);
+}
+
+.thoughts-selection-count {
+  margin-right: auto;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--lapis-lit);
+}
+
+/* One line, and the whole width of the bar: it is a sentence, and it is the
+   answer to the only question a disabled button provokes. */
+.thoughts-selection-hint {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: var(--font-sm);
+  line-height: 1.4;
+  color: var(--on-ground-faint);
+}
+
+/* ─── Rows ───────────────────────────────────────────────────────────────── */
+
+.thoughts-pin-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  color: var(--on-ground);
+  cursor: pointer;
+}
+
+.thoughts-pin-row:hover {
+  background-color: var(--ground-raised);
+}
+
+.thoughts-pin-row.is-selected {
+  background-color: var(--select-tint);
+  box-shadow: inset 2px 0 0 var(--lapis-lit);
+}
+
+/* A row being edited is a form, not a row: it stacks, it does not highlight
+   under the cursor, and clicking inside it selects nothing. */
+.thoughts-pin-row.is-editing {
+  display: block;
+  cursor: default;
+  padding: var(--space-sm);
+  background-color: var(--ground-raised);
+}
+
+.thoughts-pin-row.is-editing:hover {
+  background-color: var(--ground-raised);
+}
+
+.thoughts-pin-check {
+  flex: 0 0 auto;
+  accent-color: var(--lapis);
+  cursor: pointer;
+}
+
+/* The tier, in four characters. It is what tells the reader why Link is greyed
+   out before they read the hint, so it is legible at a glance and coloured the
+   way its cards are. */
+.thoughts-pin-kind {
+  flex: 0 0 auto;
+  min-width: 42px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: var(--on-ground-faint);
+}
+
+.thoughts-pin-kind--topic { color: var(--gold-lit); }
+.thoughts-pin-kind--idea  { color: var(--lapis-lit); }
+.thoughts-pin-kind--note  { color: var(--on-ground-soft); }
+
+.thoughts-pin-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--font-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Top-right of the row, mounted only while the row is hovered or holds focus
+   (see PinnedItem) — so this rule styles it and never reveals it. */
+.thoughts-pin-edit {
+  flex: 0 0 auto;
+  padding: 0 var(--space-xs);
+  background: none;
+  border: none;
+  align-self: flex-start;
+  font-size: var(--font-sm);
+  line-height: 1.6;
+  opacity: 0.8;
+}
+
+.thoughts-pin-edit:hover {
+  opacity: 1;
+}
+
+/* ─── The edit form ──────────────────────────────────────────────────────── */
+
+.thoughts-pin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.thoughts-form-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--on-ground-faint);
+}
+
+.thoughts-form-input,
+.thoughts-form-textarea {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--ground);
+  color: var(--on-ground);
+  border: 1px solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-base);
+}
+
+.thoughts-form-textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.thoughts-form-input:focus,
+.thoughts-form-textarea:focus {
+  outline: 2px solid var(--lapis-lit);
+  outline-offset: -1px;
+}
+
+.thoughts-form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
 }
