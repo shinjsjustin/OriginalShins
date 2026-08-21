@@ -7,10 +7,11 @@ import { LINK_HINTS } from './linkRules';
 //
 // ── One hook for three tiers, and why it is not three hooks ────────────────
 //
-// components/Library composes useCollection twice, once per page, because those
-// two pages are separate. This page is one canvas over all three tiers with one
-// editing panel beside it, and a write to any tier changes what the others
-// display: filing an idea under a topic changes that topic's idea count, and
+// Analyze/useCollection holds ONE list, which suited the two pages that used to
+// own these tiers — /ideas and /topics were separate, and a write on one of
+// them was nothing to the other. This page is one canvas over all three tiers
+// with one editing panel beside it, and a write to any tier changes what the
+// others display: filing an idea under a topic changes that topic's idea count, and
 // deleting an idea changes the note counts above it. Three hooks would mean
 // three revisions, three loading flags and three error banners for what the
 // reader experiences as one picture, and — worse — a write through one of them

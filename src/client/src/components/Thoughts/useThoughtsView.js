@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { IDEA_PARAM } from './thoughtsUrl';
 
 // Which of the page's two views is showing, held in the query string.
 //
@@ -21,7 +22,10 @@ import { useSearchParams } from 'react-router-dom';
 // biggest one this page offers — the whole canvas changes — so back must undo
 // it. Nothing here normalises the URL, so nothing here replaces.
 
-export const IDEA_PARAM = 'idea';
+// Re-exported so the page's own modules and tests can read the param name from
+// the hook that owns the behaviour, while thoughtsUrl.js stays the one place it
+// is spelled.
+export { IDEA_PARAM };
 
 /**
  * The idea a raw `?idea=` value names, or null for the topics view.

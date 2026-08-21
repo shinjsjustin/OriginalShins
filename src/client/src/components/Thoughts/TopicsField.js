@@ -5,7 +5,7 @@ import buildFan from './fanLayout';
 import useCanvasSize from './useCanvasSize';
 import { centreOf, collapseOnto, relativeTo } from './cardGeometry';
 import { UNTITLED_IDEA_LABEL } from './TopBar';
-import { countLabel } from '../Library/format';
+import { countLabel } from './format';
 
 // The topics view: every topic as a card on a field, and the spotlight that
 // opens one of them.

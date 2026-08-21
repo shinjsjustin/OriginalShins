@@ -853,6 +853,52 @@
   color: var(--ink-soft);
 }
 
+/* ─── Multi-select ───────────────────────────────────────────────────────────
+   The checkbox list the editor files a note under its ideas with. A fieldset
+   rather than a bare list: the legend is the group's name, and a screen reader
+   should hear it before the first checkbox.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.analyze-multiselect {
+  flex: 1 1 100%;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: var(--analyze-border-width) solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.analyze-multiselect-legend {
+  padding: 0 var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+
+.analyze-multiselect-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+}
+
+.analyze-multiselect-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--text-primary);
+  font-size: var(--font-base);
+  cursor: pointer;
+}
+
+/* Shown in place of the list when there is nothing to tick — a reader with no
+   ideas yet gets a sentence, not an empty box. */
+.analyze-multiselect-message {
+  margin: var(--space-xs) 0;
+  color: var(--text-muted);
+  font-size: var(--font-base);
+}
+
 /* ─── Reference List ─────────────────────────────────────────────────────── */
 
 .analyze-reference-list {

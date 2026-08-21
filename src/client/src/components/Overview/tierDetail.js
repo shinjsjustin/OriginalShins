@@ -1,6 +1,6 @@
 import { analyzeUrlForNote } from '../Analyze/analyzeUrl';
 import { describeReference } from '../Analyze/navigation';
-import { treeUrlForIdea } from '../Topics/treeFocus';
+import { thoughtsUrlForIdea } from '../Thoughts/thoughtsUrl';
 
 // Pure: what one endpoint returns -> what the drawer shows.
 //
@@ -85,8 +85,8 @@ const fromIdea = (idea) => ({
 // the /topics page that writes it, and rendering it as markdown here would
 // make one field mean two things depending on where it was read.
 //
-// An idea has no page of its own, so its row leads to the tree, opened at this
-// topic with that idea marked — the link contract Topics/treeFocus.js owns.
+// An idea's row leads to the Thoughts page, opened on that idea with its notes
+// orbiting it — the link contract Thoughts/thoughtsUrl.js owns.
 const fromTopic = (topic) => ({
     title: topic.name || '',
     body: topic.description || '',
@@ -95,7 +95,7 @@ const fromTopic = (topic) => ({
     items: (topic.ideas || []).map(idea => ({
         key: String(idea.id),
         text: titled(idea.title),
-        to: treeUrlForIdea(idea.id, topic.id),
+        to: thoughtsUrlForIdea(idea.id),
     })),
 });
 

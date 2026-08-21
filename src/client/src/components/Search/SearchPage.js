@@ -1,6 +1,6 @@
 import React from 'react';
 import Navbar from '../Navbar';
-import LibraryNav from '../Library/LibraryNav';
+import SearchNav from './SearchNav';
 import SearchGroup from './SearchGroup';
 import useSearch from './useSearch';
 import { GROUPS, MIN_QUERY_LENGTH, totalResults } from './searchModel';
@@ -19,8 +19,8 @@ import '../Styling/Search.css';
 // something is not there. The Navbar gets a link to this page instead, beside
 // the others.
 //
-// It carries LibraryNav for the same reason /ideas, /topics and the tree do:
-// these are five views of one body of work, and each links to the rest.
+// It carries SearchNav for the reason that component explains: these are four
+// views of one body of work, and each links to the rest.
 const SearchPage = () => {
     const { query, setQuery, results, isSearching, error, searchedFor, isTooShort } = useSearch();
 
@@ -40,7 +40,7 @@ const SearchPage = () => {
             <main className="search-main">
                 <header className="search-header">
                     <h1 className="search-title">Search</h1>
-                    <LibraryNav current="/search" />
+                    <SearchNav current="/search" />
                 </header>
 
                 <section className="search-card">

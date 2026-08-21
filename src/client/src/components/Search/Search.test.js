@@ -170,12 +170,12 @@ describe('searching', () => {
         expect(linksIn('Notes')).toContainEqual(
             expect.objectContaining({ href: '/analyze?l=19.23&note=1' })
         );
-        // …an idea and a topic go to the tree, focused…
+        // …an idea opens on the Thoughts canvas and a topic lands on the field…
         expect(linksIn('Ideas')).toContainEqual(
-            expect.objectContaining({ href: '/topics-tree?topic=4&idea=7' })
+            expect.objectContaining({ href: '/thoughts?idea=7' })
         );
         expect(linksIn('Topics')).toContainEqual(
-            expect.objectContaining({ href: '/topics-tree?topic=4' })
+            expect.objectContaining({ href: '/thoughts' })
         );
         // …and a verse puts the left panel on its chapter.
         expect(linksIn('Scripture')).toContainEqual(
@@ -183,17 +183,17 @@ describe('searching', () => {
         );
     });
 
-    test('an unfiled idea links to the tree without a topic', async () => {
+    test('an unfiled idea links the same way as a filed one', async () => {
         // Arrange
         await mount();
 
         // Act
         await type('shepherd');
 
-        // Assert — it is in the unfiled bucket, which is the only place in the
-        // tree it can be reached from.
+        // Assert — the idea view is reached by id, so being filed under nothing
+        // is not a different destination.
         expect(linksIn('Ideas')).toContainEqual(
-            expect.objectContaining({ href: '/topics-tree?idea=8' })
+            expect.objectContaining({ href: '/thoughts?idea=8' })
         );
     });
 

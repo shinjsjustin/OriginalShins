@@ -16,11 +16,10 @@ import { slugify } from './slug';
 // and could no longer touch. Closing is therefore not the end of the edit —
 // it is the handover to the row that can do the rest.
 //
-// ── The fields are the old Library forms' fields ───────────────────────────
+// ── The fields are the old /ideas and /topics forms' fields ────────────────
 //
-// components/Library is going away, but what its two forms asked for was
-// right: a topic is a name, a slug and a description; an idea is a title and a
-// markdown body. They are declared as a table here for the same reason
+// Those two pages are gone, but what their forms asked for was right: a topic
+// is a name, a slug and a description; an idea is a title and a markdown body. They are declared as a table here for the same reason
 // PinnedItem declares its edit forms as one — the label, the input, the draft
 // key and the POST body are then the same list of names and cannot drift.
 //

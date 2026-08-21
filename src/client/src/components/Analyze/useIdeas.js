@@ -4,12 +4,15 @@ import useCollection from './useCollection';
 
 // Every idea the user has, plus every write that can change one.
 //
-// Two very different pages use this: the ideas management page uses all of it,
-// and the Analyze page's note editor uses only `ideas` — it needs the list to
-// offer as a multi-select, and it saves through the notes endpoint rather than
-// this one. That is why the hook loads the whole list rather than a page of it:
-// it is a picker's worth of data, and the plan's scale assumption is low
-// thousands of notes with far fewer ideas above them.
+// This page uses two ends of it: the note editor needs the whole list to offer
+// as a multi-select, and the idea composer creates one. Renaming, filing and
+// deleting an idea happen on the Thoughts page, which has hooks of its own —
+// those writes are kept here because they are the same endpoints in the same
+// shape, and a hook that could only read would be the odd one out.
+//
+// It loads the whole list rather than a page of it because that is a picker's
+// worth of data: the plan's scale assumption is low thousands of notes with far
+// fewer ideas above them.
 const useIdeas = () => {
     const { items, run, ...rest } = useCollection('/ideas', 'ideas');
 

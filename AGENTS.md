@@ -20,7 +20,9 @@ BibleApp/
     │   └── migrations/
     │       ├── 001_scripture.sql   # books, chapters, verses
     │       ├── 002_notes.sql       # notes, note_references
-    │       └── 003_ideas_topics.sql# topics, ideas, idea_topics, note_ideas
+    │       ├── 003_ideas_topics.sql# topics, ideas, idea_topics, note_ideas
+    │       ├── 004_search.sql      # the FULLTEXT index /api/search reads
+    │       └── 005_pins.sql        # pins: the Thoughts page's editable set
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
@@ -29,12 +31,14 @@ BibleApp/
     │   ├── ideas.js                # ideas reads/writes + the cross-tier lookups
     │   ├── topics.js               # topics reads/writes + list counts
     │   ├── links.js                # note_ideas / idea_topics: full-set replace
-    │   ├── ordering.js             # sort_order + re-parenting for the tree
+    │   ├── ordering.js             # sort_order + re-parenting (server-side only)
     │   ├── slug.js                 # Topic slug derivation + validation
     │   ├── textInput.js            # Shared body-validation primitives
     │   ├── noteInput.js            # Request-body validation for the notes API
     │   ├── ideaInput.js            # Request-body validation for the ideas API
     │   ├── topicInput.js           # Request-body validation for the topics API
+    │   ├── pinInput.js             # Request-body validation for the pins API
+    │   ├── pins.js                 # pins reads/writes + the hydrating joins
     │   ├── searchInput.js          # The one query param /api/search takes
     │   ├── search.js               # The four search queries + their ranking rule
     │   ├── snippet.js              # Pure: the excerpt a result shows
@@ -64,6 +68,7 @@ BibleApp/
         ├── topics.js               # CRUD /api/topics (list carries counts)
         ├── search.js               # GET /api/search?q= (four groups)
         ├── overview.js             # GET /api/overview?tiers=&topicId= (cached per scope)
+        ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
         └── orderingErrors.js       # ordering results -> HTTP, shared by three routers
     └── client/                     # React app (Create React App)
         ├── package.json
@@ -106,9 +111,10 @@ BibleApp/
                 │   ├── BookPicker.js       # Modal grid of all 66 books
                 │   ├── ChapterPicker.js    # Modal grid of one book's chapters
                 │   ├── Modal.js            # Overlay shell (Escape / backdrop)
+                │   ├── MultiSelect.js      # Checkbox list; reports the COMPLETE set
                 │   ├── navigation.js       # Pure position + chapter-step helpers
-            │   ├── panelParams.js      # The names of the ?l= ?r= ?note= params
-            │   ├── analyzeUrl.js       # Pure: every link INTO this page
+                │   ├── panelParams.js      # The names of the ?l= ?r= ?note= params
+                │   ├── analyzeUrl.js       # Pure: every link INTO this page
                 │   ├── highlights.js       # Pure: references -> per-verse tints
                 │   ├── verseSelection.js   # Pure: verse-index range -> reference
                 │   ├── selectionRuns.js    # Pure: clicked verses -> contiguous refs
@@ -116,21 +122,36 @@ BibleApp/
                 │   ├── useBooks.js         # Loads /api/books once
                 │   ├── usePanelPositions.js# Reads/writes ?l= (primary) and ?r=
                 │   ├── useNotes.js         # The chapter's notes + every write
+                │   ├── useCollection.js    # One list + its fetch/revision plumbing
+                │   ├── useIdeas.js         # /api/ideas + PUT :id/topics
                 │   ├── useActiveNote.js    # Which note the editor is showing
                 │   └── useSelectedVerses.js# The page's one verse selection
-                ├── Topics/             # The Topic page: the three-level tree
-                │   ├── TopicTree.js        # /topics-tree — page shell + the buckets
-                │   ├── TreeBranch.js       # One level: rows, or loading/empty/failed
-                │   ├── TreeRow.js          # One row + the branch under it
-                │   ├── treeModel.js        # Pure: rows, drop rules, the Analyze URL
-                │   ├── treeApi.js          # Every request the tree makes
-                │   ├── useTopicTree.js     # Branch cache, expansion, the three writes
-                │   ├── useTreeDrag.js      # Native HTML5 drag plumbing
-                │   ├── treeFocus.js       # Pure: the ?topic= / ?idea= link contract
-                │   └── useTreeFocus.js    # Opens and marks the row a link named
+                ├── Thoughts/           # /thoughts — the three tiers as one canvas
+                │   ├── Thoughts.js         # Page shell; owns which card is selected
+                │   ├── TopBar.js           # Reset View, the two Create buttons, the crumb
+                │   ├── TopicsField.js      # The topics view: a card per topic + unfiled
+                │   ├── IdeaOrbit.js        # The idea view: one idea, its notes ringing it
+                │   ├── BubbleCard.js       # Every card on both views is this component
+                │   ├── PinnedPanel.js      # The right-docked panel: the page's only editor
+                │   ├── PinnedItem.js       # One pinned row, and the form it becomes
+                │   ├── CreateModal.js      # Make a topic or an idea, without leaving
+                │   ├── ConfirmButton.js    # Two-press Clear and Delete
+                │   ├── fieldLayout.js      # Pure: N topics + a canvas -> where each sits
+                │   ├── fanLayout.js        # Pure: a topic's ideas -> the fan they open on
+                │   ├── orbitLayout.js      # Pure: an idea's notes -> the ring they orbit
+                │   ├── cardGeometry.js     # Pure: the box sums both canvases share
+                │   ├── linkRules.js        # Pure: a pinned selection -> may it be linked
+                │   ├── slug.js             # Client half of the slug rule
+                │   ├── format.js           # "2 ideas", "0 notes"
+                │   ├── thoughtsUrl.js      # Pure: every link INTO this page
+                │   ├── useThoughtsView.js  # Reads/writes ?idea= — which view is showing
+                │   ├── useThoughtsData.js  # The three tiers + every write the canvas makes
+                │   ├── usePins.js          # /api/pins, optimistically
+                │   └── useCanvasSize.js    # The measured pixel size a layout is given
                 ├── Search/             # /search — one box across all four tiers
                 │   ├── SearchPage.js       # Page shell: the input and the states
                 │   ├── SearchGroup.js      # One heading + its rows, all links
+                │   ├── SearchNav.js        # Thoughts | Overview | Search | Analyze
                 │   ├── searchModel.js      # Pure: the groups and where a row goes
                 │   ├── useSearch.js        # Debounced query -> one request
                 │   └── useDebouncedValue.js# Generic: a value that has settled
@@ -163,27 +184,14 @@ BibleApp/
                 │   ├── useTierDetail.js    # Loads the one group the drawer opened
                 │   ├── useOverviewParams.js# Reads/writes ?tiers=, ?topicId= and ?q=
                 │   └── useOverviewData.js  # Loads /api/overview for the rails shown
-                ├── Library/            # Ideas and topics: the two tiers above notes
-                │   ├── IdeasPage.js        # /ideas — list, form, topic multi-select
-                │   ├── TopicsPage.js       # /topics — list with counts, form
-                │   ├── IdeaForm.js         # Create/edit one idea (title, body)
-                │   ├── TopicForm.js        # Create/edit one topic (name, slug, description)
-                │   ├── MultiSelect.js      # Checkbox list; reports the COMPLETE set
-                │   ├── LibraryNav.js       # Ideas | Topics | Analyze
-                │   ├── useCollection.js    # One list + its write plumbing
-                │   ├── useIdeas.js         # /api/ideas + PUT :id/topics
-                │   ├── useTopics.js        # /api/topics
-                │   ├── slug.js             # Client half of the slug rule
-                │   └── format.js           # "2 ideas · 5 notes"
                 └── Styling/
                     ├── Form.css        # Auth/form container styles
                     ├── Home.css        # Landing page + .industrial-button
                     ├── Navbar.css      # Profile icon + dropdown panel
-                    ├── Analyze.css     # Analyze page panels, footers, modals
-                    ├── Library.css     # Ideas/topics pages, forms, chips, multi-select
-                    ├── Search.css      # Search page: the box and the result groups
+                    ├── Analyze.css     # Analyze page panels, footers, modals, multi-select
+                    ├── Search.css      # Search page: the box, the nav, the result groups
                     ├── Overview.css    # The axis, rails, stems, arcs, tooltip, drawer, counter-transforms
-                    └── TopicTree.css   # Tree rows, indent, drag and drop states
+                    └── Thoughts.css    # The canvas, the cards, the fan and orbit, the pinned panel
 ```
 
 ---
@@ -277,6 +285,7 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/001_scripture.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/002_notes.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/003_ideas_topics.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/004_search.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/005_pins.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
@@ -351,7 +360,8 @@ them as `PRIMARY_PARAM` and `COMPARE_PARAM`.
 A third param, `?note=<id>`, opens the editor on one note. Unlike `l` and `r` it
 is a one-shot instruction rather than state: nothing writes it back, and closing
 the editor does not reopen the note even though the param is still in the URL.
-It exists so the Topic page's tree can hand a note over — those rows link to
+It exists so another page can hand a note over — the Thoughts canvas, the search
+results and the Overview drawer all link to
 `/analyze?l=<book>.<chapter>&note=<id>`, the chapter of the note's first anchor.
 A note with no anchor still opens, from the notes panel's `unreferenced` list,
 which is the same whatever chapter the panels show.
@@ -483,7 +493,7 @@ A **note** is anchored to verses, so the only way to make one is to select them:
 the notes panel has no button that creates a note. An **idea** is standalone,
 which is exactly why it needs a place to start, and `+ New idea` in that panel
 is its inline composer. Both are filed elsewhere — a note under ideas from its
-editor, an idea under topics on `/ideas` — so an idea row here links there
+editor, an idea under topics on `/thoughts` — so an idea row here links there
 rather than opening anything.
 
 ### Note editor
@@ -502,8 +512,9 @@ impossible to build through the UI.
 The two tiers above a note. A note may belong to any number of **ideas**, an
 idea to any number of **topics**, and every one of those relationships is
 optional in both directions. An orphan note, an idea under no topic and a topic
-holding nothing are all legal rows — the Topic page reaches the orphans through
-its unfiled buckets — so nothing in the API refuses a write for want of a link.
+holding nothing are all legal rows — the Thoughts page draws the unfiled ideas
+as a card of their own — so nothing in the API refuses a write for want of a
+link.
 
 `ideas.body` and `notes.body` are the same thing: markdown, rendered through the
 same `markdown.js` (marked + DOMPurify). Nothing rendered from either skips the
@@ -546,7 +557,7 @@ directions from becoming a circular import.
 ### Slugs
 
 `topics.slug` is derived from the name and is unique per user
-(`UNIQUE (user_id, slug)`). The client derives it as you type (`Library/slug.js`)
+(`UNIQUE (user_id, slug)`). The client derives it as you type (`Thoughts/slug.js`)
 and the server derives it again from what it receives (`src/lib/slug.js`) — the
 client's copy is a convenience for the form, never the authority. Uniqueness is
 enforced by the index and surfaced as a **409**, not by a read-then-write that
@@ -560,10 +571,10 @@ URL, so changing it is an explicit act and the form sends both fields.
 | Route | Does |
 |-------|------|
 | `GET /api/topics` | Every topic with `ideaCount` and `noteCount`. The note count walks topic → idea → note and counts DISTINCT notes, so a note reached through three of the topic's ideas counts once. |
-| `GET /api/topics/:id` | The topic with the ideas filed under it, each carrying its `noteCount`. Notes are not nested — the Topic page loads the tree a level at a time, and a topic's worth of notes would be fetched on every topic click and displayed on almost none of them. |
+| `GET /api/topics/:id` | The topic with the ideas filed under it, each carrying its `noteCount`. Notes are not nested — a topic's worth of notes would be fetched on every topic opened and displayed on almost none of them. The Thoughts page's pinned panel reads this endpoint for a pinned topic; the canvas itself never needs it, since `GET /api/topics` already carries the counts a card prints. |
 | `POST/PATCH/DELETE /api/topics(/:id)` | CRUD. Deleting a topic cascades its links and leaves its ideas as unfiled ideas. |
-| `GET /api/ideas` | Every idea with its topics and its `noteCount` — one payload serving both the management list and the note editor's multi-select. |
-| `GET /api/ideas/:id` | The idea with its linked topics *and* notes. The notes are compact rows — a title and `firstReference`, the one anchor a tree row links to — with no bodies: this is the tree's third level, and a row there is a way to reach a note rather than a rendering of one. |
+| `GET /api/ideas` | Every idea with its topics and its `noteCount` — one payload serving the Thoughts canvas, which fans an idea out under the topic it names, and the note editor's multi-select. It is also where "unfiled" comes from: an idea whose `topics` is empty, computed on the client rather than asked for. |
+| `GET /api/ideas/:id` | The idea with its linked topics *and* notes. The notes are compact rows — a title and `firstReference`, the one anchor a link into Analyze needs — with no bodies: a row here is a way to reach a note rather than a rendering of one. The idea view loads this to learn which notes orbit, in which order, then fetches each note for the body its card shows. |
 | `POST/PATCH/DELETE /api/ideas(/:id)` | CRUD. Deleting an idea cascades its links and leaves its notes as unfiled notes. |
 
 Every note payload from `/api/notes` carries `ideas` alongside `references`, for
@@ -572,167 +583,247 @@ moment it opens, and a partial payload would mean a second round trip.
 
 ### The pages
 
-`/ideas` and `/topics` are a list plus a form each — enough to create, edit,
-delete and link, and no more. The three-level tree with unfiled buckets and
-drag-to-reorder is a separate page, `/topics-tree` (see [Topic page](#topic-page)):
-`/topics` is where a topic is created and named, the tree is where things are
-filed, and neither page has the other's job.
+One page reads and writes both tiers: `/thoughts` (see
+[Thoughts page](#thoughts-page)). It replaced three — `/ideas` and `/topics`,
+which were a list plus a form each, and `/topics-tree`, the three-level tree
+that filed things — and it runs on the same endpoints all three did. **The
+server side of this section is unchanged by that; only the client pages went.**
 
 The note editor's ideas multi-select saves on the click rather than behind a
 Save button. The checkbox list already holds the complete membership and the PUT
 replaces the complete membership, so there is nothing left over to commit —
 unlike the title and body, which are a draft until saved.
 
----
+### Endpoints no client calls today
 
-## Topic page
+The tree left three groups of routes behind. They are live, tested and correct,
+and nothing in the app requests them:
 
-`/topics-tree` — the three-level tree the plan calls the Topic page: topic →
-idea → note, one level loaded at a time, with the two unfiled buckets pinned
-beneath the topics.
+| Route | Was |
+|-------|-----|
+| `GET /api/notes/unfiled`, `GET /api/ideas/unfiled` | The tree's two orphan buckets. The Thoughts canvas derives its unfiled card from `GET /api/ideas` instead — an idea whose `topics` is empty — so it never asks. |
+| `PUT /api/topics/order`, `PUT /api/topics/:id/ideas/order`, `PUT /api/ideas/:id/notes/order` | Drag-to-reorder. The canvas positions cards by layout function, not by a stored order, so nothing writes `sort_order` from the client any more. It is still *read*: an idea's notes orbit in the order `GET /api/ideas/:id` lists them. |
+| `PUT /api/ideas/:id/topic`, `PUT /api/notes/:id/idea` | Drag-to-re-parent: rewrite ONE membership and leave the row's others alone. The pinned panel's Link uses the full-set `PUT /:id/topics` and `PUT /:id/ideas` instead. |
 
-It is a **second page beside `/topics`, not a replacement for it**. `/topics` is
-where a topic is created, renamed, described and deleted; the tree has no forms
-at all and is only about where things sit. Folding the forms into the tree would
-make it a management page with a tree attached, and folding the tree into
-`/topics` would leave nowhere to create the topics it files into.
-
-### Lazy levels reuse the existing endpoints
-
-| Level | Comes from |
-|-------|-----------|
-| Topics (root) | `GET /api/topics` — loaded with the page |
-| A topic's ideas | `GET /api/topics/:id` — on expanding that topic |
-| An idea's notes | `GET /api/ideas/:id` — on expanding that idea |
-
-No nested tree endpoint exists, and none should. Those three payloads were each
-already shaped for exactly one level — `/topics/:id` deliberately does not nest
-notes — so a nested route would either restate them or ship every note under a
-topic on a click that displays none of them.
-
-### Unfiled buckets
-
-The plan's two orphan queries, as **dedicated paths** rather than flags on the
-list endpoints:
-
-| Route | Query |
-|-------|-------|
-| `GET /api/notes/unfiled` | `LEFT JOIN note_ideas ni ... WHERE ni.note_id IS NULL AND n.user_id = :uid` |
-| `GET /api/ideas/unfiled` | the same shape against `idea_topics` |
-
-Dedicated because neither is a narrowing of the list beside it: `GET /api/notes`
-answers a question about one chapter and requires `bookId` and `chapter` to do
-it, and `GET /api/ideas` serves the multi-select, which wants every idea. Both
-are declared **above** their router's `/:id` routes, so the literal segment is
-matched before the id pattern.
+They were kept rather than deleted because they are the only endpoints that can
+express those operations, and the two the client stopped using are the two a
+keyboard-accessible filing UI would need first. Their details — the 409 on a
+stale list, the null-means-unfile rule, why a move is never an UPDATE — are in
+`src/lib/ordering.js` and `src/routes/orderingErrors.js`, which remain the
+authority on them.
 
 Do not confuse "unfiled" with the `unreferenced` list `GET /api/notes` returns.
 That one is about scripture anchors, this one is about ideas, and a note can be
 in both, one, or neither.
 
-The buckets render **always** — before the topics load, and when they hold
-nothing. They are the only route to an orphan, and a page that silently omits
-rows is worse than one that shows none. An empty bucket says so, because "no
-orphans" and "not loaded yet" must not look the same.
+---
 
-### Ordering
+## Thoughts page
 
-`sort_order` everywhere, defaulting to creation order. Where it lives depends on
-the tier:
+`/thoughts` — topics, ideas and notes as one canvas, with a right-docked pinned
+panel beside it. It replaced `/ideas`, `/topics` and `/topics-tree`, and runs on
+the endpoints those three already had plus one new tier, `/api/pins`.
 
-| Route | Writes | Body |
-|-------|--------|------|
-| `PUT /api/topics/order` | `topics.sort_order` | `{ topicIds: [...] }` |
-| `PUT /api/topics/:id/ideas/order` | `idea_topics.sort_order` | `{ ideaIds: [...] }` |
-| `PUT /api/ideas/:id/notes/order` | `note_ideas.sort_order` | `{ noteIds: [...] }` |
+The page has exactly **two views**, and which one is showing is the query
+string:
 
-The two lower ones write the **link** row, not the child, so an idea filed under
-two topics holds its own position under each.
+| URL | Shows |
+|-----|-------|
+| `/thoughts` | The topics view: one card per topic on a field, plus an unfiled card when there is anything unfiled |
+| `/thoughts?idea=<id>` | The idea view: that idea enlarged at the centre, its notes ringing it |
 
-Each takes the container's **complete** ordered membership, the same rule the
-link-table PUTs follow. A list that has fallen behind — something was filed or
-unfiled since the client last read — is answered **409**, not half-applied; the
-client reloads that branch and tries again. A container that is not the caller's
-is a 404, indistinguishable from one that never existed.
+`Thoughts/thoughtsUrl.js` owns that contract and is what other pages import to
+link here, the same way `Analyze/analyzeUrl.js` owns links into Analyze. A topic
+has no param of its own because it has no view of its own — the field IS every
+topic — so a link to one topic can only be a link to the field.
 
-**The unfiled buckets are not sortable.** Two rows sitting in a bucket have no
-link row between them and a container, so there is no `sort_order` to write that
-means anything; they list in the row's own `sort_order`, which is creation
-order. The drop rules refuse such a drag rather than sending a request.
+### Why the pinned panel is the only editing surface
 
-### Re-parenting
+Nothing on the canvas is editable. A card is a card; to change a topic's
+description or a note's body you **pin** it, and the panel is where the form
+appears. That is one rule with three consequences worth stating outright:
 
-| Route | Body |
-|-------|------|
-| `PUT /api/ideas/:id/topic` | `{ fromTopicId, toTopicId, position? }` |
-| `PUT /api/notes/:id/idea` | `{ fromIdeaId, toIdeaId, position? }` |
+- Creating pins. `+ Topic` and `+ Idea` pin what they make, because otherwise
+  the button would produce a card the reader had just named and could no longer
+  touch — they would have to find it on the canvas and pin it by hand before
+  they could write a word of it.
+- The panel is a working set, not a selection. It survives changing views, and
+  it is the same list in both, which is why `usePins` takes no arguments and
+  never reloads when the view changes.
+- Linking happens between pinned rows rather than on the cards. Two adjacent
+  tiers in the panel, select them, press Link.
 
-Singular `topic`/`idea`, and deliberately **not** the full-set `PUT /:id/topics`
-beside it: a move rewrites ONE membership and leaves the row's others alone,
-which is what dragging one row of a tree means. The full-set replace is still
-how the multi-selects save.
+### Three hooks, composed by the page
 
-The old link row is deleted and a new one inserted inside one transaction — a
-link row's container is half its primary key, so a move is never an update. The
-destination is then renumbered densely, so `sort_order` there stays a plain
-`0..n-1` run whichever way it was written.
+`Thoughts.js` is a shell. It holds three hooks and joins them, and every piece
+below it reads state from there rather than fetching again:
 
-Either end may be **null**, and that is what makes the buckets work: `to` null
-unfiles, `from` null files something that was unfiled. Null is a value here and
-not a missing field, so the key must be present either way — omitting it is a
-400, which is the difference between "unfile this" and a body that forgot to say.
-
-`position` counts from zero and is optional; omitting it appends, which is what
-dropping onto a container rather than onto one of its rows means.
-
-`src/lib/ordering.js` performs both, and deliberately does **not** share
-`src/lib/links.js`'s vocabulary. That module calls the multi-select's side the
-*parent* — for `note_ideas` that is the note. The tree reads the same table the
-other way round, so here the tier above is the **container** and the tier below
-the **member**, and nothing in `ordering.js` says "parent".
-
-### Drag and drop
-
-Native HTML5 drag events, no dependency. `@dnd-kit` and `react-dnd` are both
-well maintained and both solve problems this page does not have — virtualised
-lists, custom collision detection, animated reordering — while what is needed
-here is "pick up a row, drop it on another row", which is the one gesture the
-browser does well unaided: drag image, cursor feedback and autoscroll come free.
-Their pointer-event sensors are also poorly modelled by jsdom, and the drop
-rules are the part worth testing.
-
-The cost is real and worth naming: HTML5 DnD has no keyboard equivalent, so
-filing by drag is mouse-only. Nothing is *only* reachable that way — an idea's
-topics and a note's ideas are still editable from the multi-selects — but
-ordering currently is, and a keyboard affordance is the first thing to add here.
-
-One gesture resolves to one of three writes, by a rule that is pure and tested
-directly (`treeModel.dropIntentFor`):
-
-| Drop | Means |
+| Hook | Holds |
 |------|-------|
-| onto a row of the **same kind** | go where that row is, in *its* container, at its index |
-| onto a row that **takes this kind** | go into that row, at the end |
-| anything else | nothing — the row never becomes a drop target |
+| `useThoughtsView` | Which view is showing — reads and writes `?idea=` and nothing else |
+| `useThoughtsData` | The corpus: every topic, every idea, and the notes of whichever idea is open, plus every write the canvas and the panel can make |
+| `usePins` | The pinned set |
 
-Which covers reordering and re-parenting with the same gesture: dropping an idea
-onto a sibling reorders, dropping it onto an idea under another topic moves it
-there, and dropping it onto a bucket unfiles it.
+`useThoughtsData` takes the open idea's id, because that is what decides whether
+any notes are loaded at all; `usePins` knows nothing about the view. None of the
+three knows about the others, and that is why the panel and the canvas cannot
+disagree: they are handed the same arrays from the same two hooks.
 
-After any write the tree **reloads the root and every open branch** rather than
-patching what it thinks changed. One move changes rows the response never
-mentions — a topic's idea and note counts, an idea's note count, both buckets —
-and only the server can be right about those. It reloads on failure too: a
-refused drop means the page is showing a move that did not happen.
+The corpus is `GET /api/topics` + `GET /api/ideas` in parallel, and — in the
+idea view — `GET /api/ideas/:id` for which notes orbit in which order, then one
+`GET /api/notes/:id` per row for the body a card shows. **There is no unfiled
+endpoint in that list.** The unfiled card is derived on the client from
+`GET /api/ideas`: an idea whose `topics` array is empty.
+
+Writes go through a `revision` counter that refetches rather than patching, for
+the reason `useCollection` does the same on Analyze — a link write changes counts
+on rows the response never mentions, and only the server can be right about them.
+`usePins` is the one exception; see below.
+
+### Layout is computed, not stored
+
+Three pure modules place every card, each taking a count and a canvas size and
+returning boxes:
+
+| Module | Places |
+|--------|--------|
+| `fieldLayout.js` | The topic cards on the field |
+| `fanLayout.js` | A topic's ideas, arcing out of it on hover |
+| `orbitLayout.js` | An idea's notes, ringing it in the idea view |
+
+Two things follow. First, `sort_order` is **read but never written** from this
+page: an idea's notes orbit in the order `GET /api/ideas/:id` lists them, and
+nothing here reorders anything. Second, the canvas size must be measured before
+anything can be placed, which is `useCanvasSize` — a layout function is handed a
+size, so the size cannot be a guess.
+
+The fan is the navigation: hovering a topic is the only route to its ideas, so
+every card `fanLayout` places has to land somewhere a cursor can reach. It turns
+to face the middle of the canvas before drawing, clamps each box into the canvas
+as a backstop, and caps the arc rather than letting a well-filled topic walk its
+cards past a full turn and back onto the first.
+
+### Linking: one authority, two adjacent tiers
+
+`linkRules.evaluateLink` answers three questions from one call — whether Link is
+enabled, what the hint under it says when it is not, and which writes fire when
+it is pressed. Splitting the enable-check from the write-builder is the bug this
+module exists to prevent: they drift, and the failure is a button enabled for a
+selection the builder then reads differently, against the reader's real corpus,
+with no undo on this page.
+
+The rule is that a link joins a tier to the tier immediately under it, because
+those are the only two link tables that exist:
+
+| Selection | Result |
+|-----------|--------|
+| Notes + ideas | Links, `PUT /api/notes/:id/ideas` |
+| Ideas + topics | Links, `PUT /api/ideas/:id/topics` |
+| Notes + topics | Refused — there is no topic-to-note edge to write |
+| One tier | Refused — that is half a link |
+| All three | Refused — genuinely ambiguous, and picking a reading writes edges nobody asked for |
+
+Pairs come out `[parent, child]`, child-major, so the caller can collapse one
+child's pairs into the single full-set PUT the endpoint wants instead of
+re-writing the same note once per idea.
+
+---
+
+### Pins
+
+A pin is a user saying *keep this where I can edit it*. `005_pins.sql` adds the
+table:
+
+```sql
+PRIMARY KEY (`user_id`, `item_type`, `item_id`)   -- item_type ENUM('topic','idea','note')
+```
+
+The composite key is what makes pinning **idempotent**: re-pinning is an INSERT
+that collides with a row already saying the same thing, so a double click leaves
+one pin and one 201 rather than a duplicate or an error.
+
+The reference to the item is **polymorphic, with deliberately no foreign key**.
+MySQL cannot express a constraint pointing at a different table depending on a
+column's value, and the alternatives — three nullable columns, or a shared items
+table — would distort three well-shaped tables to serve one small one. Nothing
+is lost, because a pin is never read on its own: `findPins` joins the table
+`item_type` names to fetch the title and carries the `user_id` check into that
+join, so a pin whose item was deleted, or was never the caller's, produces no
+joined row and is simply invisible. The three DELETE routes clear matching pins
+as well (`removePinsForItem`), so the rows do not accumulate — but correctness
+does not depend on their doing so.
+
+`src/lib/pins.js` is the one lib module that reads more than one table, and it
+reaches `topics`, `ideas` and `notes` through SQL of its own rather than through
+`src/lib/topics.js` and friends. So the pin tier hangs off the three content
+tiers without any of them knowing it exists. A table name cannot be a
+placeholder in a prepared statement, so `item_type` is resolved through a map
+the module owns (`ITEM_SOURCES`) — the second gate after validation, and the
+reason no caller-supplied string ever reaches a query as SQL.
+
+#### Endpoints
+
+| Route | Does |
+|-------|------|
+| `GET /api/pins` | Every pin, hydrated with its item's title, in pin order. One `UNION ALL` branch per `item_type` rather than three round trips. |
+| `POST /api/pins` | `{ itemType, itemId }`. Idempotent. |
+| `DELETE /api/pins` | `{ items: [{ itemType, itemId }, ...] }` — unpin-selected, and single unpin as a list of one. Answers `{ removed }`. |
+| `DELETE /api/pins/all` | The panel's Clear. Answers `{ removed }`. |
+
+Per-item endpoints rather than a full-set PUT, because the widget driving them is
+a per-card toggle. The full-set idiom lives where the widget is a multi-select —
+the link tables — and copying it here would make one pin click send the whole
+pinned set back.
+
+Two status decisions worth not re-litigating:
+
+- **POST on an item the caller does not own answers 404, not 403.** `pins` has
+  no foreign key to the item, so the ownership check a foreign key would have
+  given for free happens in the route; 403 would confirm that the id exists and
+  belongs to somebody, which is the fact a stranger has no business learning.
+  Same rule as every other `:id` in this API.
+- **DELETE does no ownership check and cannot 404.** The delete is already
+  scoped to the caller's `user_id`, so naming somebody else's pin removes
+  nothing and reveals nothing. `removed` may be lower than the number of items
+  sent — including for the ordinary race where two tabs unpin the same card —
+  and that is a success.
+
+`/api/pins` is mounted with `isAuth` but **not** with `invalidatesOverview`. A
+pin is not content: it changes nothing the overview draws, and invalidating on
+one would spend a full rebuild on a toggle.
+
+#### Why usePins is optimistic when nothing else on the page is
+
+Every other write here refetches, because a link write changes counts on rows the
+response never mentions. A pin changes nothing but itself — no counts, no
+cascade, no derived state anywhere — so `GET /api/pins` would come back saying
+exactly what was just sent, and the refetch would buy nothing while costing a
+visible lag on a toggle the reader expects to be instant.
+
+So the toggle is applied locally and the request follows; on failure the previous
+list goes back and the banner says why. **That rollback is the entire
+justification for the optimism** — it is safe precisely because the guessed state
+is one boolean the server cannot disagree with in any way more interesting than
+"no". The list is mirrored in a ref beside the state because every callback here
+is stable across renders, and rolling back out of a closure would restore
+whichever list existed when the callback was made.
+
+### Two kinds of failure, two banners
+
+A **load** error means the page has nothing to draw; an **action** error means a
+write did not land, over a page that is still correct. They are separate lines
+because they are separate facts and either can be true without the other. Each
+hook reports both, and the page shows whichever spoke — two hooks failing the
+same way at once is one server being down, and one banner says that.
 
 ### Opening a note
 
-A note row is a link to `/analyze?l=<book>.<chapter>&note=<id>` — the chapter of
-its first anchor, with the editor opened on it. The alternative, an editor
-embedded in the tree, would mean a second home for the note editor, its
-reference list and its ideas multi-select, all of which exist on `/analyze` and
-all of which are only useful beside the scripture they point at. This way is one
-URL builder and one query param.
+A note card links to `/analyze?l=<book>.<chapter>&note=<id>` — the chapter of its
+first anchor, with the editor opened on it — built by `Analyze/analyzeUrl.js`.
+The alternative, an editor embedded in the canvas, would mean a second home for
+the note editor, its reference list and its ideas multi-select, all of which
+exist on `/analyze` and all of which are only useful beside the scripture they
+point at.
 
 ---
 
@@ -805,34 +896,35 @@ it right.
 | Group | Lands on |
 |-------|----------|
 | Note | `/analyze?l=<book>.<chapter>&note=<id>` — the editor, at its first anchor |
-| Idea | `/topics-tree?topic=<topicId>&idea=<id>`, or `?idea=<id>` when unfiled |
-| Topic | `/topics-tree?topic=<id>` |
+| Idea | `/thoughts?idea=<id>` — the idea view, its notes orbiting it |
+| Topic | `/thoughts` — the topics view, where every topic is a card |
 | Scripture | `/analyze?l=<book>.<chapter>` — the primary panel on that chapter |
 
-An idea filed under several topics is opened under the first of them; any of
-them shows the idea, and picking the first is the one rule that needs no
-explaining.
+How many topics an idea is filed under does not change its link, and neither
+does being filed under none. The tree this replaced could only reach an idea
+through a topic — or through the unfiled bucket — so both were special cases
+there; the idea view is reached by id, so neither is a case at all now.
+
+A topic gets the bare field because a topic has no view of its own to open. That
+is the honest limit of the link and not an oversight: adding a param that merely
+scrolled the field would be a second URL contract for a hover's worth of state.
 
 Those URLs are built by two pure modules and not by the search page:
-`Analyze/analyzeUrl.js` owns every link **into** Analyze (the topic tree's note
-rows use it too), and `Topics/treeFocus.js` owns the tree's `?topic=` / `?idea=`
-pair. The page that reads a param owns the name of it.
+`Analyze/analyzeUrl.js` owns every link **into** Analyze (the Thoughts note cards
+use it too), and `Thoughts/thoughtsUrl.js` owns `?idea=`. The page that reads a
+param owns the name of it.
 
-### Focusing a row in the tree
+### An idea that no longer exists
 
-`/topics-tree?topic=3&idea=7` opens topic 3, waits for its branch, then marks
-idea 7's row and scrolls to it. It is unavoidably two-step: the tree loads a
-level at a time, so an idea's row does not exist until its topic has been
-expanded. `useTreeFocus` therefore runs as an effect over what has arrived
-rather than as a chain of awaits, which is also what makes it right when the
-branch was already open.
+`/thoughts?idea=7` where idea 7 has since been deleted is not handled on the
+client, deliberately. Whether an id names a live row is a question about the
+corpus and only the server can answer it — it answers 404, which the page shows
+as its error banner with the URL still saying what was asked for.
 
-Each container is expanded **once**. The params stay in the URL after the page
-has acted on them — exactly like Analyze's `?note=` — so a second expansion
-would make the row impossible to collapse.
-
-A param naming a topic that has since been deleted focuses nothing and renders
-the tree normally. A saved link must not become an error page.
+What *is* handled on the client is a malformed value: anything that is not a
+positive integer (`abc`, `-1`, `0`, `1.5`, absent) is the topics view rather than
+an error, the same rule `overviewParams` follows for a stale `?topicId=`. A saved
+link must not become an error page.
 
 ### The page, not the Navbar
 
@@ -841,7 +933,7 @@ horizontal room is the scarce thing. Results are four groups of up to twenty
 rows each, all of them links elsewhere, so they want a page's width and a page's
 scroll; a dropdown would have to cut the groups short, and a result nobody can
 see is how a reader concludes something is not there. The Navbar and
-`LibraryNav` both link to `/search` instead.
+`SearchNav` both link to `/search` instead.
 
 ### Debounce
 
@@ -1184,8 +1276,14 @@ asks which tier it is showing except at the two places the answer changes what a
 reader can *do*: only a note's link opens the Analyze editor (`?l=&note=`) where
 the other two position the panel alone, and only a topic offers "show only this
 topic", which is the plan's filter reached from the diagram rather than from the
-URL bar. Those three endpoints already existed — they are what the Topic page's
-tree walks down — so there is no `/api/overview/:something` to keep in step.
+URL bar. Those three endpoints already existed — they are what the Thoughts
+page's pinned panel reads too — so there is no `/api/overview/:something` to keep
+in step.
+
+The rows inside the drawer are links of their own: an idea's notes and a topic's
+ideas each lead to the page that shows one — `/analyze?l=&note=` for a note,
+`/thoughts?idea=` for an idea — while a note's references are text and nothing
+more, since the drawer was opened from the diagram those references drew.
 
 Verified in the browser against 250 notes and 751 arcs: hovering lit one chain's
 5 stems and its arc group and dimmed every other arc to 0.08; the tooltip read
@@ -1434,18 +1532,21 @@ jest-dom matchers then silently go missing and assertions fail for the wrong
 reason.
 
 Client tests live beside the code they cover (`components/Analyze/*.test.js`,
-`components/Library/*.test.js`). The pure modules are tested directly —
+`components/Thoughts/*.test.js`). The pure modules are tested directly —
 `navigation.test.js` for chapter stepping (book boundaries, canonical order,
 clamping at both ends of the canon), `highlights.test.js` for the per-verse tint
 rules, `verseSelection.test.js` for turning a verse-index range into a reference,
 `selectionRuns.test.js` for cutting a clicked selection into contiguous runs,
 `markdown.test.js` for rendering and sanitizing a note body, `slug.test.js` for
 the topic slug rule, `MultiSelect.test.js` for toggling a selection immutably,
-`format.test.js` for the count labels, `treeModel.test.js` for the tree's
-rows and drop rules — which of the three writes one gesture resolves to, and
-which drops mean nothing at all — and `searchModel.test.js` for where each kind
-of search result leads, which is the part of that page a wrong answer hides
-best: the link looks fine and the destination is simply not the thing that
+`format.test.js` for the count labels, `linkRules.test.js` for which selections
+of pinned rows may be linked and into which pairs — the module three separate
+reads of the Link button all go through — `fieldLayout`/`fanLayout`/
+`orbitLayout.test.js` for the three card placements, including the two ways a
+fan fails (a topic at an edge, a topic with many ideas), `useThoughtsView.test.js`
+for the `?idea=` contract in both directions, and `searchModel.test.js` for where
+each kind of search result leads, which is the part of that page a wrong answer
+hides best: the link looks fine and the destination is simply not the thing that
 matched.
 
 `Analyze.test.js` drives the rendered page against a **stateful** mock API. It
@@ -1456,18 +1557,22 @@ canned response would let a client-side guess pass. The mock recomputes
 does, and it holds the ideas tier and its link table so a note payload carries
 `ideas` the way the real one does.
 
-`Library.test.js` drives `/ideas` and `/topics` against a mock of the same kind.
-Its store derives the topic counts from the link table rather than storing them,
-so a test asserting "2 ideas · 5 notes" is asserting that the page prints what
-the server computed and does not compute its own.
+`Thoughts.test.js` drives `/thoughts` against a mock of the same kind, and what
+it exists for is the one property neither hook can assert alone: **creating pins
+what it created.** `useThoughtsData` makes the row and `usePins` pins it, and the
+page is the only thing that knows they are about the same item — so the test runs
+the whole round trip through the real components, the bar's button into the
+modal's fields into the panel's list. A create that forgot to pin, or pinned the
+wrong id, fails here and nowhere else.
 
-`TopicTree.test.js` drives the tree the same way, and its store performs a move
-the way `src/lib/ordering.js` does — delete the old link row, insert the new one
-at the position asked for, renumber the destination. That is what makes
-"dragging a note out of Unfiled files it" a real assertion: the note has to be
-absent from the bucket on the *next* fetch, computed from the link tables, not
-merely removed from a list on screen. Drags are fired as HTML5 drag events with
-a stand-in `dataTransfer`, since jsdom supplies none.
+`PinnedPanel.test.js` covers the panel as the page's only editing surface: that
+a checked selection puts both actions in front of the reader and that Unpin acts
+on exactly the rows checked, by checkbox or by row click; that Link is enabled,
+hinted and fired from the one `evaluateLink` call; and that Clear asks twice.
+
+`TopicsField.test.js` drives the real `useThoughtsView` rather than a stub prop,
+so "clicking a fanned idea card opens the idea view" is an assertion about the
+URL and not about a callback having been called.
 
 `Search.test.js` drives `/search` against a mock that matches the way
 `src/lib/search.js` does rather than returning canned rows: one word has to
@@ -1476,10 +1581,6 @@ group has to rank a title hit above a body hit. A fixed payload would let the
 page pass while the query it sent was wrong — and the query is half of what that
 page does. It runs on fake timers, because the debounce is the other half:
 "five keystrokes, one request" is an assertion about time.
-
-`TopicTree.test.js` also covers arriving with a row to focus, which is the same
-kind of round trip — the idea's row has to appear because its topic's branch
-loaded, not because the page guessed the key.
 
 `Overview.test.js` holds four lines no screenshot can. The first is that pan
 and zoom never re-render: a `Profiler` counts commits across a wheel gesture and

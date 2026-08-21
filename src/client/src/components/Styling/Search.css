@@ -44,6 +44,31 @@
   font-size: var(--font-xl);
 }
 
+/* The section links beside the title. A pill fills in on hover and stays
+   filled on the current page, so the row says where you are as well as where
+   you can go. */
+.search-nav {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.search-nav-link {
+  color: var(--text-white);
+  text-decoration: none;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-base);
+  transition: background-color var(--search-transition);
+}
+
+.search-nav-link:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.search-nav-link--current {
+  background-color: var(--color-primary);
+}
+
 /* ─── The box ────────────────────────────────────────────────────────────── */
 
 .search-card {

@@ -46,8 +46,6 @@ const Navbar = () => {
                         {[
                             { path: '/dashboard', label: 'Dashboard' },
                             { path: '/analyze', label: 'Analyze' },
-                            { path: '/ideas', label: 'Ideas' },
-                            { path: '/topics', label: 'Topics' },
                             { path: '/search', label: 'Search' },
                             { path: '/overview', label: 'Overview' },
                             { path: '/thoughts', label: 'Thoughts' },

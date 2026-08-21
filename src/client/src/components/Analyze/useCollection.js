@@ -12,7 +12,9 @@ import { fetchJson } from '../../config/api';
 // counts, and only a refetch can be right about them.
 //
 // `path` and `key` name the endpoint and the property its payload is wrapped
-// in ('/ideas' and 'ideas'), so the two callers differ only in their mutations.
+// in ('/ideas' and 'ideas'). It stays separate from useIdeas, its only caller,
+// because the split is what keeps this fetch-and-revision plumbing apart from
+// the mutations written on top of it.
 const useCollection = (path, key) => {
     const [items, setItems] = useState([]);
     const [isLoading, setIsLoading] = useState(true);

@@ -71,7 +71,7 @@ describe('note results', () => {
 });
 
 describe('idea results', () => {
-    test('link to the tree, opened on the topic the idea is filed under', () => {
+    test('link to the Thoughts page, opened on the idea', () => {
         // Arrange
         const idea = { id: 7, title: 'Shepherd imagery', topics: [{ id: 3, name: 'Care' }] };
 
@@ -79,11 +79,12 @@ describe('idea results', () => {
         const link = groupNamed('ideas').linkOf(idea);
 
         // Assert
-        expect(link).toBe('/topics-tree?topic=3&idea=7');
+        expect(link).toBe('/thoughts?idea=7');
     });
 
-    test('link an idea filed under several through the first of them', () => {
-        // Arrange
+    test('link an idea filed under several the same way — the view is the idea', () => {
+        // Arrange — the topics it is filed under do not appear in the link at
+        // all, so however many there are, there is one place to go.
         const idea = {
             id: 7,
             title: 'Shepherd imagery',
@@ -91,22 +92,24 @@ describe('idea results', () => {
         };
 
         // Act / Assert
-        expect(groupNamed('ideas').linkOf(idea)).toBe('/topics-tree?topic=3&idea=7');
+        expect(groupNamed('ideas').linkOf(idea)).toBe('/thoughts?idea=7');
     });
 
-    test('link an unfiled idea to the tree without a topic', () => {
-        // Arrange — an idea under no topic sits in the unfiled bucket, which is
-        // the only place in the tree it can be reached from.
+    test('link an unfiled idea the same way too', () => {
+        // Arrange — an idea under no topic was a special case in the tree, which
+        // could only reach it through the unfiled bucket. The idea view reaches
+        // it by id, so it is no longer a case at all.
         const idea = { id: 7, title: 'Shepherd imagery', topics: [] };
 
         // Act / Assert
-        expect(groupNamed('ideas').linkOf(idea)).toBe('/topics-tree?idea=7');
+        expect(groupNamed('ideas').linkOf(idea)).toBe('/thoughts?idea=7');
     });
 });
 
 describe('topic results', () => {
-    test('link to the tree, opened on the topic', () => {
-        expect(groupNamed('topics').linkOf({ id: 3, name: 'Care' })).toBe('/topics-tree?topic=3');
+    test('link to the topics view, where every topic is a card', () => {
+        // A topic has no view of its own to open, so the link is the field.
+        expect(groupNamed('topics').linkOf({ id: 3, name: 'Care' })).toBe('/thoughts');
     });
 });
 

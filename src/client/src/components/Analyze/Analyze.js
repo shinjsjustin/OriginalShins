@@ -9,7 +9,7 @@ import usePanelPositions from './usePanelPositions';
 import useNotes from './useNotes';
 import useActiveNote from './useActiveNote';
 import useSelectedVerses from './useSelectedVerses';
-import useIdeas from '../Library/useIdeas';
+import useIdeas from './useIdeas';
 import { describePosition } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';

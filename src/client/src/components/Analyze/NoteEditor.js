@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { describeReference } from './navigation';
 import { renderMarkdown } from './markdown';
-import MultiSelect from '../Library/MultiSelect';
+import MultiSelect from './MultiSelect';
 
 // What the "add from selection" button says. A selection with a gap in it is
 // several references, and naming them all would outrun the button, so past one

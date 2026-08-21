@@ -1,4 +1,4 @@
-import { countLabel, joinCounts } from './format';
+import { countLabel } from './format';
 
 describe('countLabel', () => {
     test('keeps the noun singular for exactly one', () => {
@@ -11,11 +11,5 @@ describe('countLabel', () => {
 
     test('prints zero rather than hiding it — an empty topic is a real state', () => {
         expect(countLabel(0, 'note')).toBe('0 notes');
-    });
-});
-
-describe('joinCounts', () => {
-    test('separates the parts with a middle dot', () => {
-        expect(joinCounts(['2 ideas', '5 notes'])).toBe('2 ideas · 5 notes');
     });
 });

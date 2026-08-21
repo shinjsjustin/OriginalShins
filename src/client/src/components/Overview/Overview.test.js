@@ -1524,9 +1524,9 @@ describe('clicking a chain', () => {
             .toHaveTextContent('Everything filed under faith.');
         expect(drawer.querySelector('.overview-drawer-heading')).toHaveTextContent('Ideas');
 
-        // An idea has no page of its own, so its row leads to the tree.
+        // An idea's row leads to the Thoughts page, opened on that idea.
         expect(screen.getByRole('link', { name: IDEA_TITLE }))
-            .toHaveAttribute('href', `/topics-tree?topic=${TOPIC_ID}&idea=${IDEA_ID}`);
+            .toHaveAttribute('href', `/thoughts?idea=${IDEA_ID}`);
     });
 
     test('offers to narrow the whole diagram to the topic it opened', async () => {

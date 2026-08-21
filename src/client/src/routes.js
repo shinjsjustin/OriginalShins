@@ -5,9 +5,6 @@ import AccessDenied from './components/Authentication/AccessDenied';
 import PostRegisterPage from './components/Authentication/PostRegisterPage';
 import Dashboard from './components/Dashboard/Dashboard';
 import Analyze from './components/Analyze/Analyze';
-import IdeasPage from './components/Library/IdeasPage';
-import TopicsPage from './components/Library/TopicsPage';
-import TopicTree from './components/Topics/TopicTree';
 import SearchPage from './components/Search/SearchPage';
 import Overview from './components/Overview/Overview';
 import Thoughts from './components/Thoughts/Thoughts';
@@ -41,16 +38,6 @@ const routes = [
     // Panel positions live in the query string, e.g. /analyze?l=1.1&r=40.1
     { path: '/analyze',   element: <ProtectedRoute><Analyze /></ProtectedRoute> },
 
-    // The two tiers above notes. Each is a list plus a form: where an idea or
-    // a topic is created, edited and deleted.
-    { path: '/ideas',   element: <ProtectedRoute><IdeasPage /></ProtectedRoute> },
-    { path: '/topics',  element: <ProtectedRoute><TopicsPage /></ProtectedRoute> },
-
-    // The Topic page: the three-level tree that walks topic -> idea -> note,
-    // plus the two unfiled buckets. It files things; /topics creates them, so
-    // the two are separate pages rather than one page with two jobs.
-    { path: '/topics-tree', element: <ProtectedRoute><TopicTree /></ProtectedRoute> },
-
     // One box across all four tiers. A page rather than a Navbar dropdown:
     // the results are four groups of links wanting a page's width, and the
     // Navbar is shown on /analyze too, where the room is spoken for.
@@ -66,6 +53,10 @@ const routes = [
     // their ideas out on hover, an idea centred with its notes orbiting it, and
     // the pinned panel beside them where anything pinned is edited. Which of
     // the two views is showing lives in the query string, e.g. /thoughts?idea=7
+    //
+    // It replaced /ideas, /topics and /topics-tree, which were three pages over
+    // the same two tiers — one to create, one to file, one to read. The server
+    // routes they ran on are unchanged and this page runs on them.
     { path: '/thoughts', element: <ProtectedRoute><Thoughts /></ProtectedRoute> },
 
     // TODO: Add more protected routes here, e.g.:

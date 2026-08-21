@@ -1,5 +1,5 @@
 import { analyzeUrlForChapter, analyzeUrlForNote } from '../Analyze/analyzeUrl';
-import { treeUrlForIdea, treeUrlForTopic } from '../Topics/treeFocus';
+import { thoughtsUrl, thoughtsUrlForIdea } from '../Thoughts/thoughtsUrl';
 
 // The search page as data: what the four groups are called, what a row of each
 // one reads as, and — the part worth testing on its own — where clicking it
@@ -10,7 +10,7 @@ import { treeUrlForIdea, treeUrlForTopic } from '../Topics/treeFocus';
 // existing meaning, and this module is where the four are chosen rather than
 // four link expressions scattered through the JSX.
 
-// The client half of the server's minimum. Like Library/slug.js it is a
+// The client half of the server's minimum. Like Thoughts/slug.js it is a
 // convenience for the input — it stops a one-character query from becoming a
 // request the server will refuse — and never the authority: searchInput.js
 // checks the same thing again on the way in.
@@ -27,16 +27,6 @@ export const EMPTY_RESULTS = Object.freeze({
     topics: [],
     scripture: [],
 });
-
-// An idea's row lives under a topic in the tree, so a link to it needs one.
-// An idea filed under several is opened under the first — any of them shows the
-// idea, and picking the first is the one rule that needs no explaining. Filed
-// under none, it is in the unfiled bucket, which `treeUrlForIdea` takes null
-// for.
-const firstTopicIdOf = (idea) => {
-    const topics = idea.topics || [];
-    return topics.length === 0 ? null : topics[0].id;
-};
 
 // The four groups, in the order the page renders them: the reader's own writing
 // first — that is what the plan means by "notes, ideas and topics first" — and
@@ -58,7 +48,7 @@ export const GROUPS = Object.freeze([
         titleOf: (idea) => idea.title || 'Untitled idea',
         detailOf: (idea) => idea.snippet,
         keyOf: (idea) => idea.id,
-        linkOf: (idea) => treeUrlForIdea(idea.id, firstTopicIdOf(idea)),
+        linkOf: (idea) => thoughtsUrlForIdea(idea.id),
     },
     {
         key: 'topics',
@@ -66,7 +56,10 @@ export const GROUPS = Object.freeze([
         titleOf: (topic) => topic.name,
         detailOf: (topic) => topic.snippet,
         keyOf: (topic) => topic.id,
-        linkOf: (topic) => treeUrlForTopic(topic.id),
+        // The topics view, where every topic is a card. A topic has no view of
+        // its own to land on, so this is as close as a link gets — the reader
+        // arrives at the field with the name they searched for on it.
+        linkOf: () => thoughtsUrl(),
     },
     {
         key: 'scripture',
