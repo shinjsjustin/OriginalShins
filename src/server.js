@@ -26,6 +26,10 @@ dotenv.config();
 
 const app = express();
 
+// Behind nginx: without this Express sees the connection as plain HTTP and
+// would never set the `secure: true` session cookie below.
+app.set('trust proxy', 1);
+
 // Allow requests from the React dev server.
 // In production the server serves the built React app directly, so CORS
 // is only needed during development.
