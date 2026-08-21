@@ -23,6 +23,27 @@
      page leaves for it, as on /overview. */
   --thoughts-navbar-clearance: 64px;
   --thoughts-panel-width: 320px;
+  --thoughts-spine-width: 46px;
+
+  /* ── Motion ────────────────────────────────────────────────────────────
+     Four durations and one curve, named here so the page's movements are
+     compared in one place instead of as literals scattered down the file. The
+     curve is Analyze's panel curve: everything in this app decelerates into
+     its stop rather than arriving at speed.
+
+       chrome  a hover on a button, a spine or a row — a colour, not a move
+       card    a card settling into a new size or depth
+       open    a fan or an orbit arriving
+       exit    a view leaving, and the one duration here that JavaScript also
+               holds: ORBIT_EXIT_MS in IdeaOrbit.js unmounts the idea view on
+               this beat and the fan below hides itself on it. Change one and
+               all three have to change together. */
+  --thoughts-transition: 0.15s ease;
+  --thoughts-ease:    cubic-bezier(0.22, 0.61, 0.36, 1);
+  --thoughts-card-ms: 260ms;
+  --thoughts-open-ms: 300ms;
+  --thoughts-fade-ms: 180ms;
+  --thoughts-exit-ms: 320ms;
 
   min-height: 100vh;
   background-color: var(--bg-dark);
@@ -187,10 +208,12 @@
      2  a topic card at rest — above every cluster region, including open ones
      5  the open fan: its idea cards and its chip, above the faded field
      6  the spotlit topic itself
+     7  a fan card under the cursor, over the arc it is sitting in
 
-   Motion is `transform` and `opacity` only, both cheap to composite, and the
-   whole page's reduced-motion preference is already honoured globally in
-   index.css.
+   Motion is `transform` and `opacity` only, both cheap to composite. index.css
+   collapses every duration on the page for a reader who asked for less of it;
+   what it cannot reach is the per-card delay that staggers these, so the foot
+   of this file finishes the job.
    ──────────────────────────────────────────────────────────────────────────── */
 
 .thoughts-field {
@@ -209,6 +232,23 @@
 /* ─── A card ─────────────────────────────────────────────────────────────── */
 
 .thoughts-bubble {
+  /* Two slots, so that the states below can each fill one without restating
+     the stack. As a single `box-shadow` they are one declaration, and the
+     states here do arrive together — a spotlit card is lifted while a selected
+     one is edged, and whichever rule ran last would silently erase the other.
+     Split, they compose:
+
+       --bubble-edge    a hairline drawn inside the card: what it is, or that
+                        it is the one selected. Analyze draws its primary
+                        panel's gold top edge the same way.
+       --bubble-shadow  the lift — how far off the canvas the card sits.
+
+     `0 0 0 0 transparent` is the empty value for both, and `none` is not:
+     neither slot is the whole property, and a `none` in the middle of a
+     shadow list is a parse error that takes the other slot down with it. */
+  --bubble-edge: 0 0 0 0 transparent;
+  --bubble-shadow: var(--shadow-sm);
+
   position: absolute;
   z-index: 2;
   border-radius: var(--radius-lg);
@@ -216,12 +256,12 @@
      its width on corners the text cannot use. */
   background-color: var(--bg-alt);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--bubble-edge), var(--bubble-shadow);
   transform: scale(var(--bubble-lift, 1));
   transition:
-    transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1),
-    opacity 200ms ease,
-    box-shadow 260ms ease;
+    transform var(--thoughts-card-ms) var(--thoughts-ease),
+    opacity var(--thoughts-fade-ms) ease,
+    box-shadow var(--thoughts-card-ms) ease;
 }
 
 .thoughts-bubble-face {
@@ -260,7 +300,22 @@
 
 /* ─── The three kinds ────────────────────────────────────────────────────── */
 
+/* A topic is the ground state, and the other three kinds below are each drawn
+   as a departure from it: unfiled loses the fill, an idea inverts it, a note
+   takes the gold. So the only thing this rule owes the field is that a card be
+   visibly a card — and at --border on --bg-alt it was not. Paper-alt on paper
+   is a three per cent difference and the hairline over it is barely more, which
+   left nine cards reading as one pale smudge in the middle of the canvas.
+
+   --border-alt is the firmer of the two edges :root keeps, and it is the whole
+   fix. Gold was the tempting one — it is the palette's "a mark already made",
+   and a topic is one — but gold on this page is already spoken for twice over,
+   by the pinned card and by the dashed Unfiled bubble, and nine gold cards took
+   both of those down with them: a pinned topic looked exactly like a topic, and
+   Unfiled stopped being the one gold thing in the field it is meant to be. The
+   ground state does not need a colour. It needs an edge. */
 .thoughts-bubble--topic {
+  border-color: var(--border-alt);
   color: var(--text-primary);
 }
 
@@ -282,10 +337,17 @@
    that has faded to almost nothing. Dark on the canvas's paper, which is the
    strongest contrast this palette has and the reason the fan reads as lit. */
 .thoughts-bubble--idea {
+  /* A ring of the page's own near-black, outside the card rather than in it.
+     Once a topic has more ideas than one arc holds, fanLayout puts the rest on
+     a second arc close enough to overlap the first — and --shadow-md is a 22px
+     blur, so two dark cards crossing smear into one dark mass with no edge
+     anywhere in it. The ring is that edge, and it holds on paper and against
+     another card alike. */
+  --bubble-shadow: 0 0 0 1px var(--ground-deep), var(--shadow-md);
+
   background-color: var(--ground-raised);
   border-color: var(--ground-line);
   color: var(--on-ground);
-  box-shadow: var(--shadow-md);
 }
 
 .thoughts-bubble--idea .thoughts-bubble-subtitle {
@@ -302,12 +364,20 @@
 .thoughts-cluster.is-active .thoughts-bubble--topic,
 .thoughts-cluster.is-active .thoughts-bubble--unfiled {
   --bubble-lift: 1.12;
+  --bubble-shadow: var(--shadow-lg);
 
   z-index: 6;
-  box-shadow: var(--shadow-lg);
 }
 
+/* Lapis, and lapis on this canvas is only ever this: what is being chosen right
+   now. It is why no kind above claims the colour — a selected idea card has to
+   be tellable from an idea card, and it cannot be if being an idea had already
+   made it blue. Drawn as an inset edge rather than a border colour because one
+   pixel of border on a card this size is a rumour; Analyze marks its selected
+   verse with the same two. */
 .thoughts-bubble.is-selected {
+  --bubble-edge: inset 2px 0 0 0 var(--select-edge);
+
   border-color: var(--color-primary);
 }
 
@@ -315,8 +385,10 @@
    and — the practical half — a card at 0.08 is still a hit target, so hovering
    another topic is still how the reader moves the spotlight. */
 .thoughts-bubble.is-faded {
+  --bubble-edge: 0 0 0 0 transparent;
+  --bubble-shadow: 0 0 0 0 transparent;
+
   opacity: 0.08;
-  box-shadow: none;
 }
 
 /* ─── The fan ────────────────────────────────────────────────────────────── */
@@ -331,7 +403,7 @@
      on the way out so the closing animation is seen, and immediate on the way
      in so the first card is focusable as it appears. */
   visibility: hidden;
-  transition: visibility 0s linear 320ms;
+  transition: visibility 0s linear var(--thoughts-exit-ms);
 }
 
 .thoughts-cluster.is-active .thoughts-fan {
@@ -349,8 +421,8 @@
      one movement outwards rather than fifteen fades in place. */
   transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(0.55);
   transition:
-    transform 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--card-delay, 0ms),
-    opacity 180ms ease var(--card-delay, 0ms);
+    transform var(--thoughts-open-ms) var(--thoughts-ease) var(--card-delay, 0ms),
+    opacity var(--thoughts-fade-ms) ease var(--card-delay, 0ms);
 }
 
 .thoughts-cluster.is-active .thoughts-fan-item,
@@ -361,7 +433,11 @@
   transform: none;
 }
 
+/* Raised as well as enlarged. The two arcs overlap wherever the second one is
+   drawn, and a card that answered the pointer by growing underneath its
+   neighbour would answer it by hiding more of itself. */
 .thoughts-cluster.is-active .thoughts-fan-item:hover {
+  z-index: 7;
   transform: scale(1.06);
 }
 
@@ -403,9 +479,28 @@
 /* ─── The pin ────────────────────────────────────────────────────────────── */
 
 /* Top-right of every card, on hover and while pinned — the spec's rule for all
-   three tiers. It is mounted and unmounted by the card rather than faded, so
-   there is no transition here to write: what would be animated does not exist
-   yet at the moment the animation would start. */
+   three tiers.
+
+   Its ARRIVAL is not animated and cannot be: the card mounts and unmounts it,
+   so at the instant a fade-in would begin there is nothing there to fade. What
+   does transition is everything after that, while the marker is standing where
+   it was put — the wash rising under it as the pointer lands, and the wash that
+   stays once the press has pinned the card.
+
+   Three states, and the middle one is why the wash exists at all. The marker is
+   an emoji: its colour belongs to the font and no rule here can touch it, which
+   left opacity as the only dial — and opacity alone gave "your pointer is on
+   the pin" and "this card is pinned" the same appearance, the two states a
+   reader most needs to tell apart in the moment before they click.
+
+     0.6, no disc     mounted because the card is hovered; nothing claimed yet
+     1.0, faint disc  the pointer is on the marker itself
+     1.0, full disc   pinned, and mounted from here on whatever the pointer does
+
+   Both discs are gold, from the tints :root already keeps for a mark made on
+   the page. Neither is the lapis one: lapis is what is being chosen right now,
+   and a pin is its opposite — a choice made earlier that outlives the pointer
+   that made it. */
 .thoughts-bubble-pin {
   position: absolute;
   top: 3px;
@@ -422,19 +517,31 @@
   font-size: 11px;
   line-height: 1;
   opacity: 0.6;
+  transition:
+    opacity var(--thoughts-transition),
+    background-color var(--thoughts-transition);
 }
 
 .thoughts-bubble-pin:hover {
   opacity: 1;
-  background-color: var(--select-tint);
+  background-color: var(--note-tint-1);
 }
 
 .thoughts-bubble.is-pinned .thoughts-bubble-pin {
   opacity: 1;
+  background-color: var(--note-tint-2);
 }
 
 .thoughts-bubble.is-pinned {
   border-color: var(--color-accent);
+}
+
+/* The idea card is the dark one, and --color-accent is a pigment mixed for
+   paper: on ground-raised it goes to a brown smudge rather than an edge. The
+   lit gold stands in — the same swap the panel makes to print a topic's kind
+   against the chrome. */
+.thoughts-bubble--idea.is-pinned {
+  border-color: var(--gold-lit);
 }
 
 /* ─── The idea orbit ─────────────────────────────────────────────────────────
@@ -474,6 +581,8 @@
      1  the "no notes" line
      2  a note card (from .thoughts-bubble)
      3  the centred idea, above the ring it is the subject of
+     4  a note under the cursor — over the idea too, because a card being
+        pointed at is the card being read
    ──────────────────────────────────────────────────────────────────────────── */
 
 .thoughts-orbit {
@@ -489,7 +598,7 @@
   position: absolute;
   inset: 0;
   background-color: var(--bg-card);
-  transition: opacity 260ms ease;
+  transition: opacity var(--thoughts-card-ms) ease;
 }
 
 .thoughts-orbit.is-closing::before {
@@ -511,7 +620,7 @@
 }
 
 .thoughts-orbit .thoughts-bubble {
-  animation: orbit-in 300ms cubic-bezier(0.22, 0.61, 0.36, 1) var(--card-delay, 0ms) backwards;
+  animation: orbit-in var(--thoughts-open-ms) var(--thoughts-ease) var(--card-delay, 0ms) backwards;
 }
 
 .thoughts-orbit.is-closing .thoughts-bubble {
@@ -524,9 +633,14 @@
 
 .thoughts-orbit-centre {
   --card-from-scale: 0.4;
+  /* Through the slot, not over it: this card is an idea, and setting
+     `box-shadow` here outright is exactly the erasure the two properties on
+     .thoughts-bubble exist to prevent — it would take the kind's ring with it.
+     The ring is kept and only the lift is deepened, because this card is the
+     one the whole view is about. */
+  --bubble-shadow: 0 0 0 1px var(--ground-deep), var(--shadow-lg);
 
   z-index: 3;
-  box-shadow: var(--shadow-lg);
 }
 
 /* A document, not a label: the body reads from the top left like every other
@@ -602,6 +716,17 @@
   text-align: left;
 }
 
+/* Raised as well as enlarged, for the fan's reason and one more of its own:
+   where orbitLayout splits the notes onto two circles, the inner circle is both
+   the smaller and the one on top, so the card a reader points at is often the
+   one with a corner of another lying over it. */
+.thoughts-orbit-note:hover {
+  --bubble-lift: 1.04;
+  --bubble-shadow: var(--shadow-md);
+
+  z-index: 4;
+}
+
 /* The spec's three lines and its "…". The clamp is the browser's because only
    the browser knows where three lines of this width end — the card is handed
    the raw body and cuts nothing itself. */
@@ -634,7 +759,7 @@
 
 .thoughts-orbit.is-closing .thoughts-orbit-empty {
   opacity: 0;
-  transition: opacity 200ms ease;
+  transition: opacity var(--thoughts-fade-ms) ease;
 }
 
 /* ─── The pinned panel ────────────────────────────────────────────────────────
@@ -647,11 +772,6 @@
    because the rules are — .analyze-spine is sized from custom properties that
    only exist inside .analyze-page, so the components themselves cannot travel.
    ──────────────────────────────────────────────────────────────────────────── */
-
-.thoughts-page {
-  --thoughts-spine-width: 46px;
-  --thoughts-transition: 0.15s ease;
-}
 
 .thoughts-spine {
   flex: 0 0 var(--thoughts-spine-width);
@@ -1014,4 +1134,39 @@
   overflow-y: auto;
   padding: var(--space-md);
   background-color: var(--ground-deep);
+}
+
+/* ─── Less motion ─────────────────────────────────────────────────────────────
+   index.css already collapses every duration and every animation on the page to
+   a hair for a reader who asked for less movement, which is the whole of the
+   rule everywhere else in this app: give them the destination and not the
+   journey.
+
+   On this page that is not yet the whole of it, because the one thing a
+   duration reset does not touch is a DELAY — and on this canvas the delay is
+   most of the motion. Every card in a fan and every note in a ring carries a
+   `--card-delay` of its index times sixteen milliseconds, written inline by
+   TopicsField and IdeaOrbit; the fan holds its own `visibility` back by the
+   exit beat so a closing fan can be watched leaving. Collapse the durations and
+   leave those, and a reader who asked for no motion still gets the journey —
+   eighteen cards arriving one after another across a third of a second, now
+   without the movement that was the only thing making them read as one gesture.
+   Popping, in sequence, is worse than the animation it replaced.
+
+   So: no delays. The whole view arrives, or leaves, at once.
+
+   `!important` because `--card-delay` is an inline style and an important
+   author rule is the only thing that outranks one — and the delays are zeroed
+   directly rather than through that property, so this holds whatever a card
+   turns out to have been given. */
+@media (prefers-reduced-motion: reduce) {
+  .thoughts-fan,
+  .thoughts-fan-item,
+  .thoughts-fan-chip,
+  .thoughts-orbit::before,
+  .thoughts-orbit .thoughts-bubble,
+  .thoughts-orbit-empty {
+    transition-delay: 0ms !important;
+    animation-delay: 0ms !important;
+  }
 }
