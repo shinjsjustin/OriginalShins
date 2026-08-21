@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { slugify } from './slug';
+import { slugify } from '../Thoughts/slug';
 
 const emptyDraft = { name: '', slug: '', description: '' };
 

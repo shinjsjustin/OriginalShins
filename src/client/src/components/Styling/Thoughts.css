@@ -944,3 +944,74 @@
   gap: var(--space-xs);
   margin-top: var(--space-xs);
 }
+
+/* ─── The create modal ───────────────────────────────────────────────────── */
+
+/* Fixed to the viewport rather than to the page, so it is over the canvas, the
+   panel and the bar alike — the z-indexes inside the canvas (the spotlight
+   lift, the orbit's centre card) are all local to it and none of them can
+   reach out here. */
+.thoughts-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background-color: rgba(8, 11, 16, 0.72);
+  z-index: 10;
+}
+
+.thoughts-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.thoughts-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--ground);
+  border-bottom: 1px solid var(--ground-line);
+}
+
+.thoughts-modal-title {
+  margin: 0;
+  font-family: var(--font-scripture);
+  font-size: var(--font-md);
+  font-weight: 400;
+  color: var(--on-ground);
+}
+
+.thoughts-modal-close {
+  padding: 0 var(--space-sm);
+  background-color: transparent;
+  color: var(--on-ground-soft);
+  font-size: var(--font-xl);
+  line-height: 1;
+}
+
+.thoughts-modal-close:hover {
+  color: var(--madder-lit);
+}
+
+/* The body IS the form: the fields scroll and the actions scroll with them,
+   because a description box that has been dragged tall must not push its own
+   Create button off the bottom of a dialog that cannot scroll. */
+.thoughts-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  overflow-y: auto;
+  padding: var(--space-md);
+  background-color: var(--ground-deep);
+}

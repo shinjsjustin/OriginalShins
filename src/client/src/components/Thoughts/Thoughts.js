@@ -1,9 +1,10 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
 import TopicsField from './TopicsField';
 import IdeaOrbit from './IdeaOrbit';
 import PinnedPanel from './PinnedPanel';
+import CreateModal from './CreateModal';
 import useThoughtsData from './useThoughtsData';
 import usePins from './usePins';
 import useThoughtsView from './useThoughtsView';
@@ -62,12 +63,26 @@ import '../Styling/Thoughts.css';
 // reports both, and the page shows whichever spoke: two hooks failing the same
 // way at the same time is one server being down, and one banner says that.
 
-// The create modal is the next step's work. Until then the two buttons exist
-// so the bar is the bar, and press to nothing.
-const noop = () => {};
+// ── Creating means pinning ────────────────────────────────────────────────
+//
+// A created item is pinned the moment it exists, because the pinned panel is
+// the only place on this page an item can be edited. Without the pin, "+ Topic"
+// would produce a card the reader had just named and could no longer touch —
+// they would have to find it on the canvas and pin it by hand before they could
+// write its description. The pin is what makes the create button finish the job
+// it starts.
+
+// How each kind names itself. The pin carries a title so the new row reads
+// correctly before the next load replaces it with the server's own.
+const TITLE_OF = Object.freeze({
+    topic: (item) => item.name,
+    idea: (item) => item.title,
+});
 
 const Thoughts = () => {
     const { ideaId, showIdea, resetView } = useThoughtsView();
+    // Which create form is open: 'topic', 'idea', or nothing.
+    const [creatingKind, setCreatingKind] = useState(null);
     const {
         topics,
         ideas,
@@ -75,6 +90,8 @@ const Thoughts = () => {
         isLoading,
         error: loadError,
         actionError: dataActionError,
+        createTopic,
+        createIdea,
         updateTopic,
         updateIdea,
         updateNote,
@@ -102,6 +119,22 @@ const Thoughts = () => {
     const openIdea = ideaId === null
         ? null
         : ideas.find(idea => idea.id === ideaId) || null;
+
+    // Create, then pin what came back. The pin is a second request and can fail
+    // on its own; when it does, the item is still made and the banner says why
+    // it is not in the panel, which is the honest report of what happened.
+    // `togglePin` is a toggle in name only here: an id the server has just
+    // minted cannot already be in the pinned list.
+    const createAndPin = useCallback(async (fields) => {
+        const create = creatingKind === 'topic' ? createTopic : createIdea;
+        const created = await create(fields);
+
+        if (!created) return null;
+
+        await togglePin(creatingKind, created.id, TITLE_OF[creatingKind](created));
+
+        return created;
+    }, [creatingKind, createTopic, createIdea, togglePin]);
 
     const saveItem = useCallback((pin, changes) => {
         if (pin.itemType === 'topic') return updateTopic(pin.itemId, changes);
@@ -136,9 +169,17 @@ const Thoughts = () => {
                 <TopBar
                     idea={openIdea}
                     onResetView={resetView}
-                    onCreateTopic={noop}
-                    onCreateIdea={noop}
+                    onCreateTopic={() => setCreatingKind('topic')}
+                    onCreateIdea={() => setCreatingKind('idea')}
                 />
+
+                {creatingKind && (
+                    <CreateModal
+                        kind={creatingKind}
+                        onCreate={createAndPin}
+                        onClose={() => setCreatingKind(null)}
+                    />
+                )}
 
                 {error && (
                     <p className="thoughts-message thoughts-message--error" role="alert">{error}</p>
