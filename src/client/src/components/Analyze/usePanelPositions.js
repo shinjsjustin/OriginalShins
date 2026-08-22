@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PRIMARY_PARAM, COMPARE_PARAM } from './panelParams';
 import {
@@ -23,7 +23,8 @@ export { PRIMARY_PARAM, COMPARE_PARAM };
 // independent by construction.
 //
 // `books` is needed to validate a position: a param naming a book that does not
-// exist, or a chapter past the end of one, resolves to the panel's default.
+// exist, or a chapter past the end of one, resolves the way an absent param
+// does — see useRememberedPosition below.
 //
 // `isDeferred` holds the normalization below — and only that; the positions are
 // read and reported throughout. The Analyze page passes its restore's
@@ -31,11 +32,39 @@ export { PRIMARY_PARAM, COMPARE_PARAM };
 // reader's saved location. Both writing in one pass would leave whichever ran
 // last in charge, and the defaults would win a race they have no business
 // entering.
+
+// One panel's position, read from the URL and remembered across a URL that
+// stops saying where it is.
+//
+// A missing param falls back to where the panel already was, and only a panel
+// that has never been anywhere falls back to its default. That distinction is
+// what keeps the page from resetting itself: the Navbar's Analyze button
+// navigates to a bare /analyze, and pressing it while already here drops both
+// params without unmounting the page — so the restore, which runs once on
+// arrival, is not there to answer, and the defaults would otherwise walk in.
+// Nobody asked to be sent to Genesis 1 by pressing the button for the page they
+// are on. The same holds for a link that pins one panel and leaves the other,
+// which is how every link into this page is built.
+//
+// The remembered position lags one commit behind on purpose — it is written
+// after each render, so during the render where the param goes missing it still
+// holds the last place the panel was actually pointed at.
+const useRememberedPosition = (value, books, defaultPosition) => {
+    const lastRef = useRef(null);
+    const position = parsePosition(value, books, lastRef.current || defaultPosition);
+
+    useEffect(() => {
+        lastRef.current = position;
+    });
+
+    return position;
+};
+
 const usePanelPositions = (books, isDeferred = false) => {
     const [searchParams, setSearchParams] = useSearchParams();
 
-    const primary = parsePosition(searchParams.get(PRIMARY_PARAM), books, DEFAULT_PRIMARY);
-    const compare = parsePosition(searchParams.get(COMPARE_PARAM), books, DEFAULT_COMPARE);
+    const primary = useRememberedPosition(searchParams.get(PRIMARY_PARAM), books, DEFAULT_PRIMARY);
+    const compare = useRememberedPosition(searchParams.get(COMPARE_PARAM), books, DEFAULT_COMPARE);
 
     const primaryValue = formatPosition(primary);
     const compareValue = formatPosition(compare);

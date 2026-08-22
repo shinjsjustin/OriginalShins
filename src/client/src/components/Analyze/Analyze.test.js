@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter, useLocation } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import Analyze from './Analyze';
 
 // A miniature canon standing in for /api/books. Ids and canonical order match
@@ -314,10 +314,18 @@ const mount = async (element) => {
     return result;
 };
 
+// Stands in for the Navbar's Analyze button, which navigates to a bare
+// /analyze whatever page the reader is on — including this one.
+const NavbarProbe = () => {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate('/analyze')}>Go to Analyze</button>;
+};
+
 const renderAnalyze = (initialEntry = '/analyze') => mount(
     <MemoryRouter initialEntries={[initialEntry]}>
         <Analyze />
         <LocationProbe />
+        <NavbarProbe />
     </MemoryRouter>
 );
 
@@ -1419,8 +1427,8 @@ describe('The saved location', () => {
         const { unmount } = await renderAnalyze();
         await waitForPanels();
 
-        // Act — move both panels, then leave before the debounce has run out,
-        // which is exactly what clicking a Navbar link does.
+        // Act — move both panels, then leave, which is what clicking a Navbar
+        // link does. Both panels, because each is saved on its own.
         await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
         await clickAndSettle(within(panel('Compare')).getByRole('button', { name: 'Next chapter' }));
         unmount();
@@ -1431,23 +1439,6 @@ describe('The saved location', () => {
             compare: { bookId: 40, chapter: 2 },
             noteId: null,
         });
-    });
-
-    test('saves a move without waiting to be left, once the panels settle', async () => {
-        // Arrange
-        await renderAnalyze();
-        await waitForPanels();
-
-        // Act
-        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
-
-        // Assert — the debounce is real time, so this waits it out rather than
-        // asserting immediately. Its point is that leaving the page is the
-        // backstop and not the mechanism.
-        await waitFor(
-            () => expect(store.location.primary).toEqual({ bookId: 1, chapter: 2 }),
-            { timeout: 3000 }
-        );
     });
 
     test('saves nothing when the reader only arrives and leaves', async () => {
@@ -1465,6 +1456,33 @@ describe('The saved location', () => {
             .toHaveLength(0);
     });
 
+    test('saves a move as it happens, without waiting out a debounce', async () => {
+        // Arrange
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Act — one step forward in the primary panel.
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+
+        // Assert — no waitFor: the request goes with the move, so that no move
+        // depends on the page surviving long enough to send it.
+        expect(store.location.primary).toEqual({ bookId: 1, chapter: 2 });
+    });
+
+    test('saves a jump straight to another book as it happens', async () => {
+        // Arrange
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Act — the book picker, rather than the arrows. Picking a book lands
+        // on its chapter 1.
+        await clickAndSettle(within(panel('Compare')).getByRole('button', { name: 'Choose a book' }));
+        await clickAndSettle(screen.getByRole('button', { name: 'Exodus' }));
+
+        // Assert
+        expect(store.location.compare).toEqual({ bookId: 2, chapter: 1 });
+    });
+
     test('saves the open note along with the passages', async () => {
         // Arrange
         const note = addNote({ title: 'In the beginning' });
@@ -1479,5 +1497,53 @@ describe('The saved location', () => {
 
         // Assert
         expect(store.location.noteId).toBe(note.id);
+    });
+});
+
+describe('Returning to the analysis page from the analysis page', () => {
+    test('keeps both passages when the Analyze link lands on a bare /analyze', async () => {
+        // Arrange — the reader has moved both panels off their defaults.
+        await renderAnalyze();
+        await waitForPanels();
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+        await clickAndSettle(within(panel('Compare')).getByRole('button', { name: 'Next chapter' }));
+
+        // Act — the Navbar's Analyze button, pressed while already here. The
+        // page does not remount, so nothing re-reads the saved location; the
+        // URL simply loses the two params.
+        await clickAndSettle(screen.getByRole('button', { name: 'Go to Analyze' }));
+        await waitForPanels();
+
+        // Assert — where the reader was, not where the page opens.
+        expect(titleOf('Passage')).toBe('Genesis 2');
+        expect(titleOf('Compare')).toBe('Matthew 2');
+    });
+
+    test('puts the params back, so the URL stays shareable', async () => {
+        await renderAnalyze();
+        await waitForPanels();
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+
+        await clickAndSettle(screen.getByRole('button', { name: 'Go to Analyze' }));
+
+        await waitFor(() => {
+            expect(screen.getByTestId('search').textContent).toBe('?l=1.2&r=40.1');
+        });
+    });
+
+    test('does not overwrite the saved location with the defaults', async () => {
+        // Arrange — the reset this guards against was silent: the panels went
+        // back to Genesis 1, and the save that followed made that the place the
+        // reader came back to ever after.
+        await renderAnalyze();
+        await waitForPanels();
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+
+        // Act
+        await clickAndSettle(screen.getByRole('button', { name: 'Go to Analyze' }));
+        await waitForPanels();
+
+        // Assert
+        expect(store.location.primary).toEqual({ bookId: 1, chapter: 2 });
     });
 });

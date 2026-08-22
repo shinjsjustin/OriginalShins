@@ -220,10 +220,10 @@ const Analyze = () => {
     const isPreparing = isLoading || isRestoring;
 
     // The other half of the restore: where the page is now becomes where it
-    // reopens. Debounced inside the hook, so stepping through a chapter at a
-    // time is one save and not one per chapter — and paused for the whole of
-    // `isPreparing`, because until the canon is loaded every position still
-    // reads as its default.
+    // reopens. One request per move, so nothing depends on the page surviving
+    // long enough to send it — and paused for the whole of `isPreparing`,
+    // because until the canon is loaded every position still reads as its
+    // default.
     useRecordLocation({
         primary,
         compare,

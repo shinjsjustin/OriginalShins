@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchJson } from '../../config/api';
-import useDebouncedValue from '../Search/useDebouncedValue';
 import {
     LOCATION_PATH,
     hasLocationParams,
@@ -24,11 +23,6 @@ import {
 // The whole feature is a convenience. Nothing here reports a failure to the
 // reader, because there is nothing a reader could do about one and the fallback
 // — the page opens at Genesis 1, as it always did — is not a broken page.
-
-// How long the panels must sit still before where they are is worth saving.
-// Stepping through a chapter at a time is the ordinary way to read here, and
-// every step would otherwise be a request for a place already left.
-const SAVE_DELAY_MS = 600;
 
 /**
  * Sends the page back where it was left, when the URL does not say otherwise.
@@ -105,7 +99,12 @@ export const useRestoreLocation = () => {
 };
 
 /**
- * Saves where the page is, as it changes.
+ * Saves where the page is, each time it changes.
+ *
+ * One request per move — per arrow press, per jump from a picker, per note
+ * opened. Nothing is batched or held back: a saved place the reader cannot
+ * count on is worse than none, and the request is small next to the chapter
+ * fetch the same move already sets off.
  *
  * `isPaused` covers everything that has to finish before the page is showing a
  * real place: the restore, and the canon load behind it. Until the catalog is
@@ -115,7 +114,6 @@ export const useRestoreLocation = () => {
  */
 export const useRecordLocation = ({ primary, compare, noteId, isPaused }) => {
     const key = locationKey({ primary, compare, noteId });
-    const settledKey = useDebouncedValue(key, SAVE_DELAY_MS);
 
     // The location behind `key`, for the effect below and for the flush on the
     // way out. A ref rather than a dependency because both fire on the key
@@ -138,17 +136,14 @@ export const useRecordLocation = ({ primary, compare, noteId, isPaused }) => {
         if (isPaused) return;
 
         if (savedKeyRef.current === null) {
-            // Seeded from `key` and not from `settledKey`: the debounce is
-            // still carrying whatever the page showed before the canon loaded,
-            // and what has just been established is where the page is *now*.
             savedKeyRef.current = key;
             return;
         }
 
-        if (settledKey === savedKeyRef.current) return;
+        if (key === savedKeyRef.current) return;
 
         const previousKey = savedKeyRef.current;
-        savedKeyRef.current = settledKey;
+        savedKeyRef.current = key;
 
         fetchJson(LOCATION_PATH, { method: 'PUT', body: toPayload(locationRef.current) })
             .catch(() => {
@@ -159,14 +154,11 @@ export const useRecordLocation = ({ primary, compare, noteId, isPaused }) => {
                 // to open.
                 savedKeyRef.current = previousKey;
             });
-    // `key` as well as `settledKey`: the seeding branch above reads `key`, so it
-    // has to run on the pass where the page first has a real one rather than
-    // waiting out a debounce to find out what it already knows.
-    }, [settledKey, key, isPaused]);
+    }, [key, isPaused]);
 
-    // Leaving the page must not lose the last move. A Navbar link unmounts this
-    // page while the debounce above is still counting, and that pending save is
-    // the one that matters most — it is the place the reader stopped at.
+    // The backstop, not the mechanism: every move above is already on its way
+    // out when it happens. This covers the one pass the effect cannot — a
+    // position committed and then unmounted before the effect for it ran.
     useEffect(() => () => {
         const pending = locationRef.current;
         if (!pending || savedKeyRef.current === null) return;
