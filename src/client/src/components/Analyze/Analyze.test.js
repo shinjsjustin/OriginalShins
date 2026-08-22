@@ -57,6 +57,10 @@ const resetStore = () => {
         nextNoteId: 1,
         nextReferenceId: 1,
         nextIdeaId: 1,
+        // Where this reader was last, as GET /api/user/location answers it.
+        // Null in every test that does not care, which is how the endpoint
+        // answers for an account that has not been anywhere yet.
+        location: { primary: null, compare: null, noteId: null },
     };
 };
 
@@ -191,6 +195,15 @@ const handleRequest = (url, options = {}) => {
 
     if (url.endsWith('/books')) {
         return jsonResponse({ books });
+    }
+
+    // The saved location. Stateful like the rest of this fake, so a test can
+    // assert on what leaving the page wrote as well as on what arriving read.
+    if (url.endsWith('/user/location')) {
+        if (method === 'PUT') {
+            store.location = body;
+        }
+        return jsonResponse({ location: store.location });
     }
 
     const chapter = /\/chapter\/(\d+)\/(\d+)$/.exec(url);
@@ -1268,5 +1281,203 @@ describe('Linking a note to ideas', () => {
         // Assert
         expect(panel('Notes')).toHaveTextContent('No ideas yet');
         expect(within(panel('Notes')).queryAllByRole('checkbox')).toHaveLength(0);
+    });
+});
+
+// ─── Where the page reopens ─────────────────────────────────────────────────
+//
+// The page's state is its query string, which is what makes a link to a passage
+// worth sending someone — and what left a bare /analyze at Genesis 1 however
+// long the reader had spent in Romans. So the last place is saved per user and
+// read back when, and only when, the URL names nowhere.
+describe('The saved location', () => {
+    const openFirstNote = async () => {
+        await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
+        await clickAndSettle(noteRows()[0]);
+    };
+
+    const somewhere = {
+        primary: { bookId: 40, chapter: 2 },
+        compare: { bookId: 1, chapter: 2 },
+        noteId: null,
+    };
+
+    test('reopens a bare /analyze where the reader left off', async () => {
+        // Arrange
+        store.location = somewhere;
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert — both passages, not just the primary one.
+        expect(titleOf('Passage')).toBe('Matthew 2');
+        expect(titleOf('Compare')).toBe('Genesis 2');
+    });
+
+    test('puts the restored place in the URL, so it is shareable in turn', async () => {
+        store.location = somewhere;
+
+        await renderAnalyze();
+        await waitFor(() => {
+            expect(screen.getByTestId('search').textContent).toBe('?l=40.2&r=1.2');
+        });
+    });
+
+    test('reopens the editor on the note it was left open on', async () => {
+        // Arrange — a note on Matthew 2, and a location naming it.
+        const note = addNote({
+            title: 'The flight to Egypt',
+            body: 'Out of Egypt I called my son.',
+            reference: { bookId: 40, chapter: 2, startVerse: 1, endVerse: 2 },
+        });
+        store.location = { ...somewhere, noteId: note.id };
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert — the editor, not the list.
+        await waitFor(() => expect(panel('Notes').querySelector('.analyze-editor-rendered'))
+            .toHaveTextContent('Out of Egypt I called my son.'));
+    });
+
+    test('survives the double mount StrictMode does in development', async () => {
+        // Arrange — index.js wraps the app in StrictMode, so in development
+        // every effect here runs, is torn down and runs again, and the restore's
+        // first request is aborted mid-flight by that teardown. The restore is
+        // two effects passing a location between them through state, which is
+        // exactly the shape a double mount can drop something in.
+        store.location = somewhere;
+
+        // Act
+        await mount(
+            <React.StrictMode>
+                <MemoryRouter initialEntries={['/analyze']}>
+                    <Analyze />
+                    <LocationProbe />
+                </MemoryRouter>
+            </React.StrictMode>
+        );
+        await waitForPanels();
+
+        // Assert — the panels are where they should be, and were never anywhere
+        // else on the way. The second half holds here because the catalog is
+        // still loading while the abort lands, so nothing renders either way;
+        // it is asserted anyway because it is the property that matters and the
+        // one that would go first if the two effects were rearranged.
+        expect(titleOf('Passage')).toBe('Matthew 2');
+        expect(titleOf('Compare')).toBe('Genesis 2');
+        expect(requestsMatching(r => r.url.endsWith('/chapter/1/1'))).toHaveLength(0);
+    });
+
+    test('a link naming a passage overrules the saved place', async () => {
+        // Arrange — a shared link is a deliberate instruction about where to
+        // open, and the saved place is only the default for when there is none.
+        store.location = somewhere;
+
+        // Act
+        await renderAnalyze('/analyze?l=1.1');
+        await waitForPanels();
+
+        // Assert
+        expect(titleOf('Passage')).toBe('Genesis 1');
+    });
+
+    test('opens at the defaults for a reader who has not been anywhere yet', async () => {
+        // Arrange — store.location is the empty location a new account gets.
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert
+        expect(titleOf('Passage')).toBe('Genesis 1');
+        expect(titleOf('Compare')).toBe('Matthew 1');
+    });
+
+    test('opens at the defaults when the saved location cannot be read', async () => {
+        // Arrange — the endpoint fails outright. A convenience lost is not a
+        // page broken: the panels must still open.
+        const answer = global.fetch.getMockImplementation();
+        global.fetch = jest.fn((url, options) => (
+            url.endsWith('/user/location')
+                ? Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })
+                : answer(url, options)
+        ));
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert
+        expect(titleOf('Passage')).toBe('Genesis 1');
+    });
+
+    test('saves where the reader stopped when the page is left', async () => {
+        // Arrange
+        const { unmount } = await renderAnalyze();
+        await waitForPanels();
+
+        // Act — move both panels, then leave before the debounce has run out,
+        // which is exactly what clicking a Navbar link does.
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+        await clickAndSettle(within(panel('Compare')).getByRole('button', { name: 'Next chapter' }));
+        unmount();
+
+        // Assert
+        expect(store.location).toEqual({
+            primary: { bookId: 1, chapter: 2 },
+            compare: { bookId: 40, chapter: 2 },
+            noteId: null,
+        });
+    });
+
+    test('saves a move without waiting to be left, once the panels settle', async () => {
+        // Arrange
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Act
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+
+        // Assert — the debounce is real time, so this waits it out rather than
+        // asserting immediately. Its point is that leaving the page is the
+        // backstop and not the mechanism.
+        await waitFor(
+            () => expect(store.location.primary).toEqual({ bookId: 1, chapter: 2 }),
+            { timeout: 3000 }
+        );
+    });
+
+    test('saves nothing when the reader only arrives and leaves', async () => {
+        // Arrange — arriving on a link is not choosing a place to come back to,
+        // and the reader has moved nothing.
+        const { unmount } = await renderAnalyze('/analyze?l=40.2&r=1.2');
+        await waitForPanels();
+
+        // Act
+        unmount();
+
+        // Assert
+        expect(store.location).toEqual({ primary: null, compare: null, noteId: null });
+        expect(requestsMatching(r => r.method === 'PUT' && r.url.endsWith('/user/location')))
+            .toHaveLength(0);
+    });
+
+    test('saves the open note along with the passages', async () => {
+        // Arrange
+        const note = addNote({ title: 'In the beginning' });
+        addReference(note.id, { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 });
+
+        const { unmount } = await renderAnalyze();
+        await waitForPanels();
+
+        // Act
+        await openFirstNote();
+        unmount();
+
+        // Assert
+        expect(store.location.noteId).toBe(note.id);
     });
 });

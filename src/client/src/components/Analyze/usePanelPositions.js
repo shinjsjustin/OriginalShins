@@ -24,7 +24,14 @@ export { PRIMARY_PARAM, COMPARE_PARAM };
 //
 // `books` is needed to validate a position: a param naming a book that does not
 // exist, or a chapter past the end of one, resolves to the panel's default.
-const usePanelPositions = (books) => {
+//
+// `isDeferred` holds the normalization below — and only that; the positions are
+// read and reported throughout. The Analyze page passes its restore's
+// `isRestoring`, because that restore writes the same two params from the
+// reader's saved location. Both writing in one pass would leave whichever ran
+// last in charge, and the defaults would win a race they have no business
+// entering.
+const usePanelPositions = (books, isDeferred = false) => {
     const [searchParams, setSearchParams] = useSearchParams();
 
     const primary = parsePosition(searchParams.get(PRIMARY_PARAM), books, DEFAULT_PRIMARY);
@@ -38,6 +45,7 @@ const usePanelPositions = (books) => {
     // can be copied and shared. Replaces rather than pushes: normalizing is not
     // a navigation the back button should have to walk through.
     useEffect(() => {
+        if (isDeferred) return;
         if (books.length === 0) return;
 
         const isNormalized = searchParams.get(PRIMARY_PARAM) === primaryValue
@@ -48,7 +56,7 @@ const usePanelPositions = (books) => {
         next.set(PRIMARY_PARAM, primaryValue);
         next.set(COMPARE_PARAM, compareValue);
         setSearchParams(next, { replace: true });
-    }, [books.length, searchParams, primaryValue, compareValue, setSearchParams]);
+    }, [isDeferred, books.length, searchParams, primaryValue, compareValue, setSearchParams]);
 
     // Each move pushes a history entry, so stepping through chapters is
     // reversible with the back button.

@@ -12,6 +12,7 @@ const {
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { findChapter } = require('../lib/chapters');
 const { removePinsForItem } = require('../lib/pins');
+const { clearSavedNote } = require('../lib/location');
 const { findReferencesOverlappingChapter, insertReference } = require('../lib/references');
 const {
     findNoteById,
@@ -234,6 +235,13 @@ router.delete('/:id', async (req, res) => {
         // rows accumulating — cleanup, not correctness. Please don't "fix" it
         // into a transaction; there is no bug here to fix.
         await removePinsForItem(req.user.id, 'note', noteId);
+
+        // Same shape and same reasoning: the Analyze page's saved location may
+        // still name this note as the one the editor was left open on. A stale
+        // id there is already harmless — useActiveNote only ever finds a note in
+        // the reader's own lists, so it opens nothing — and this only stops a
+        // later note that inherits the id from inheriting the pointer with it.
+        await clearSavedNote(req.user.id, noteId);
 
         res.status(204).end();
     } catch (err) {

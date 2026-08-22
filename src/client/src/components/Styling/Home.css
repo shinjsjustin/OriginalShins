@@ -1,70 +1,161 @@
-/* ─── Landing Page ───────────────────────────────────────────────────────────── */
-.Home {
+/* ─── Landing page ────────────────────────────────────────────────────────────
+   The desk at night, with one thing on it.
+
+   Everywhere else gold means "a mark already made" and lapis means "live
+   intent". This page has neither notes nor a selection, so the pair has nothing
+   to distinguish and the page is gold alone: the title, the rule and the door
+   into the app. Register is the same gold with the fill taken away — one accent
+   said twice, at two weights, rather than a second hue introduced for the sake
+   of a second button.
+
+   Tokens only. The palette and its contrast arithmetic live in index.css; a hex
+   value typed here would be a fourth pigment nobody had checked.
+   ──────────────────────────────────────────────────────────────────────────── */
+.home {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+  background-color: var(--ground-deep);
+}
+
+.home-panel {
+  width: 100%;
+  max-width: 30rem;
   text-align: center;
 }
 
-.Home-logo {
-  width: 60vh;
-  max-width: 100%;
-  height: auto;
-  pointer-events: none;
-  margin-bottom: 3vh;
-  /* Inverts SVG/PNG to white — useful on dark backgrounds */
-  filter: brightness(0) invert(1);
+/* Set in the scripture serif rather than the interface sans. It is the only
+   line on the site that is neither an instrument nor a control, and it is
+   naming the thing the serif is reserved for. */
+.home-title {
+  margin: 0;
+  font-family: var(--font-scripture);
+  font-size: clamp(2.5rem, 9vw, 4rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  color: var(--gold-lit);
 }
 
-.Home-header {
-  min-height: 100vh;
+/* Gold leaf, the width of a hand. Decorative, and hidden from the accessibility
+   tree accordingly. */
+.home-rule {
+  width: 4rem;
+  height: 2px;
+  margin: var(--space-lg) auto;
+  background-color: var(--gold);
+}
+
+.home-body {
+  margin: 0;
+  font-size: var(--font-lg);
+  line-height: 1.6;
+  color: var(--on-ground-soft);
+}
+
+.home-signature {
+  margin: var(--space-sm) 0 0;
+  font-family: var(--font-scripture);
+  font-size: var(--font-md);
+  font-style: italic;
+  color: var(--on-ground-faint);
+}
+
+/* ─── The two doors ─────────────────────────────────────────────────────────── */
+.home-actions {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  gap: var(--space-md);
   justify-content: center;
-  font-size: calc(10px + 2vmin);
+  margin-top: var(--space-xl);
 }
 
-.center {
-  width: 60vh;
-  max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+.home-button {
+  flex: 1 1 0;
+  max-width: 11rem;
+  padding: 12px var(--space-lg);
+  font-size: var(--font-md);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-/* ─── Industrial Button ──────────────────────────────────────────────────────── */
-/* Reused across pages for primary CTAs */
-.industrial-button {
-  background-color: #4a4a4a;
+/* Dark type on gold, not white: white on this gold is under 2:1 and would be
+   the one unreadable thing on an otherwise checked page. */
+.home-button--primary {
+  background-color: var(--gold-lit);
+  color: var(--ground-deep);
+}
+
+.home-button--primary:hover {
+  background-color: var(--gold-strong);
   color: var(--text-white);
+}
+
+.home-button--secondary {
+  background-color: transparent;
+  border-color: var(--gold);
+  color: var(--gold-lit);
+}
+
+.home-button--secondary:hover {
+  background-color: var(--ground-raised);
+  border-color: var(--gold-lit);
+}
+
+.home-button:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 420px) {
+  .home-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-button {
+    max-width: none;
+  }
+}
+
+/* ─── Industrial button ───────────────────────────────────────────────────────
+   The Navbar's profile panel is the only thing left using this, and it imports
+   this stylesheet for it. It is furniture — slate, like the rest of the chrome
+   — and deliberately not one of the gold buttons above: those two are the way
+   into the app, and a list of page links is not.
+   ──────────────────────────────────────────────────────────────────────────── */
+.industrial-button {
+  background-color: var(--ground-raised);
+  color: var(--on-ground);
   padding: var(--space-sm) 12px;
   margin: var(--space-sm);
   font-size: var(--font-md);
   font-weight: bold;
-  border: 2px solid #333;
+  border: 2px solid var(--ground-line);
   border-radius: var(--radius-sm);
   letter-spacing: 1px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
   transition: background-color 0.2s ease, transform 0.2s ease;
   width: 100%;
   cursor: pointer;
 }
 
 .industrial-button:hover {
-  background-color: #5c5c5c;
+  background-color: var(--ground-hover);
   transform: translateY(-2px);
 }
 
 .industrial-button:active {
-  background-color: #333;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  background-color: var(--ground);
+  box-shadow: var(--shadow-sm);
   transform: translateY(0);
 }
 
 @media (max-width: 500px) {
-  .Home-logo {
-    width: 150px;
-  }
-
   .industrial-button {
     max-width: 200px;
   }

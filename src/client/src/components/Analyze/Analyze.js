@@ -9,6 +9,7 @@ import usePanelPositions from './usePanelPositions';
 import useNotes from './useNotes';
 import useActiveNote from './useActiveNote';
 import useSelectedVerses from './useSelectedVerses';
+import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
 import { describePosition } from './navigation';
 import { NOTE_PARAM } from './panelParams';
@@ -42,8 +43,15 @@ const COMPARE = 'compare';
 const NO_REFERENCES = [];
 
 const Analyze = () => {
+    // Declared first, and before anything that writes the query string. A bare
+    // /analyze is sent back to wherever this reader was last — the two passages
+    // and the open note — and until that is settled nothing else may touch the
+    // URL or the page would race its own defaults into it. See
+    // useSavedLocation.js.
+    const { isRestoring } = useRestoreLocation();
+
     const { books, isLoading, error } = useBooks();
-    const { primary, compare, setPrimary, setCompare } = usePanelPositions(books);
+    const { primary, compare, setPrimary, setCompare } = usePanelPositions(books, isRestoring);
     const notes = useNotes(primary);
 
     // The ideas a note can be filed under, and the standalone ideas the notes
@@ -206,6 +214,23 @@ const Analyze = () => {
         }
     }, [notes]);
 
+    // The panels are held back until the restore has settled as well as the
+    // catalog: rendering them first would paint Genesis 1 for a moment, fetch a
+    // chapter nobody asked for, and then jump.
+    const isPreparing = isLoading || isRestoring;
+
+    // The other half of the restore: where the page is now becomes where it
+    // reopens. Debounced inside the hook, so stepping through a chapter at a
+    // time is one save and not one per chapter — and paused for the whole of
+    // `isPreparing`, because until the canon is loaded every position still
+    // reads as its default.
+    useRecordLocation({
+        primary,
+        compare,
+        noteId: activeNoteId,
+        isPaused: isPreparing,
+    });
+
     const compareLabel = 'Compare';
     const primaryLabel = 'Passage';
 
@@ -219,11 +244,11 @@ const Analyze = () => {
                 </p>
             )}
 
-            {!error && isLoading && (
+            {!error && isPreparing && (
                 <p className="analyze-message">Loading scripture…</p>
             )}
 
-            {!error && !isLoading && (
+            {!error && !isPreparing && (
                 <main className="analyze-panels">
                     {collapsed.compare ? (
                         <PanelSpine
