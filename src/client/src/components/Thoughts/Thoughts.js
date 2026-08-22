@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
-import TopicsField from './TopicsField';
+import TopicIdeaField from '../Bubbles/TopicIdeaField';
 import IdeaOrbit from './IdeaOrbit';
 import PinnedPanel from './PinnedPanel';
 import CreateModal from './CreateModal';
@@ -190,19 +190,19 @@ const Thoughts = () => {
                 )}
 
                 <div className="thoughts-body">
-                    {/* Slot one: TopicsField in the topics view, IdeaOrbit in
-                        the idea view. The canvas keeps its size either way, so
-                        the cards animate between the two rather than the page
-                        resizing under them. */}
+                    {/* Slot one: TopicIdeaField in the topics view, IdeaOrbit
+                        in the idea view. The canvas keeps its size either way,
+                        so the cards animate between the two rather than the
+                        page resizing under them. */}
                     <section className="thoughts-canvas" aria-label="Thoughts canvas">
                         {isLoading && <p className="thoughts-message">Loading your thoughts…</p>}
                         {!isLoading && !error && ideaId === null && (
-                            <TopicsField
+                            <TopicIdeaField
                                 topics={topics}
                                 ideas={ideas}
+                                onSelectIdea={showIdea}
                                 isPinned={isPinned}
                                 onTogglePin={togglePin}
-                                onShowIdea={showIdea}
                             />
                         )}
 

@@ -54,9 +54,16 @@ const resetStore = () => {
         // server replaces it.
         ideas: [],
         noteIdeas: [],
+        // The topics the importer's field of bubbles is built from, and the
+        // per-chapter shortlist it writes into. Both are seeded by the tests
+        // that need them; an idea under no topic still reaches the field
+        // through its "unfiled" bubble.
+        topics: [],
+        chapterIdeas: [],
         nextNoteId: 1,
         nextReferenceId: 1,
         nextIdeaId: 1,
+        nextTopicId: 1,
         // Where this reader was last, as GET /api/user/location answers it.
         // Null in every test that does not care, which is how the endpoint
         // answers for an account that has not been anywhere yet.
@@ -70,6 +77,43 @@ const addIdea = (title) => {
     store.ideas = [...store.ideas, idea];
     return idea;
 };
+
+const addTopic = (name) => {
+    const topic = { id: store.nextTopicId, name, sortOrder: store.topics.length, ideaCount: 0 };
+    store.nextTopicId += 1;
+    store.topics = [...store.topics, topic];
+    return topic;
+};
+
+// Files an idea under a topic, the way PUT /api/ideas/:id/topics would. GET
+// /api/ideas carries each idea's topics, which is what the field clusters on.
+const fileIdeaUnder = (ideaId, topic) => {
+    store.ideas = store.ideas.map(idea => (
+        idea.id === ideaId
+            ? { ...idea, topics: [...idea.topics, { id: topic.id, name: topic.name }] }
+            : idea
+    ));
+};
+
+const chapterIdeaIds = (bookId, chapter) => store.chapterIdeas
+    .filter(row => row.bookId === bookId && row.chapter === chapter)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(row => row.ideaId);
+
+// The chapter's ENTIRE imported set, replaced in one write — the only shape
+// PUT /api/chapter-ideas has. Position becomes sort_order, as on the server.
+const replaceChapterIdeas = (bookId, chapter, ideaIds) => {
+    store.chapterIdeas = [
+        ...store.chapterIdeas.filter(row => !(row.bookId === bookId && row.chapter === chapter)),
+        ...ideaIds.map((ideaId, index) => ({ bookId, chapter, ideaId, sortOrder: index })),
+    ];
+};
+
+// Hydrated exactly as GET /api/ideas hydrates its list, which is what lets the
+// panel render a row from either endpoint with one component.
+const chapterIdeasPayload = (bookId, chapter) => ({
+    ideas: chapterIdeaIds(bookId, chapter).map(id => store.ideas.find(idea => idea.id === id)),
+});
 
 // The full-set replace: every link for this note goes, then the given set is
 // written back in the order it arrived. Position becomes sort_order, as on the
@@ -224,6 +268,20 @@ const handleRequest = (url, options = {}) => {
         return jsonResponse({ ideas: store.ideas });
     }
 
+    if (url.endsWith('/topics') && method === 'GET') {
+        return jsonResponse({ topics: store.topics });
+    }
+
+    const chapterIdeasQuery = /\/chapter-ideas\?bookId=(\d+)&chapter=(\d+)$/.exec(url);
+    if (chapterIdeasQuery && method === 'GET') {
+        return jsonResponse(chapterIdeasPayload(Number(chapterIdeasQuery[1]), Number(chapterIdeasQuery[2])));
+    }
+
+    if (url.endsWith('/chapter-ideas') && method === 'PUT') {
+        replaceChapterIdeas(body.bookId, body.chapter, body.ideaIds);
+        return jsonResponse(chapterIdeasPayload(body.bookId, body.chapter));
+    }
+
     if (url.endsWith('/ideas') && method === 'POST') {
         // The server's fallback: an absent title becomes the default.
         const idea = addIdea(body.title === undefined ? 'Untitled idea' : body.title);
@@ -376,12 +434,33 @@ const selectVerses = async (panelName, ...verseIndexes) => {
     }
 };
 
-// The two buttons a selection puts in a panel's top-right corner.
-const addNoteButton = (panelName) =>
-    within(panel(panelName)).queryByRole('button', { name: 'Add note' });
+// The selection tray above the panel row. It belongs to the page and not to a
+// panel: a selection can span chapters that no panel is showing, so there is
+// one tray however many places are in it, and none at all when nothing is
+// selected.
+const tray = () => screen.queryByRole('region', { name: 'Selection' });
 
-const clearButton = (panelName) =>
-    within(panel(panelName)).queryByRole('button', { name: 'Clear selection' });
+// The places the tray names, in the order it lists them.
+const trayPlaces = () => Array.from(
+    tray() ? tray().querySelectorAll('.analyze-selection-place-label') : []
+).map(node => node.textContent);
+
+const addNoteButton = () =>
+    (tray() ? within(tray()).getByRole('button', { name: 'Add note' }) : null);
+
+const clearAllButton = () => within(tray()).getByRole('button', { name: 'Clear all' });
+
+const removePlaceButton = (label) =>
+    within(tray()).getByRole('button', { name: `Remove ${label} from selection` });
+
+// Moves one panel to another book through its footer picker — the reader's own
+// route across a book boundary.
+const goToBook = async (panelName, bookName) => {
+    await clickAndSettle(within(panel(panelName)).getByRole('button', { name: 'Choose a book' }));
+    const dialog = screen.getByRole('dialog', { name: 'Choose a book' });
+    await clickAndSettle(within(dialog).getByRole('button', { name: bookName }));
+    await waitFor(() => expect(titleOf(panelName)).toBe(`${bookName} 1`));
+};
 
 const versesSelected = (panelName) =>
     panel(panelName).querySelectorAll('.analyze-verse--selected').length;
@@ -395,6 +474,33 @@ const markersIn = (panelName) =>
 const noteRows = () => panel('Notes').querySelectorAll('.analyze-note');
 
 const ideaRows = () => panel('Notes').querySelectorAll('.analyze-idea');
+
+// ─── The importer ───────────────────────────────────────────────────────────
+
+const openImporter = async () =>
+    clickAndSettle(within(panel('Notes')).getByRole('button', { name: 'Import idea' }));
+
+const importerOverlay = () => screen.queryByRole('dialog');
+
+// One bubble in the overlay's field, found by the title it prints. Every fan is
+// mounted whatever is hovered — see TopicIdeaField — so an idea's card is
+// reachable without having to hover its topic first.
+//
+// By title rather than by accessible name, because a topic card's name is its
+// title AND the count underneath it ("Covenant 1 idea"), and this is a helper
+// for naming the thing on the card rather than for asserting how it reads out.
+const bubble = (name) => within(importerOverlay())
+    .getByText(name, { selector: '.thoughts-bubble-title' })
+    .closest('button');
+
+// The panel's per-chapter shortlist, by the titles it lists.
+const chapterIdeaTitles = () => Array.from(ideaRows()).map(
+    row => row.querySelector('.analyze-entry-title').textContent
+);
+
+const removeFromChapter = (title) => within(panel('Notes')).getByRole('button', {
+    name: `Remove ${title} from this chapter — the idea itself is kept`,
+});
 
 const requestsMatching = (predicate) => requests.filter(predicate);
 
@@ -705,19 +811,23 @@ describe('Notes panel', () => {
         expect(within(panel('Notes')).getByRole('button', { name: '+ New idea' })).toBeInTheDocument();
     });
 
-    test('ideas are listed whatever chapter the panels are pointed at', async () => {
+    test('an idea the reader owns is not listed until this chapter holds it', async () => {
+        // The panel used to list the whole corpus whatever the panels were
+        // pointed at, which is what stopped being useful once ideas could be
+        // curated per chapter. The full list is still one press away.
         addIdea('The wilderness');
 
         await renderAnalyze();
         await waitForPanels();
 
-        await waitFor(() => expect(ideaRows().length).toBe(1));
+        await waitFor(() => expect(within(panel('Notes'))
+            .getByRole('button', { name: 'Import idea' })).toBeInTheDocument());
 
-        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
-        await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
+        expect(ideaRows().length).toBe(0);
+        expect(panel('Notes')).not.toHaveTextContent('Ideas in this chapter');
 
-        expect(ideaRows().length).toBe(1);
-        expect(panel('Notes')).toHaveTextContent('The wilderness');
+        await openImporter();
+        expect(bubble('The wilderness')).toBeInTheDocument();
     });
 
     test('a note with references either side of a chapter boundary appears in both', async () => {
@@ -743,28 +853,27 @@ describe('Notes panel', () => {
 });
 
 describe('Selecting verses by clicking them', () => {
-    test('puts two buttons in the panel corner once a verse is clicked', async () => {
+    test('puts a tray above the panels once a verse is clicked', async () => {
         await renderAnalyze();
         await waitForPanels();
 
-        expect(addNoteButton('Passage')).toBeNull();
-        expect(clearButton('Passage')).toBeNull();
+        expect(tray()).toBeNull();
 
         await selectVerses('Passage', 1010);
 
-        expect(addNoteButton('Passage')).toBeInTheDocument();
-        expect(clearButton('Passage')).toBeInTheDocument();
+        expect(tray()).toBeInTheDocument();
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
         expect(versesSelected('Passage')).toBe(1);
     });
 
-    test('adds each clicked verse to the selection and counts them', async () => {
-        await renderAnalyze();
+    test('names a chapter once however many runs are selected in it', async () => {
+        await renderAnalyze('/analyze?l=1.1&r=40.1');
         await waitForPanels();
 
         await selectVerses('Passage', 1010, 1011);
 
         expect(versesSelected('Passage')).toBe(2);
-        expect(panel('Passage')).toHaveTextContent('2 verses');
+        expect(trayPlaces()).toEqual(['Genesis 1:1–2']);
     });
 
     test('clicking a selected verse again takes it back out', async () => {
@@ -775,41 +884,58 @@ describe('Selecting verses by clicking them', () => {
         await clickVerse('Passage', 1011);
 
         expect(versesSelected('Passage')).toBe(1);
-        expect(panel('Passage')).toHaveTextContent('1 verse');
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
 
-        // Unclicking the last one ends the selection outright.
+        // Unclicking the last one ends the selection outright, and the tray
+        // goes with it rather than sitting there empty.
         await clickVerse('Passage', 1010);
-        expect(addNoteButton('Passage')).toBeNull();
+        expect(tray()).toBeNull();
     });
 
-    test('"Clear selection" drops every mark without writing anything', async () => {
+    test('"Clear all" drops every mark without writing anything', async () => {
         await renderAnalyze();
         await waitForPanels();
 
         await selectVerses('Passage', 1010, 1011);
-        await clickAndSettle(clearButton('Passage'));
+        await selectVerses('Compare', 40010);
+        await clickAndSettle(clearAllButton());
 
         expect(versesSelected('Passage')).toBe(0);
-        expect(addNoteButton('Passage')).toBeNull();
+        expect(versesSelected('Compare')).toBe(0);
+        expect(tray()).toBeNull();
         expect(requestsMatching(r => r.method === 'POST')).toHaveLength(0);
     });
 
-    test('a click in the other panel starts a new selection rather than extending', async () => {
-        // A note's anchors all live in one chapter, so a selection that spanned
-        // two panels could never be saved as it stands.
+    test('a click in the other panel adds to the selection rather than replacing it', async () => {
+        // A note can be anchored to passages from several chapters at once, so
+        // the basket spans the panels: what was clicked in one is still there
+        // after clicking in the other, and the tray names both places.
         await renderAnalyze();
         await waitForPanels();
 
         await selectVerses('Passage', 1010);
         await selectVerses('Compare', 40010);
 
-        expect(versesSelected('Passage')).toBe(0);
+        expect(versesSelected('Passage')).toBe(1);
         expect(versesSelected('Compare')).toBe(1);
-        expect(addNoteButton('Passage')).toBeNull();
-        expect(addNoteButton('Compare')).toBeInTheDocument();
+        expect(trayPlaces()).toEqual(['Genesis 1:1', 'Matthew 1:1']);
     });
 
-    test('the selection is dropped when the panel moves to another chapter', async () => {
+    test('the same chapter open in both panels is selected in both', async () => {
+        // The basket is keyed on the book and chapter, not on the panel, so
+        // one click lights the verse up wherever that chapter is showing.
+        await renderAnalyze('/analyze?l=1.1&r=1.1');
+        await waitForPanels();
+
+        await selectVerses('Passage', 1010);
+
+        expect(versesSelected('Passage')).toBe(1);
+        expect(versesSelected('Compare')).toBe(1);
+        // One place, not one per panel.
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
+    });
+
+    test('a chapter keeps its selection while the panel is away from it', async () => {
         await renderAnalyze();
         await waitForPanels();
 
@@ -818,8 +944,30 @@ describe('Selecting verses by clicking them', () => {
         await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
         await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
 
+        // Nothing to paint here, but the tray still names where the marks are.
         expect(versesSelected('Passage')).toBe(0);
-        expect(addNoteButton('Passage')).toBeNull();
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
+
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Previous chapter' }));
+        await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 1'));
+
+        expect(versesSelected('Passage')).toBe(1);
+    });
+
+    test('the tray drops one place and leaves the other standing', async () => {
+        await renderAnalyze();
+        await waitForPanels();
+
+        await selectVerses('Passage', 1010, 1011);
+        await selectVerses('Compare', 40010);
+        expect(trayPlaces()).toEqual(['Genesis 1:1–2', 'Matthew 1:1']);
+
+        await clickAndSettle(removePlaceButton('Genesis 1:1–2'));
+
+        expect(trayPlaces()).toEqual(['Matthew 1:1']);
+        expect(versesSelected('Passage')).toBe(0);
+        expect(versesSelected('Compare')).toBe(1);
+        expect(requestsMatching(r => r.method === 'POST')).toHaveLength(0);
     });
 });
 
@@ -831,7 +979,7 @@ describe('Adding a note from selected verses', () => {
         await selectVerses('Passage', 1010, 1011);
 
         // Act
-        await clickAndSettle(addNoteButton('Passage'));
+        await clickAndSettle(addNoteButton());
 
         // Assert — verse numbers derived from data-verse-index, and no index
         // bounds sent: those are the server's to compute.
@@ -850,7 +998,7 @@ describe('Adding a note from selected verses', () => {
 
         // Act
         await selectVerses('Passage', 1010, 1011);
-        await clickAndSettle(addNoteButton('Passage'));
+        await clickAndSettle(addNoteButton());
 
         // Assert — both verses marked, each with a rail segment, and the lapis
         // selection handed over to a gold mark.
@@ -864,11 +1012,11 @@ describe('Adding a note from selected verses', () => {
         await waitForPanels();
 
         await selectVerses('Passage', 1010);
-        await clickAndSettle(addNoteButton('Passage'));
+        await clickAndSettle(addNoteButton());
         await clickAndSettle(within(panel('Notes')).getByRole('button', { name: '← All notes' }));
 
         await selectVerses('Passage', 1010);
-        await clickAndSettle(addNoteButton('Passage'));
+        await clickAndSettle(addNoteButton());
 
         await waitFor(() => {
             expect(panel('Passage').querySelectorAll('.analyze-verse--tint-2')).toHaveLength(1);
@@ -877,12 +1025,55 @@ describe('Adding a note from selected verses', () => {
         expect(markersIn('Passage')).toHaveLength(2);
     });
 
+    test('one note carries references to every chapter the selection spans', async () => {
+        // The acceptance case for the basket: verses picked in Genesis, the
+        // panel moved to another book, more verses picked there, and a single
+        // Add note. What comes out is one note with anchors either side of the
+        // boundary — not one note per chapter.
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Act
+        await selectVerses('Passage', 1010, 1011);
+        await goToBook('Passage', 'Exodus');
+        await selectVerses('Passage', 2010);
+
+        expect(trayPlaces()).toEqual(['Genesis 1:1–2', 'Exodus 1:1']);
+
+        await clickAndSettle(addNoteButton());
+
+        // Assert — one POST /notes, carrying the first chapter's run...
+        const created = requestsMatching(r => r.method === 'POST' && r.url.endsWith('/notes'));
+        expect(created).toHaveLength(1);
+        expect(created[0].body.reference).toEqual({
+            bookId: 1, chapter: 1, startVerse: 1, endVerse: 2,
+        });
+
+        // ...and the second chapter anchored onto that same note.
+        const noteId = store.notes[0].id;
+        const anchored = requestsMatching(r => r.method === 'POST' && r.url.includes('/references'));
+        expect(anchored).toHaveLength(1);
+        expect(anchored[0].url).toContain(`/notes/${noteId}/references`);
+        expect(anchored[0].body).toEqual({
+            bookId: 2, chapter: 1, startVerse: 1, endVerse: 1,
+        });
+
+        expect(store.notes).toHaveLength(1);
+        expect(referencesOf(noteId)).toHaveLength(2);
+
+        // The basket is emptied once, after the last anchor has landed.
+        expect(tray()).toBeNull();
+
+        // Exodus 1 is on screen and now carries the mark.
+        await waitFor(() => expect(versesTinted('Passage')).toBe(1));
+    });
+
     test('works from the compare panel too', async () => {
         await renderAnalyze();
         await waitForPanels();
 
         await selectVerses('Compare', 40010);
-        await clickAndSettle(addNoteButton('Compare'));
+        await clickAndSettle(addNoteButton());
 
         const created = requestsMatching(r => r.method === 'POST' && r.url.endsWith('/notes'));
         expect(created[0].body.reference).toEqual({
@@ -1169,6 +1360,43 @@ describe('Note editor', () => {
         expect(versesTinted('Passage')).toBe(1);
     });
 
+    test('anchors an open note to two chapters at once from one selection', async () => {
+        // The button counts past one reference, and it must stay live while the
+        // reader is on a chapter the note does not touch — reaching across that
+        // boundary is what the selection is for.
+        addNote({ title: 'Across the boundary',
+                  reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act — a verse here, then a verse in a chapter the note has nothing in.
+        await selectVerses('Passage', 1011);
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+        await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
+        await selectVerses('Passage', 1020);
+
+        const addFromSelection = within(panel('Notes'))
+            .getByRole('button', { name: 'Add 2 references from selection' });
+        expect(addFromSelection).toBeEnabled();
+
+        await clickAndSettle(addFromSelection);
+
+        // Assert — both anchors written, onto the one note.
+        const added = requestsMatching(r => r.method === 'POST' && r.url.includes('/references'));
+        expect(added).toHaveLength(2);
+        expect(added.map(request => request.body)).toEqual([
+            { bookId: 1, chapter: 1, startVerse: 2, endVerse: 2 },
+            { bookId: 1, chapter: 2, startVerse: 1, endVerse: 1 },
+        ]);
+        expect(store.notes).toHaveLength(1);
+
+        // Cleared once, after the last of them landed.
+        expect(tray()).toBeNull();
+        await waitFor(() => expect(versesTinted('Passage')).toBe(1));
+    });
+
     test('deletes the note and returns to the list', async () => {
         addNote({ title: 'Light and dark',
                   reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
@@ -1289,6 +1517,149 @@ describe('Linking a note to ideas', () => {
         // Assert
         expect(panel('Notes')).toHaveTextContent('No ideas yet');
         expect(within(panel('Notes')).queryAllByRole('checkbox')).toHaveLength(0);
+    });
+});
+
+// ─── The chapter's shortlist ────────────────────────────────────────────────
+//
+// Ideas are curated per chapter now: the panel lists what this chapter holds
+// rather than everything the reader has ever written, and the whole corpus is
+// reached through the importer's overlay instead.
+describe('Importing an idea into the chapter', () => {
+    const chapterIdeaRequests = () =>
+        requestsMatching(r => r.method === 'PUT' && r.url.endsWith('/chapter-ideas'));
+
+    test('the overlay offers every idea, filed and unfiled alike', async () => {
+        // Arrange — one idea under a topic, one under nothing at all. The
+        // unfiled one is reachable through the field's "unfiled" bubble, and a
+        // reader whose ideas are all unfiled must still be able to import one.
+        const covenant = addTopic('Covenant');
+        const abiding = addIdea('Abiding');
+        fileIdeaUnder(abiding.id, covenant);
+        addIdea('Loose thread');
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+        await openImporter();
+
+        // Assert
+        expect(bubble('Covenant')).toBeInTheDocument();
+        expect(bubble('Abiding')).toBeInTheDocument();
+        expect(bubble('Loose thread')).toBeInTheDocument();
+        expect(bubble('Unfiled ideas')).toBeInTheDocument();
+    });
+
+    test('clicking an idea imports it into the chapter and closes the overlay', async () => {
+        // Arrange
+        const abiding = addIdea('Abiding');
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openImporter();
+
+        // Act
+        await clickAndSettle(bubble('Abiding'));
+
+        // Assert — the whole set, against the chapter the primary panel shows.
+        expect(chapterIdeaRequests()).toHaveLength(1);
+        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 1, chapter: 1, ideaIds: [abiding.id] });
+
+        expect(importerOverlay()).toBeNull();
+        await waitFor(() => expect(panel('Notes')).toHaveTextContent('Ideas in this chapter'));
+        expect(chapterIdeaTitles()).toEqual(['Abiding']);
+    });
+
+    test('moving the primary panel shows that chapter\'s shortlist instead', async () => {
+        // Arrange — one idea imported either side of a chapter boundary.
+        const abiding = addIdea('Abiding');
+        const pruning = addIdea('Pruning');
+        replaceChapterIdeas(1, 1, [abiding.id]);
+        replaceChapterIdeas(1, 2, [pruning.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
+
+        // Act — the notes panel follows the centre panel, and so does this.
+        await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
+
+        // Assert
+        await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Pruning']));
+    });
+
+    test('an idea a note here is filed under is in the chapter without being imported', async () => {
+        // Arrange — nothing imported; the idea arrives through the note.
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine',
+                               reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+        replaceNoteIdeas(note.id, [abiding.id]);
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert — listed, and with no × on it: there is no import to remove,
+        // and the way out is to unfile the note.
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
+        expect(store.chapterIdeas).toEqual([]);
+        expect(within(panel('Notes')).queryByRole('button', {
+            name: /Remove Abiding from this chapter/,
+        })).toBeNull();
+    });
+
+    test('removing an import leaves the idea itself, still offerable in the editor', async () => {
+        // Arrange — an imported idea and a note that is not filed under it.
+        const abiding = addIdea('Abiding');
+        replaceChapterIdeas(1, 1, [abiding.id]);
+        addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
+
+        // Act — the same full-set PUT, with the idea taken out of the set.
+        await clickAndSettle(removeFromChapter('Abiding'));
+
+        // Assert — out of this chapter...
+        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 1, chapter: 1, ideaIds: [] });
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual([]));
+        expect(panel('Notes')).not.toHaveTextContent('Ideas in this chapter');
+
+        // ...and nowhere else. The idea is untouched, no DELETE was sent, and
+        // the note editor still offers it.
+        expect(store.ideas.map(idea => idea.title)).toEqual(['Abiding']);
+        expect(requestsMatching(r => r.method === 'DELETE')).toHaveLength(0);
+
+        await clickAndSettle(noteRows()[0]);
+        expect(within(panel('Notes')).getByRole('checkbox', { name: 'Abiding' })).toBeInTheDocument();
+    });
+
+    test('the editor offers this chapter\'s ideas first, with the rest below', async () => {
+        // Arrange — two ideas, one of them in this chapter. The corpus order
+        // puts the other one first, so a picker that ignored the chapter would
+        // list them the other way round.
+        addIdea('Pruning');
+        const abiding = addIdea('Abiding');
+        replaceChapterIdeas(1, 1, [abiding.id]);
+        addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
+
+        // Act
+        await clickAndSettle(noteRows()[0]);
+
+        // Assert — grouped, chapter first, and every other idea still there to
+        // be filed under.
+        expect(within(panel('Notes')).getByText('In this chapter')).toBeInTheDocument();
+        expect(within(panel('Notes')).getByText('Other ideas')).toBeInTheDocument();
+
+        const offered = Array.from(panel('Notes').querySelectorAll('.analyze-multiselect-option'))
+            .map(option => option.textContent);
+        expect(offered).toEqual(['Abiding', 'Pruning']);
     });
 });
 

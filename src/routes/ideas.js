@@ -19,7 +19,7 @@ const {
     removeIdea,
 } = require('../lib/ideas');
 const { removePinsForItem } = require('../lib/pins');
-const { findTopicsForIdeas } = require('../lib/topics');
+const { withTopics } = require('../lib/ideaTopics');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { TREE_SPECS, reorderMembers, moveMember, inTransaction } = require('../lib/ordering');
 const { respondToOrderingError } = require('./orderingErrors');
@@ -32,20 +32,6 @@ const router = express.Router();
 // The ideas tier sits between notes and topics. Every relationship it takes
 // part in is optional: an idea with no topics and no notes is a legal row, and
 // nothing here refuses to create, read or save one.
-
-// Attaches each idea's topics from a single flat query rather than one per
-// idea. The lib modules read one table each, so composing the two tiers is the
-// route's job — which is also what keeps them from requiring each other.
-const withTopics = async (userId, ideas) => {
-    const links = await findTopicsForIdeas(userId, ideas.map(idea => idea.id));
-
-    const byIdeaId = links.reduce((acc, link) => ({
-        ...acc,
-        [link.ideaId]: [...(acc[link.ideaId] || []), { id: link.id, name: link.name, slug: link.slug }],
-    }), {});
-
-    return ideas.map(idea => ({ ...idea, topics: byIdeaId[idea.id] || [] }));
-};
 
 // GET /api/ideas
 // Every idea the user has, each with its topics and how many notes it gathers.

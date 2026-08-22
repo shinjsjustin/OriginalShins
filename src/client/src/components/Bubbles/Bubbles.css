@@ -1,0 +1,47 @@
+/* ─── The bubble overlay ─────────────────────────────────────────────────────
+
+   The shell a field of bubbles floats in. Everything here is the ground the
+   cards sit on; the cards themselves are styled by Thoughts.css, which owns
+   `.thoughts-bubble` and the field around it.
+
+   ── Above everything ──────────────────────────────────────────────────────
+
+   The navbar is fixed at z-index 1000, and a dialog with a page's chrome still
+   sitting on top of it is a dialog the reader can click straight out of. So
+   this clears it rather than joining the low stack Analyze's modal lives in
+   (10, inside the page's own content).                                      */
+
+.bubble-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+
+  /* The dim on its own, and the reading it gets when there is no blur: the
+     page behind stays legible through the gaps between cards, which is exactly
+     what the blur below is for. This is the @supports fallback, written first
+     so a browser without backdrop-filter simply stops here. */
+  background-color: rgba(8, 11, 16, 0.72);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .bubble-overlay-backdrop {
+    /* With the page blurred out there is no text to compete with the cards,
+       so the dim can lift a little and let the blur do the separating. */
+    background-color: rgba(8, 11, 16, 0.62);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+
+.bubble-overlay-surface {
+  /* Edge to edge and transparent: no card, no padding of its own. The field
+     inside measures this box and lays its cards across the whole of it, so
+     anything taken off here is canvas the layout no longer has. */
+  position: absolute;
+  inset: 0;
+
+  /* It is focused on open so the keyboard is inside the dialog, and a focus
+     ring drawn around the whole viewport says nothing about where the reader
+     is — the cards inside carry their own. */
+  outline: none;
+}

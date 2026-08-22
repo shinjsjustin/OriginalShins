@@ -417,7 +417,7 @@
   opacity: 0;
   pointer-events: none;
   /* --card-dx/--card-dy are the vector back to the topic's centre, written per
-     card by TopicsField: closed, every card sits ON its topic, so opening is
+     card by TopicIdeaField: closed, every card sits ON its topic, so opening is
      one movement outwards rather than fifteen fades in place. */
   transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(0.55);
   transition:
@@ -1146,7 +1146,7 @@
    duration reset does not touch is a DELAY — and on this canvas the delay is
    most of the motion. Every card in a fan and every note in a ring carries a
    `--card-delay` of its index times sixteen milliseconds, written inline by
-   TopicsField and IdeaOrbit; the fan holds its own `visibility` back by the
+   TopicIdeaField and IdeaOrbit; the fan holds its own `visibility` back by the
    exit beat so a closing fan can be watched leaving. Collapse the durations and
    leave those, and a reader who asked for no motion still gets the journey —
    eighteen cards arriving one after another across a third of a second, now

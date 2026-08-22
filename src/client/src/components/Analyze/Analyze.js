@@ -4,6 +4,7 @@ import Navbar from '../Navbar';
 import ScripturePanel from './ScripturePanel';
 import NotesPanel from './NotesPanel';
 import PanelSpine from './PanelSpine';
+import PendingSelectionTray from './PendingSelectionTray';
 import useBooks from './useBooks';
 import usePanelPositions from './usePanelPositions';
 import useNotes from './useNotes';
@@ -11,6 +12,9 @@ import useActiveNote from './useActiveNote';
 import useSelectedVerses from './useSelectedVerses';
 import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
+import useTopics from './useTopics';
+import useChapterIdeas from './useChapterIdeas';
+import { collectChapterIdeas, groupIdeaOptions } from './chapterIdeas';
 import { describePosition } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';
@@ -37,11 +41,6 @@ import '../Styling/Analyze.css';
 // for the primary chapter, which note is hovered, which is open, and the verse
 // selection. Those cross the boundary between the scripture and notes panels,
 // so neither of them can hold the copy.
-const PRIMARY = 'primary';
-const COMPARE = 'compare';
-
-const NO_REFERENCES = [];
-
 const Analyze = () => {
     // Declared first, and before anything that writes the query string. A bare
     // /analyze is sent back to wherever this reader was last — the two passages
@@ -59,6 +58,21 @@ const Analyze = () => {
     // opens on whichever note you click, and a picker that fetched its options
     // on open would show an empty list for a moment every time.
     const { ideas, createIdea } = useIdeas();
+
+    // The topics the importer's field of bubbles is built from. Read-only here
+    // — topics are made and filed on the Thoughts page.
+    const { topics } = useTopics();
+
+    // The shortlist for the chapter the primary panel is showing. It takes
+    // `primary` and not a position of its own, so moving that panel refetches
+    // it: the shortlist is per chapter, and one left behind by a move would be
+    // the previous chapter's ideas under this chapter's heading.
+    const {
+        chapterIdeas: importedIdeas,
+        importIdea,
+        removeImport,
+        actionError: chapterIdeaError,
+    } = useChapterIdeas(primary);
 
     const [hoveredNoteId, setHoveredNoteId] = useState(null);
     const [activeNoteId, setActiveNoteId] = useState(null);
@@ -92,46 +106,32 @@ const Analyze = () => {
         }
     }, [requestedNoteId]);
 
-    const { toggleVerse, clearSelection, selectedVersesIn } = useSelectedVerses();
+    // One basket of clicked verses for the whole page. It spans panels and
+    // chapters, and it resolves itself: each verse went in with its printed
+    // number, so no panel has to hand a loaded chapter over to make sense of it.
+    const {
+        toggleVerse,
+        clearSelection,
+        clearPlace,
+        selectedVersesIn,
+        selectionReferences,
+        selectedPlaces,
+    } = useSelectedVerses();
 
     const togglePrimaryVerse = useCallback(
-        verseIndex => toggleVerse(PRIMARY, primary, verseIndex),
+        verse => toggleVerse(primary, verse),
         [toggleVerse, primary]
     );
     const toggleCompareVerse = useCallback(
-        verseIndex => toggleVerse(COMPARE, compare, verseIndex),
+        verse => toggleVerse(compare, verse),
         [toggleVerse, compare]
     );
 
-    // Resolving clicked verses into references needs the chapter each panel has
-    // loaded, which only that panel holds — so the panels report the references
-    // upward and this is where the editor picks them up.
-    const [referencesByPanel, setReferencesByPanel] = useState({
-        [PRIMARY]: NO_REFERENCES,
-        [COMPARE]: NO_REFERENCES,
-    });
-
-    const setPanelReferences = useCallback((panel, references) => {
-        setReferencesByPanel(previous => ({ ...previous, [panel]: references }));
-    }, []);
-
-    const handlePrimaryReferences = useCallback(
-        references => setPanelReferences(PRIMARY, references),
-        [setPanelReferences]
-    );
-    const handleCompareReferences = useCallback(
-        references => setPanelReferences(COMPARE, references),
-        [setPanelReferences]
-    );
-
-    // At most one panel holds the selection, so at most one of these is filled.
-    const pendingReferences = referencesByPanel[PRIMARY].length > 0
-        ? referencesByPanel[PRIMARY]
-        : referencesByPanel[COMPARE];
-
-    // The picker's shape: id plus the label to show. The editor never sees an
-    // idea's body, so this is everything it needs.
-    const ideaOptions = ideas.map(idea => ({ id: idea.id, label: idea.title }));
+    // What this chapter holds: what was imported into it, plus what the notes
+    // anchored here are already filed under. One derivation, read twice — the
+    // panel lists it and the editor's picker is ordered by it.
+    const chapterIdeaList = collectChapterIdeas(importedIdeas, notes.notes, ideas);
+    const ideaGroups = groupIdeaOptions(ideas, chapterIdeaList);
 
     // The open note comes from the current lists whenever they hold it, so the
     // editor always shows the latest fetch. It survives navigating to a chapter
@@ -172,6 +172,12 @@ const Analyze = () => {
     // straight away — an empty note's whole point is the editor. The response
     // is retained as well as selected, so the editor opens on this copy instead
     // of waiting for the list refetch to catch up.
+    //
+    // The references arrive already spanning every chapter the basket holds,
+    // and each one carries its own bookId and chapter, so the loop needs to
+    // know nothing about where the panels are pointed. The basket is cleared
+    // only after the last anchor has landed: clearing on the first would drop
+    // the chapters still waiting to be written.
     const handleCreateFromSelection = useCallback(async (references) => {
         if (references.length === 0) return;
 
@@ -187,7 +193,8 @@ const Analyze = () => {
 
     // Anchoring a note while reading a chapter it does not yet touch returns
     // the updated note before the list containing it reloads; retain it so the
-    // new references appear in the editor immediately.
+    // new references appear in the editor immediately. Cleared after the loop
+    // for the same reason as above.
     const handleAddReferences = useCallback(async (noteId, references) => {
         const anchored = await anchorAll(noteId, references);
         if (anchored) {
@@ -206,6 +213,20 @@ const Analyze = () => {
             retain(note);
         }
     }, [notes, retain]);
+
+    // A new idea starts in the chapter it was started in. "+ New idea" sits in
+    // this panel, beside this passage, which says the idea belongs here as
+    // plainly as importing one does — and without the second call the button's
+    // whole result would disappear the moment it succeeded, into a corpus this
+    // panel no longer lists. The idea is created either way: a failed import
+    // costs the shortlist an entry, not the reader their idea.
+    const handleCreateIdea = useCallback(async (body) => {
+        const created = await createIdea(body);
+        if (created) {
+            await importIdea(created.id);
+        }
+        return created;
+    }, [createIdea, importIdea]);
 
     const handleDeleteNote = useCallback(async (noteId) => {
         const removed = await notes.removeNote(noteId);
@@ -249,7 +270,21 @@ const Analyze = () => {
             )}
 
             {!error && !isPreparing && (
-                <main className="analyze-panels">
+                <>
+                    {/* Above the panel row, because a selection spanning two
+                        chapters is not either panel's business. It also stays
+                        put while a panel scrolls, which is what the old corner
+                        widget was pinned for. */}
+                    <PendingSelectionTray
+                        books={books}
+                        places={selectedPlaces}
+                        references={selectionReferences}
+                        onAddNote={handleCreateFromSelection}
+                        onClearPlace={clearPlace}
+                        onClearAll={clearSelection}
+                    />
+
+                    <main className="analyze-panels">
                     {collapsed.compare ? (
                         <PanelSpine
                             side="left"
@@ -268,11 +303,8 @@ const Analyze = () => {
                             hoveredNoteId={hoveredNoteId}
                             onHoverNote={setHoveredNoteId}
                             onOpenNote={handleOpenNote}
-                            selectedVerseIndexes={selectedVersesIn(COMPARE, compare)}
+                            selectedVerseIndexes={selectedVersesIn(compare)}
                             onToggleVerse={toggleCompareVerse}
-                            onSelectionReferencesChange={handleCompareReferences}
-                            onCreateNoteFromSelection={handleCreateFromSelection}
-                            onClearSelection={clearSelection}
                         />
                     )}
 
@@ -289,11 +321,8 @@ const Analyze = () => {
                         hoveredNoteId={hoveredNoteId}
                         onHoverNote={setHoveredNoteId}
                         onOpenNote={handleOpenNote}
-                        selectedVerseIndexes={selectedVersesIn(PRIMARY, primary)}
+                        selectedVerseIndexes={selectedVersesIn(primary)}
                         onToggleVerse={togglePrimaryVerse}
-                        onSelectionReferencesChange={handlePrimaryReferences}
-                        onCreateNoteFromSelection={handleCreateFromSelection}
-                        onClearSelection={clearSelection}
                     />
 
                     {collapsed.notes ? (
@@ -311,22 +340,27 @@ const Analyze = () => {
                             collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
                             notes={notes.notes}
                             unreferenced={notes.unreferenced}
+                            topics={topics}
                             ideas={ideas}
+                            chapterIdeas={chapterIdeaList}
+                            importedIdeaIds={importedIdeas.map(idea => idea.id)}
                             isLoading={notes.isLoading}
                             error={notes.error}
-                            actionError={notes.actionError}
+                            actionError={notes.actionError || chapterIdeaError}
                             activeNote={activeNote}
                             hoveredNoteId={hoveredNoteId}
                             scrollRequest={scrollRequest}
                             isComposingIdea={isComposingIdea}
-                            pendingReferences={pendingReferences}
-                            ideaOptions={ideaOptions}
+                            pendingReferences={selectionReferences}
+                            ideaGroups={ideaGroups}
                             onHoverNote={setHoveredNoteId}
                             onOpenNote={setActiveNoteId}
                             onCloseNote={handleCloseNote}
                             onStartIdea={() => setIsComposingIdea(true)}
                             onCancelIdea={() => setIsComposingIdea(false)}
-                            onCreateIdea={createIdea}
+                            onCreateIdea={handleCreateIdea}
+                            onImportIdea={importIdea}
+                            onRemoveChapterIdea={removeImport}
                             onSaveNote={notes.updateNote}
                             onDeleteNote={handleDeleteNote}
                             onAddReferences={handleAddReferences}
@@ -334,7 +368,8 @@ const Analyze = () => {
                             onSaveIdeas={handleSaveIdeas}
                         />
                     )}
-                </main>
+                    </main>
+                </>
             )}
         </div>
     );

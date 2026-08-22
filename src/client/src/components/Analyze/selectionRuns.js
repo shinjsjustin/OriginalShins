@@ -5,9 +5,13 @@
 // the set has to be cut into runs before it can be saved: that selection
 // anchors two references, and never one running 1-10.
 //
+// Verse *numbers* are deliberately absent here: a run is a stretch of
+// consecutive indexes, and pendingSelection.js is what carries the numbers
+// clicked alongside them. The WEB omits verses the KJV numbers, so a chapter's
+// numbers can skip while its indexes stay gapless — a number can never be
+// derived from an index, only remembered from the chapter it was read off.
+//
 // Nothing here touches React, the DOM or the network.
-
-import { referenceFromVerseIndexRange } from './verseSelection';
 
 const ascending = (a, b) => a - b;
 
@@ -36,23 +40,4 @@ export const contiguousRuns = (verseIndexes) => {
         }
         return [...runs, [index]];
     }, []);
-};
-
-// One reference per run, in the { bookId, chapter, startVerse, endVerse } shape
-// the API takes. The verse *numbers* come off the loaded chapter rather than
-// from the indexes, because the WEB omits verses the KJV numbers: indexes stay
-// gapless where the printed numbers skip.
-//
-// A run covering no loaded verse yields nothing rather than a wrong reference.
-export const referencesFromSelection = (chapterData, verseIndexes) => {
-    if (!chapterData || verseIndexes.length === 0) {
-        return [];
-    }
-
-    return contiguousRuns(verseIndexes)
-        .map(run => referenceFromVerseIndexRange(chapterData, {
-            startIndex: run[0],
-            endIndex: run[run.length - 1],
-        }))
-        .filter(Boolean);
 };

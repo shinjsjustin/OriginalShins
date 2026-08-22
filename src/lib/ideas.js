@@ -212,6 +212,10 @@ const removeIdea = async (userId, ideaId) => {
 
 module.exports = {
     toIdea,
+    // Exported for the one reader outside this module that needs an idea to
+    // carry the same note count the lists here do: src/lib/chapterIdeas.js,
+    // which selects from `ideas` under the same `i` alias this subquery assumes.
+    NOTE_COUNT_SUBQUERY,
     findIdeas,
     findIdeaById,
     findIdeasForTopic,

@@ -62,15 +62,23 @@ export const describePosition = (books, { bookId, chapter }) => {
     return book ? `${book.name} ${chapter}` : '';
 };
 
+// "1:3–5", or "1:3" for a single verse — a reference stripped of its book.
+// The selection tray lists several runs of one chapter under a single book
+// name ("Romans 5:1–2, 5:8"), so the tail of a reference is needed on its own;
+// describeReference is this with the book name in front of it.
+export const describeChapterVerses = ({ chapter, startVerse, endVerse }) => {
+    const verses = startVerse === endVerse ? `${startVerse}` : `${startVerse}–${endVerse}`;
+    return `${chapter}:${verses}`;
+};
+
 // "Genesis 1:3–5", or "Genesis 1:3" when a reference covers a single verse.
 // Used wherever a note's anchors are listed. Falls back to the book id rather
 // than rendering nothing if the catalog has not loaded yet, so a reference is
 // never shown as a blank row.
-export const describeReference = (books, { bookId, chapter, startVerse, endVerse }) => {
-    const book = findBook(books, bookId);
-    const name = book ? book.name : `Book ${bookId}`;
-    const verses = startVerse === endVerse ? `${startVerse}` : `${startVerse}–${endVerse}`;
-    return `${name} ${chapter}:${verses}`;
+export const describeReference = (books, reference) => {
+    const book = findBook(books, reference.bookId);
+    const name = book ? book.name : `Book ${reference.bookId}`;
+    return `${name} ${describeChapterVerses(reference)}`;
 };
 
 // Moves one chapter forward (`direction` 1) or back (`direction` -1), crossing

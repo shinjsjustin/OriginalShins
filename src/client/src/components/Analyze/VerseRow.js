@@ -8,6 +8,10 @@ import { coversNote, referencesAt, tintClassName } from './highlights';
 // off this element to turn a click into a verse range, so it must stay on the
 // row itself and not move onto a child.
 //
+// A toggle hands over the whole verse, not just its index. The selection keeps
+// the printed number alongside the index, and this is the only moment it is in
+// reach: once the panel navigates away the chapter carrying it is gone.
+//
 // The row handles the click, but the *verse number* is the button. Nesting the
 // gutter markers inside a button row would be invalid markup and would swallow
 // their own clicks, so the number carries the keyboard affordance and the
@@ -38,7 +42,7 @@ const VerseRow = ({
         if (domSelection && !domSelection.isCollapsed) {
             return;
         }
-        onToggleVerse(verse.verseIndex);
+        onToggleVerse(verse);
     };
 
     return (
@@ -79,7 +83,7 @@ const VerseRow = ({
                 aria-label={`Verse ${verse.verse}`}
                 onClick={event => {
                     event.stopPropagation();
-                    onToggleVerse(verse.verseIndex);
+                    onToggleVerse(verse);
                 }}
             >
                 {verse.verse}

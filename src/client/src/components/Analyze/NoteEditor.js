@@ -3,9 +3,9 @@ import { describeReference } from './navigation';
 import { renderMarkdown } from './markdown';
 import MultiSelect from './MultiSelect';
 
-// What the "add from selection" button says. A selection with a gap in it is
-// several references, and naming them all would outrun the button, so past one
-// it is counted rather than listed.
+// What the "add from selection" button says. A selection with a gap in it — or
+// one spanning several chapters — is several references, and naming them all
+// would outrun the button, so past one it is counted rather than listed.
 const describeSelection = (books, references) => {
     if (references.length === 0) {
         return 'Add reference from selection';
@@ -31,7 +31,7 @@ const NoteEditor = ({
     note,
     books,
     pendingReferences,
-    ideaOptions,
+    ideaGroups,
     onSave,
     onDelete,
     onAddReferences,
@@ -162,6 +162,11 @@ const NoteEditor = ({
                     ))}
                 </ul>
 
+                {/* Disabled on an empty selection and on nothing else. The
+                    references come from the page's whole basket, not from
+                    whatever chapter is on screen, so this stays live while the
+                    reader is somewhere the note does not touch — anchoring
+                    across that boundary is the point of selecting there. */}
                 <button
                     type="button"
                     className="analyze-editor-button"
@@ -178,9 +183,14 @@ const NoteEditor = ({
                     /notes/:id/ideas replaces the complete membership, so there
                     is nothing left over to commit. Unchecking the last one is a
                     normal save — a note filed under no idea is legal. */}
+                {/* Grouped rather than one flat list: the ideas this
+                    chapter holds come first, because a note written here is
+                    usually filed under one of them. Every other idea is still
+                    below and still checkable — an idea is not confined to the
+                    chapters it was imported into. */}
                 <MultiSelect
                     legend="Ideas"
-                    options={ideaOptions}
+                    groups={ideaGroups}
                     selectedIds={note.ideas.map(idea => idea.id)}
                     onChange={ideaIds => onSaveIdeas(note.id, ideaIds)}
                     emptyMessage="No ideas yet — create one on the Ideas page to file this note under."

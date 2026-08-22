@@ -38,7 +38,13 @@
   /* A panel opening or closing is the one movement on the page worth seeing. */
   --analyze-panel-transition: 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  min-height: 100vh;
+  height: 100vh;
+  /* A column: the selection tray takes its own strip off the top when there is
+     a selection, and the panel row takes whatever is left. The row used to
+     compute its own height from the viewport, which it can no longer do — what
+     sits above it now comes and goes. */
+  display: flex;
+  flex-direction: column;
   /* A faint lift behind the centre column, so the three panels read as lying
      on something rather than floating on a flat fill. */
   background-color: var(--ground-deep);
@@ -56,9 +62,11 @@
   display: flex;
   gap: var(--space-md);
   align-items: stretch;
-  /* Fill the viewport below the navbar so each panel scrolls internally
-     instead of the page scrolling as a whole. */
-  height: calc(100vh - var(--analyze-navbar-clearance) - var(--space-md) * 2);
+  /* Take the rest of the column, so each panel scrolls internally instead of
+     the page scrolling as a whole. min-height: 0 is what lets a flex child
+     shrink below its content and hand the overflow to the panel bodies. */
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .analyze-panel {
@@ -377,33 +385,88 @@
   color: var(--lapis-strong);
 }
 
-/* ─── Selection Actions ──────────────────────────────────────────────────────
-   Pinned to the panel's top-right corner: a selection can run past the fold,
-   and scrolling down to click a fifth verse must not mean scrolling back up to
-   act on the first four. */
+/* ─── Selection Tray ─────────────────────────────────────────────────────────
+   A strip above the panel row naming every chapter the reader has verses
+   selected in, however far apart they are. It sits on the ground rather than
+   on paper because it belongs to the page: the selection it describes may run
+   through chapters no panel is showing.
 
-.analyze-selection-actions {
-  position: absolute;
-  top: var(--space-sm);
-  right: var(--space-sm);
-  z-index: 5;
+   Above the row rather than in a panel corner, which also keeps the old
+   reason the corner had: a selection can run past the fold, and scrolling down
+   to click a fifth verse must not mean scrolling back up to act on the first
+   four. Nothing here scrolls with a panel. */
+
+.analyze-selection-tray {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs);
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+  margin-bottom: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   background-color: var(--ground-raised);
   border: var(--analyze-border-width) solid var(--ground-line);
+  /* Lapis down the leading edge: this is live intent, not a mark made. */
+  border-left: var(--space-xs) solid var(--lapis);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
-.analyze-selection-count {
-  padding: 0 var(--space-xs);
+.analyze-selection-tray-label {
   color: var(--on-ground-soft);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   white-space: nowrap;
+}
+
+/* The places, in canonical order. One chip per chapter holding a selection. */
+.analyze-selection-places {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Takes the slack, so the buttons sit at the far end of the strip. */
+  flex: 1 1 auto;
+}
+
+.analyze-selection-place {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  background-color: var(--select-tint);
+  border: var(--analyze-border-width) solid var(--select-edge);
+  border-radius: var(--radius-sm);
+}
+
+.analyze-selection-place-label {
+  color: var(--on-ground);
+  font-size: var(--font-base);
+  white-space: nowrap;
+}
+
+.analyze-selection-place-remove {
+  padding: 0 2px;
+  background-color: transparent;
+  color: var(--on-ground-soft);
+  border: none;
+  font-size: var(--font-base);
+  line-height: 1;
+  transition: color var(--analyze-transition);
+}
+
+.analyze-selection-place-remove:hover {
+  color: var(--on-ground);
+}
+
+.analyze-selection-tray-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
 }
 
 .analyze-selection-button {
@@ -641,6 +704,33 @@
   border-style: solid;
 }
 
+/* The panel's second create action, directly under the first and wearing the
+   same dashed frame — the two are one pair of ways to put an idea here, and a
+   button styled differently would read as belonging to something else. Quieter
+   than "+ New idea" only in its ink: importing reaches for something that
+   already exists, so it does not ask for the accent the create action has. */
+.analyze-import-idea {
+  width: 100%;
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm);
+  background-color: transparent;
+  color: var(--ink-soft);
+  border: var(--analyze-border-width) dashed var(--border-alt);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  font-weight: 500;
+  transition: background-color var(--analyze-transition),
+              border-color var(--analyze-transition),
+              color var(--analyze-transition);
+}
+
+.analyze-import-idea:hover {
+  background-color: var(--select-tint);
+  color: var(--lapis-strong);
+  border-color: var(--lapis);
+  border-style: solid;
+}
+
 .analyze-note-section + .analyze-note-section {
   margin-top: var(--space-lg);
 }
@@ -688,6 +778,35 @@
 
 .analyze-idea:hover {
   border-left-color: var(--ink-soft);
+}
+
+/* An imported row: the link, plus the × that takes it out of this chapter. The
+   × is a sibling rather than a child because the whole row is an anchor — see
+   IdeaListItem — so the two are laid out side by side here instead. The row's
+   own bottom margin moves onto this wrapper, or the × would sit against the
+   next row rather than beside its own. */
+.analyze-idea-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.analyze-idea-row .analyze-idea {
+  margin-bottom: 0;
+}
+
+.analyze-idea-remove {
+  flex: 0 0 auto;
+  padding: 0 var(--space-xs);
+  background-color: transparent;
+  color: var(--ink-faint);
+  font-size: var(--font-lg);
+  line-height: 1;
+}
+
+.analyze-idea-remove:hover {
+  color: var(--madder);
 }
 
 .analyze-entry-title {
@@ -871,6 +990,22 @@
   padding: 0 var(--space-xs);
   color: var(--text-muted);
   font-size: var(--font-sm);
+}
+
+/* One run of options under its heading. The groups stack; the options inside
+   each still wrap, which is what keeps a long list from becoming a column. */
+.analyze-multiselect-group + .analyze-multiselect-group {
+  margin-top: var(--space-sm);
+}
+
+/* Quieter than the legend above it: the legend names the whole field, and
+   these only say which half of it you are looking at. */
+.analyze-multiselect-heading {
+  margin: 0 0 var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+  text-transform: none;
 }
 
 .analyze-multiselect-list {

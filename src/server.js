@@ -13,6 +13,7 @@ const noteRoutes = require('./routes/notes');
 const referenceRoutes = require('./routes/references');
 const ideaRoutes = require('./routes/ideas');
 const topicRoutes = require('./routes/topics');
+const chapterIdeaRoutes = require('./routes/chapterIdeas');
 const searchRoutes = require('./routes/search');
 const overviewRoutes = require('./routes/overview');
 const pinRoutes = require('./routes/pins');
@@ -85,6 +86,14 @@ app.use('/api/references', isAuth, invalidatesOverview, referenceRoutes);
 // is always replaced whole, from the tier that holds the multi-select.
 app.use('/api/ideas', isAuth, invalidatesOverview, ideaRoutes);
 app.use('/api/topics', isAuth, invalidatesOverview, topicRoutes);
+
+// The ideas the Analyze panel has imported into a chapter. Deliberately WITHOUT
+// `invalidatesOverview`, on the same reasoning as the pins mount below:
+// `chapter_ideas` is not one of the six tables the Overview payload is built
+// from, so importing an idea into a chapter cannot make that cache wrong, and
+// throwing a valid payload away here would buy nothing. If a later phase puts
+// imported ideas into the Overview payload, this mount joins the three above.
+app.use('/api/chapter-ideas', isAuth, chapterIdeaRoutes);
 
 // One search across all four tiers. Its own mount rather than a query on any of
 // the lists above: those answer questions about one chapter or one tier, and

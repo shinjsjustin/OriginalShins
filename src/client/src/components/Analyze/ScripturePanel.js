@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PanelFooter from './PanelFooter';
 import VerseRow from './VerseRow';
 import PanelHeader from './PanelHeader';
-import SelectionActions from './SelectionActions';
 import { fetchJson } from '../../config/api';
 import { buildHighlightIndex } from './highlights';
-import { isVerseSelected, referencesFromSelection } from './selectionRuns';
+import { isVerseSelected } from './selectionRuns';
 import { describePosition } from './navigation';
 
 // One scripture panel: a chapter of text, its marks, and the footer that moves
@@ -19,9 +18,10 @@ import { describePosition } from './navigation';
 // in both.
 //
 // The verse selection is the page's, not the panel's: `selectedVerseIndexes`
-// comes down and every click goes back up. That is what lets a click in one
-// panel end the selection in the other, which it must, because the references a
-// note is saved with all live in one chapter.
+// comes down and every click goes back up. The panel neither resolves a
+// selection into references nor offers anything to do with one. Both moved to
+// the page's selection tray, because a selection may span several chapters and
+// a panel can only ever see the part of it that is on screen.
 const ScripturePanel = ({
     label,
     isPrimary = false,
@@ -35,9 +35,6 @@ const ScripturePanel = ({
     onOpenNote,
     selectedVerseIndexes,
     onToggleVerse,
-    onSelectionReferencesChange,
-    onCreateNoteFromSelection,
-    onClearSelection,
 }) => {
     const [chapterData, setChapterData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -85,22 +82,7 @@ const ScripturePanel = ({
         [chapterData]
     );
 
-    // A selection of clicked verses becomes one reference per contiguous run:
-    // clicking verses 1 and 10 anchors two ranges, never one running 1–10.
-    const selectionReferences = useMemo(
-        () => referencesFromSelection(chapterData, selectedVerseIndexes),
-        [chapterData, selectedVerseIndexes]
-    );
-
-    // Report them upward so the note editor can offer to anchor an open note to
-    // what is selected. Only one panel holds the selection, so only one of them
-    // ever reports anything.
-    useEffect(() => {
-        onSelectionReferencesChange(selectionReferences);
-    }, [selectionReferences, onSelectionReferencesChange]);
-
     const heading = describePosition(books, position);
-    const hasSelection = selectedVerseIndexes.length > 0;
 
     const panelClassName = [
         'analyze-panel',
@@ -110,14 +92,6 @@ const ScripturePanel = ({
     return (
         <section className={panelClassName} aria-label={label}>
             <PanelHeader label={label} title={heading} collapse={collapse} />
-
-            {hasSelection && (
-                <SelectionActions
-                    count={selectedVerseIndexes.length}
-                    onAddNote={() => onCreateNoteFromSelection(selectionReferences)}
-                    onClear={onClearSelection}
-                />
-            )}
 
             <div className="analyze-panel-body" ref={bodyRef}>
                 {error && (

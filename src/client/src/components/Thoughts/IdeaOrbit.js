@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import BubbleCard from './BubbleCard';
+import BubbleCard from '../Bubbles/BubbleCard';
 import buildOrbit, { NOTE_CARD, ORBIT_CENTRE_CLEARANCE } from './orbitLayout';
-import useCanvasSize from './useCanvasSize';
-import { centreOf, collapseOnto } from './cardGeometry';
+import useCanvasSize from '../Bubbles/useCanvasSize';
+import { centreOf, collapseOnto } from '../Bubbles/cardGeometry';
 import { UNTITLED_IDEA_LABEL } from './TopBar';
 import { renderMarkdown } from '../Analyze/markdown';
 

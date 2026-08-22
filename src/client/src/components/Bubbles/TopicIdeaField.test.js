@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import TopicsField, { UNFILED_TITLE, buildClusters } from './TopicsField';
-import useThoughtsView from './useThoughtsView';
+import TopicIdeaField, { UNFILED_TITLE, buildClusters } from './TopicIdeaField';
+import useThoughtsView from '../Thoughts/useThoughtsView';
 
 // ─── What the field has to get right ────────────────────────────────────────
 //
@@ -77,29 +77,29 @@ describe('buildClusters', () => {
     });
 });
 
-describe('TopicsField', () => {
+describe('TopicIdeaField', () => {
     test('draws a card per topic with its idea count', () => {
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} />);
 
         expect(topicCard('Faith')).toHaveTextContent('1 idea');
         expect(topicCard('Law')).toBeInTheDocument();
     });
 
     test('draws no unfiled bubble when every idea is filed', () => {
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} />);
 
         expect(screen.queryByText(UNFILED_TITLE)).not.toBeInTheDocument();
     });
 
     test('draws the unfiled bubble when a loose idea exists', () => {
         const loose = { id: 14, title: 'Loose thought', topics: [] };
-        render(<TopicsField topics={TOPICS} ideas={[...IDEAS, loose]} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={[...IDEAS, loose]} />);
 
         expect(screen.getByText(UNFILED_TITLE)).toBeInTheDocument();
     });
 
     test('shows no pin on a topic card until it is hovered', () => {
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} onTogglePin={jest.fn()} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} onTogglePin={jest.fn()} />);
 
         expect(screen.queryByRole('button', { name: 'Pin Faith' })).not.toBeInTheDocument();
 
@@ -108,9 +108,20 @@ describe('TopicsField', () => {
         expect(screen.getByRole('button', { name: 'Pin Faith' })).toBeInTheDocument();
     });
 
+    test('draws no pin on any card when the page passes no pin handler', () => {
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} />);
+
+        // Hovered and fanned open: every card that could carry a pin is on
+        // screen and under the cursor, so an absent pin here is absent for
+        // good rather than merely not revealed yet.
+        hoverTopic('Faith');
+
+        expect(screen.queryByRole('button', { name: /^(Pin|Unpin) / })).not.toBeInTheDocument();
+    });
+
     test('keeps the pin on a card that is already pinned', () => {
         const isPinned = (itemType, itemId) => itemType === 'topic' && itemId === 1;
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} isPinned={isPinned} onTogglePin={jest.fn()} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} isPinned={isPinned} onTogglePin={jest.fn()} />);
 
         expect(screen.getByRole('button', { name: 'Unpin Faith' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Pin Law' })).not.toBeInTheDocument();
@@ -118,7 +129,7 @@ describe('TopicsField', () => {
 
     test('toggles the pin through usePins with the card it belongs to', () => {
         const onTogglePin = jest.fn();
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} onTogglePin={onTogglePin} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} onTogglePin={onTogglePin} />);
 
         hoverTopic('Faith');
         fireEvent.click(screen.getByRole('button', { name: 'Pin Faith' }));
@@ -144,7 +155,7 @@ describe('TopicsField', () => {
 
 describe('locking a topic open', () => {
     beforeEach(() => {
-        render(<TopicsField topics={TOPICS} ideas={IDEAS} />);
+        render(<TopicIdeaField topics={TOPICS} ideas={IDEAS} />);
     });
 
     test('a hovered fan closes again when the cursor leaves', () => {
@@ -214,7 +225,7 @@ const ViewHarness = (props) => {
     return (
         <>
             <p>view: {ideaId === null ? 'topics' : `idea ${ideaId}`}</p>
-            <TopicsField topics={TOPICS} ideas={IDEAS} onShowIdea={showIdea} {...props} />
+            <TopicIdeaField topics={TOPICS} ideas={IDEAS} onSelectIdea={showIdea} {...props} />
         </>
     );
 };

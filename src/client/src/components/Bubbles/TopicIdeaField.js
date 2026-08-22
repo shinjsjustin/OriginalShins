@@ -4,11 +4,29 @@ import buildField, { TOPIC_CARD } from './fieldLayout';
 import buildFan from './fanLayout';
 import useCanvasSize from './useCanvasSize';
 import { centreOf, collapseOnto, relativeTo } from './cardGeometry';
-import { UNTITLED_IDEA_LABEL } from './TopBar';
-import { countLabel } from './format';
+import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
+import { countLabel } from '../Thoughts/format';
+// The cards' own styles, which Thoughts.css owns. Imported here rather than by
+// each page, because a page that used this field and forgot the stylesheet
+// would get a field of unpositioned boxes — the field carries its own look
+// wherever it is drawn, exactly as BubbleOverlay carries Bubbles.css.
+import '../Styling/Thoughts.css';
 
-// The topics view: every topic as a card on a field, and the spotlight that
-// opens one of them.
+// A field of topic cards, each opening a hover fan of the ideas filed under
+// it. Thoughts draws its topics view with this; the Analyze importer draws the
+// same field to pick an idea out of.
+//
+// ── The actions come from the caller ───────────────────────────────────────
+//
+// The two pages agree completely about what this field LOOKS like and not at
+// all about what its cards DO: on Thoughts a fanned idea opens the idea view
+// and every card carries a pin, and in the importer the same card files the
+// idea against a chapter and there is nothing to pin. So the field owns the
+// layout, the spotlight and the lock, and takes the rest as props —
+// `onSelectIdea` for the fan, `isPinned`/`onTogglePin` for the pins. The pin
+// props are optional together: without them no pin is drawn on any card,
+// which is a page's way of saying this field has no pinning in it rather than
+// a page having to pass two no-ops.
 //
 // ── The cluster is the hover target, not the card ──────────────────────────
 //
@@ -147,11 +165,21 @@ const TopicCluster = ({
     onLeave,
     onTopicClick,
     onChipClick,
-    onShowIdea,
+    onSelectIdea,
 }) => {
     const bounds = boundsFor(topicBox, fan, isActive, isExpanded);
     const topicCentre = centreOf(topicBox);
     const chipCentre = fan.overflow ? centreOf(fan.overflow) : topicCentre;
+
+    // Nothing at all when the page did not ask for pinning, rather than a pin
+    // wired to a no-op: BubbleCard draws no toggle unless it is handed one, so
+    // the absent props have to stay absent all the way down.
+    const pinPropsFor = (itemType, itemId, title) => (onTogglePin
+        ? {
+            isPinned: isPinned(itemType, itemId),
+            onTogglePin: () => onTogglePin(itemType, itemId, title),
+        }
+        : {});
 
     const classes = [
         'thoughts-cluster',
@@ -179,10 +207,9 @@ const TopicCluster = ({
                 scale={topicBox.width / TOPIC_CARD.width}
                 isSelected={isActive}
                 isFaded={isFaded}
-                isPinned={cluster.kind === 'topic' && isPinned('topic', cluster.id)}
                 onActivate={() => onTopicClick(cluster.id)}
                 {...(cluster.kind === 'topic'
-                    ? { onTogglePin: () => onTogglePin('topic', cluster.id, cluster.title) }
+                    ? pinPropsFor('topic', cluster.id, cluster.title)
                     : {})}
             />
 
@@ -201,9 +228,8 @@ const TopicCluster = ({
                             title={title}
                             position={relativeTo(bounds, card)}
                             scale={fan.scale}
-                            isPinned={isPinned('idea', idea.id)}
-                            onActivate={() => onShowIdea(idea.id)}
-                            onTogglePin={() => onTogglePin('idea', idea.id, title)}
+                            onActivate={() => onSelectIdea(idea.id)}
+                            {...pinPropsFor('idea', idea.id, title)}
                             className={`thoughts-fan-item${isStowed ? ' is-stowed' : ''}`}
                             style={{
                                 ...collapseOnto(isStowed ? chipCentre : topicCentre, card),
@@ -239,18 +265,22 @@ const TopicCluster = ({
 };
 
 /**
- * @param topics      every topic the reader has
- * @param ideas       every idea, each carrying the topics it is filed under
- * @param isPinned    (itemType, itemId) -> boolean, from usePins
- * @param onTogglePin (itemType, itemId, title) -> void, from usePins
- * @param onShowIdea  (ideaId) -> void; useThoughtsView.showIdea in the page
+ * @param topics        every topic the reader has
+ * @param ideas         every idea, each carrying the topics it is filed under
+ * @param onSelectIdea  (ideaId) -> void; what clicking a fanned idea card
+ *                      does. Thoughts opens the idea view with it, the
+ *                      importer files the idea against the open chapter
+ * @param isPinned      (itemType, itemId) -> boolean, from usePins. Optional,
+ *                      and only meaningful alongside onTogglePin
+ * @param onTogglePin   (itemType, itemId, title) -> void, from usePins.
+ *                      Omit it and the field draws no pins at all
  */
-const TopicsField = ({
+const TopicIdeaField = ({
     topics = [],
     ideas = [],
+    onSelectIdea = () => {},
     isPinned = () => false,
-    onTogglePin = () => {},
-    onShowIdea = () => {},
+    onTogglePin = null,
 }) => {
     const canvasRef = useRef(null);
     const canvas = useCanvasSize(canvasRef);
@@ -343,11 +373,11 @@ const TopicsField = ({
                     onLeave={handleLeave}
                     onTopicClick={handleTopicClick}
                     onChipClick={handleChipClick}
-                    onShowIdea={onShowIdea}
+                    onSelectIdea={onSelectIdea}
                 />
             ))}
         </div>
     );
 };
 
-export default TopicsField;
+export default TopicIdeaField;

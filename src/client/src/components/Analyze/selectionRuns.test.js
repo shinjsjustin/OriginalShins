@@ -1,22 +1,4 @@
-import {
-    contiguousRuns,
-    isVerseSelected,
-    referencesFromSelection,
-    toggleVerseIndex,
-} from './selectionRuns';
-
-// Genesis 1:1-4, with 3 missing to stand in for the verses the WEB omits: the
-// indexes stay gapless where the printed numbers skip.
-const chapterData = {
-    book: { id: 1 },
-    chapter: { number: 1 },
-    verses: [
-        { verseIndex: 10, verse: 1 },
-        { verseIndex: 11, verse: 2 },
-        { verseIndex: 12, verse: 4 },
-        { verseIndex: 13, verse: 5 },
-    ],
-};
+import { contiguousRuns, isVerseSelected, toggleVerseIndex } from './selectionRuns';
 
 describe('toggleVerseIndex', () => {
     test('adds a verse that was not selected', () => {
@@ -60,39 +42,5 @@ describe('contiguousRuns', () => {
 
     test('sorts before grouping', () => {
         expect(contiguousRuns([12, 10, 11])).toEqual([[10, 11, 12]]);
-    });
-});
-
-describe('referencesFromSelection', () => {
-    test('is empty when nothing is selected', () => {
-        expect(referencesFromSelection(chapterData, [])).toEqual([]);
-    });
-
-    test('is empty when the chapter has not loaded', () => {
-        expect(referencesFromSelection(null, [10])).toEqual([]);
-    });
-
-    test('turns one run into one reference', () => {
-        expect(referencesFromSelection(chapterData, [10, 11])).toEqual([
-            { bookId: 1, chapter: 1, startVerse: 1, endVerse: 2 },
-        ]);
-    });
-
-    test('turns a gapped selection into one reference per run', () => {
-        expect(referencesFromSelection(chapterData, [10, 12, 13])).toEqual([
-            { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 },
-            { bookId: 1, chapter: 1, startVerse: 4, endVerse: 5 },
-        ]);
-    });
-
-    test('reads the printed verse numbers rather than deriving them from indexes', () => {
-        // Indexes 12-13 are consecutive; the numbers they carry are 4 and 5.
-        expect(referencesFromSelection(chapterData, [12, 13])).toEqual([
-            { bookId: 1, chapter: 1, startVerse: 4, endVerse: 5 },
-        ]);
-    });
-
-    test('drops a run that lands on no loaded verse', () => {
-        expect(referencesFromSelection(chapterData, [99])).toEqual([]);
     });
 });
