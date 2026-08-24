@@ -18,15 +18,6 @@ const ascending = (a, b) => a - b;
 export const isVerseSelected = (verseIndexes, verseIndex) =>
     verseIndexes.includes(verseIndex);
 
-// Add or remove one verse, returning a new sorted array. The clicks arrive in
-// whatever order the reader makes them; keeping the set sorted here is what
-// lets everything downstream assume ascending order.
-export const toggleVerseIndex = (verseIndexes, verseIndex) => (
-    verseIndexes.includes(verseIndex)
-        ? verseIndexes.filter(index => index !== verseIndex)
-        : [...verseIndexes, verseIndex].sort(ascending)
-);
-
 // The selection cut into runs of consecutive indexes: [10,11,14] -> [[10,11],[14]].
 export const contiguousRuns = (verseIndexes) => {
     const sorted = [...verseIndexes].sort(ascending);

@@ -46,7 +46,6 @@ const NotesPanel = ({
     hoveredNoteId,
     scrollRequest,
     isComposingIdea,
-    pendingReferences,
     ideaGroups,
     onHoverNote,
     onOpenNote,
@@ -58,7 +57,7 @@ const NotesPanel = ({
     onRemoveChapterIdea,
     onSaveNote,
     onDeleteNote,
-    onAddReferences,
+    onAddPassage,
     onRemoveReference,
     onSaveIdeas,
 }) => {
@@ -133,11 +132,10 @@ const NotesPanel = ({
                     <NoteEditor
                         note={activeNote}
                         books={books}
-                        pendingReferences={pendingReferences}
                         ideaGroups={ideaGroups}
                         onSave={onSaveNote}
                         onDelete={onDeleteNote}
-                        onAddReferences={onAddReferences}
+                        onAddPassage={onAddPassage}
                         onRemoveReference={onRemoveReference}
                         onSaveIdeas={onSaveIdeas}
                         onClose={onCloseNote}

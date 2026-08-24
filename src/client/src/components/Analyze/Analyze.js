@@ -76,6 +76,12 @@ const Analyze = () => {
 
     const [hoveredNoteId, setHoveredNoteId] = useState(null);
     const [activeNoteId, setActiveNoteId] = useState(null);
+
+    // Which note "Add passage" armed the selection tray for, if any. The tray
+    // is the page's, so this is too: a run of picking can cross both panels and
+    // any number of chapters before it is committed, and nothing that happens
+    // in between may end it.
+    const [addingToNoteId, setAddingToNoteId] = useState(null);
     const [scrollRequest, setScrollRequest] = useState(null);
     const [isComposingIdea, setIsComposingIdea] = useState(false);
 
@@ -193,15 +199,21 @@ const Analyze = () => {
 
     // Anchoring a note while reading a chapter it does not yet touch returns
     // the updated note before the list containing it reloads; retain it so the
-    // new references appear in the editor immediately. Cleared after the loop
-    // for the same reason as above.
-    const handleAddReferences = useCallback(async (noteId, references) => {
+    // new references appear in the editor immediately. The basket is cleared
+    // after the loop for the same reason as above, and the arming goes with it
+    // — a run that has landed is over.
+    const handleAddToNote = useCallback(async (noteId, references) => {
         const anchored = await anchorAll(noteId, references);
         if (anchored) {
             retain(anchored);
         }
         clearSelection();
+        setAddingToNoteId(null);
     }, [anchorAll, retain, clearSelection]);
+
+    // Backing out leaves the basket standing: the verses were picked on
+    // purpose, and they are still a perfectly good new note.
+    const handleCancelAdd = useCallback(() => setAddingToNoteId(null), []);
 
     // The multi-select hands over the complete set, which goes straight to
     // PUT /notes/:id/ideas. Retained for the same reason a new reference is:
@@ -234,6 +246,13 @@ const Analyze = () => {
             setActiveNoteId(null);
         }
     }, [notes]);
+
+    // Arming names one note, and it only means anything while that note is the
+    // one open. Closing the editor or opening a different note therefore
+    // disarms the tray without anything having to remember to — a target that
+    // no longer matches is simply inert, which beats clearing the state from
+    // each of the four places that set activeNoteId.
+    const addTarget = addingToNoteId === activeNoteId ? addingToNoteId : null;
 
     // The panels are held back until the restore has settled as well as the
     // catalog: rendering them first would paint Genesis 1 for a moment, fetch a
@@ -279,7 +298,10 @@ const Analyze = () => {
                         books={books}
                         places={selectedPlaces}
                         references={selectionReferences}
+                        addTarget={addTarget}
                         onAddNote={handleCreateFromSelection}
+                        onAddToNote={handleAddToNote}
+                        onCancelAdd={handleCancelAdd}
                         onClearPlace={clearPlace}
                         onClearAll={clearSelection}
                     />
@@ -351,7 +373,6 @@ const Analyze = () => {
                             hoveredNoteId={hoveredNoteId}
                             scrollRequest={scrollRequest}
                             isComposingIdea={isComposingIdea}
-                            pendingReferences={selectionReferences}
                             ideaGroups={ideaGroups}
                             onHoverNote={setHoveredNoteId}
                             onOpenNote={setActiveNoteId}
@@ -363,7 +384,7 @@ const Analyze = () => {
                             onRemoveChapterIdea={removeImport}
                             onSaveNote={notes.updateNote}
                             onDeleteNote={handleDeleteNote}
-                            onAddReferences={handleAddReferences}
+                            onAddPassage={setAddingToNoteId}
                             onRemoveReference={notes.removeReference}
                             onSaveIdeas={handleSaveIdeas}
                         />

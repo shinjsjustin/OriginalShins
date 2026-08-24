@@ -450,6 +450,16 @@ const addNoteButton = () =>
 
 const clearAllButton = () => within(tray()).getByRole('button', { name: 'Clear all' });
 
+// Arming the tray for the open note, and the actions that appear once it is.
+// "Add note" is gone for the duration: while the tray is armed the primary
+// button commits the open note's next anchors, not a new note.
+const addPassageButton = () =>
+    within(panel('Notes')).getByRole('button', { name: 'Add passage' });
+
+const addToNoteButton = () => within(tray()).getByRole('button', { name: 'Add to note' });
+
+const cancelAddButton = () => within(tray()).getByRole('button', { name: 'Cancel' });
+
 const removePlaceButton = (label) =>
     within(tray()).getByRole('button', { name: `Remove ${label} from selection` });
 
@@ -1286,22 +1296,18 @@ describe('Note editor', () => {
         expect(panel('Notes')).toHaveTextContent('Light and dark');
     });
 
-    test('anchors the open note to the current selection', async () => {
-        // Arrange — a standalone note, and a selection made after opening it.
+    test('anchors the open note to passages picked after arming the tray', async () => {
+        // Arrange — a standalone note, and passages picked after arming it.
         addNote({ title: 'Floating thought' });
 
         await renderAnalyze();
         await waitForPanels();
         await openFirstNote();
 
-        expect(within(panel('Notes')).getByRole('button', { name: 'Add reference from selection' }))
-            .toBeDisabled();
-
-        // Act
+        // Act — the editor's button arms; the tray commits.
+        await clickAndSettle(addPassageButton());
         await selectVerses('Passage', 1011);
-        await clickAndSettle(
-            within(panel('Notes')).getByRole('button', { name: 'Add Genesis 1:2' })
-        );
+        await clickAndSettle(addToNoteButton());
 
         // Assert
         const added = requestsMatching(r => r.method === 'POST' && r.url.includes('/references'));
@@ -1343,8 +1349,9 @@ describe('Note editor', () => {
         await clickAndSettle(within(panel('Passage')).getByRole('button', { name: 'Next chapter' }));
         await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
 
+        await clickAndSettle(addPassageButton());
         await selectVerses('Passage', 1020);
-        await clickAndSettle(within(panel('Notes')).getByRole('button', { name: 'Add Genesis 2:1' }));
+        await clickAndSettle(addToNoteButton());
 
         // Assert — highlighted in Genesis 2...
         await waitFor(() => expect(versesTinted('Passage')).toBe(1));
@@ -1360,16 +1367,18 @@ describe('Note editor', () => {
         expect(versesTinted('Passage')).toBe(1);
     });
 
-    test('anchors an open note to two chapters at once from one selection', async () => {
-        // The button counts past one reference, and it must stay live while the
-        // reader is on a chapter the note does not touch — reaching across that
-        // boundary is what the selection is for.
+    test('anchors an open note to two chapters at once from one armed run', async () => {
+        // The armed tray survives navigation: the reader picks a verse here,
+        // moves to a chapter the note has nothing in, picks another, and
+        // commits both at once. Reaching across that boundary is what the
+        // selection is for.
         addNote({ title: 'Across the boundary',
                   reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
 
         await renderAnalyze();
         await waitForPanels();
         await openFirstNote();
+        await clickAndSettle(addPassageButton());
 
         // Act — a verse here, then a verse in a chapter the note has nothing in.
         await selectVerses('Passage', 1011);
@@ -1377,11 +1386,10 @@ describe('Note editor', () => {
         await waitFor(() => expect(titleOf('Passage')).toBe('Genesis 2'));
         await selectVerses('Passage', 1020);
 
-        const addFromSelection = within(panel('Notes'))
-            .getByRole('button', { name: 'Add 2 references from selection' });
-        expect(addFromSelection).toBeEnabled();
+        expect(trayPlaces()).toEqual(['Genesis 1:2', 'Genesis 2:1']);
+        expect(addToNoteButton()).toBeEnabled();
 
-        await clickAndSettle(addFromSelection);
+        await clickAndSettle(addToNoteButton());
 
         // Assert — both anchors written, onto the one note.
         const added = requestsMatching(r => r.method === 'POST' && r.url.includes('/references'));
@@ -1419,6 +1427,128 @@ describe('Note editor', () => {
 // rather than adding one link at a time, so what these tests watch is the body
 // of that request: it must always be the complete membership the checkboxes
 // show, including the empty one.
+describe('Adding passages to an open note', () => {
+    const openFirstNote = async () => {
+        await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
+        await clickAndSettle(noteRows()[0]);
+    };
+
+    const armFor = async (title) => {
+        addNote({ title });
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+        await clickAndSettle(addPassageButton());
+    };
+
+    test('arms the tray with a prompt before anything has been picked', async () => {
+        // An armed mode with nothing selected must still be visible: otherwise
+        // the reader is picking passages with nothing on screen to say so, and
+        // nothing to press to back out.
+        await armFor('Floating thought');
+
+        expect(tray()).not.toBeNull();
+        expect(tray()).toHaveTextContent('Click passages to add to this note');
+        expect(trayPlaces()).toEqual([]);
+        expect(addToNoteButton()).toBeDisabled();
+        expect(cancelAddButton()).toBeInTheDocument();
+
+        // The new-note action is gone for the duration — while the tray is
+        // armed the selection belongs to the open note.
+        expect(within(tray()).queryByRole('button', { name: 'Add note' })).toBeNull();
+    });
+
+    test('takes passages picked in the compare panel', async () => {
+        // The basket already spans panels; arming must not narrow it to the
+        // one the note's chapter is showing in.
+        await armFor('Floating thought');
+
+        await selectVerses('Compare', 40010);
+        expect(trayPlaces()).toEqual(['Matthew 1:1']);
+
+        await clickAndSettle(addToNoteButton());
+
+        const added = requestsMatching(r => r.method === 'POST' && r.url.includes('/references'));
+        expect(added).toHaveLength(1);
+        expect(added[0].body).toEqual({ bookId: 40, chapter: 1, startVerse: 1, endVerse: 1 });
+        await waitFor(() => expect(versesTinted('Compare')).toBe(1));
+    });
+
+    test('Cancel disarms the tray and leaves the selection standing', async () => {
+        await armFor('Floating thought');
+        await selectVerses('Passage', 1010);
+
+        // Act
+        await clickAndSettle(cancelAddButton());
+
+        // Assert — nothing written, the verses still picked, and the tray back
+        // to offering a new note.
+        expect(requestsMatching(r => r.method === 'POST' && r.url.includes('/references')))
+            .toHaveLength(0);
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
+        expect(versesSelected('Passage')).toBe(1);
+        expect(addNoteButton()).toBeInTheDocument();
+    });
+
+    test('Clear all empties the basket without disarming', async () => {
+        await armFor('Floating thought');
+        await selectVerses('Passage', 1010);
+
+        await clickAndSettle(clearAllButton());
+
+        // Still armed, so the tray stays up on its prompt rather than vanishing.
+        expect(trayPlaces()).toEqual([]);
+        expect(versesSelected('Passage')).toBe(0);
+        expect(tray()).toHaveTextContent('Click passages to add to this note');
+        expect(cancelAddButton()).toBeInTheDocument();
+    });
+
+    test('closing the note disarms the tray', async () => {
+        // The target is the open note. Close it and there is nothing left to
+        // add to, so the tray goes back to offering a new note.
+        await armFor('Floating thought');
+        await selectVerses('Passage', 1010);
+
+        await clickAndSettle(within(panel('Notes')).getByRole('button', { name: '← All notes' }));
+
+        expect(addNoteButton()).toBeInTheDocument();
+        expect(trayPlaces()).toEqual(['Genesis 1:1']);
+    });
+
+    test('opening a different note disarms the tray', async () => {
+        // The arming names one note. Another note opened over it is not that
+        // note, and the tray must not quietly re-aim at it.
+        addNote({ title: 'First note' });
+        addNote({ title: 'Second note' });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await waitFor(() => expect(noteRows().length).toBe(2));
+
+        await clickAndSettle(noteRows()[0]);
+        await clickAndSettle(addPassageButton());
+        await selectVerses('Passage', 1010);
+        expect(addToNoteButton()).toBeInTheDocument();
+
+        await clickAndSettle(within(panel('Notes')).getByRole('button', { name: '← All notes' }));
+        await clickAndSettle(noteRows()[1]);
+
+        expect(addNoteButton()).toBeInTheDocument();
+    });
+
+    test('the tray disappears once the passages have landed', async () => {
+        await armFor('Floating thought');
+        await selectVerses('Passage', 1010);
+
+        await clickAndSettle(addToNoteButton());
+
+        // Committed, cleared and disarmed — an armed empty tray left behind
+        // would read as a second run waiting to be made.
+        await waitFor(() => expect(tray()).toBeNull());
+        expect(panel('Notes')).toHaveTextContent('Genesis 1:1');
+    });
+});
+
 describe('Linking a note to ideas', () => {
     const openFirstNote = async () => {
         await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));

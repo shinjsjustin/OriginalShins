@@ -1,24 +1,4 @@
-import { contiguousRuns, isVerseSelected, toggleVerseIndex } from './selectionRuns';
-
-describe('toggleVerseIndex', () => {
-    test('adds a verse that was not selected', () => {
-        expect(toggleVerseIndex([], 11)).toEqual([11]);
-    });
-
-    test('removes a verse that was already selected', () => {
-        expect(toggleVerseIndex([10, 11], 10)).toEqual([11]);
-    });
-
-    test('keeps the result sorted however the clicks arrived', () => {
-        expect(toggleVerseIndex([13, 10], 11)).toEqual([10, 11, 13]);
-    });
-
-    test('does not modify the array it is given', () => {
-        const selected = [10];
-        toggleVerseIndex(selected, 11);
-        expect(selected).toEqual([10]);
-    });
-});
+import { contiguousRuns, isVerseSelected } from './selectionRuns';
 
 describe('isVerseSelected', () => {
     test('is true only for a verse in the set', () => {

@@ -419,6 +419,17 @@
   white-space: nowrap;
 }
 
+/* Stands in for the place list while the tray is armed for a note and nothing
+   has been picked yet. Takes the slack the list would have taken, so the
+   actions stay pinned to the far end either way. */
+.analyze-selection-tray-prompt {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--on-ground-soft);
+  font-size: var(--font-base);
+  font-style: italic;
+}
+
 /* The places, in canonical order. One chip per chapter holding a selection. */
 .analyze-selection-places {
   display: flex;
@@ -481,7 +492,7 @@
               color var(--analyze-transition);
 }
 
-.analyze-selection-button:hover {
+.analyze-selection-button:hover:not(:disabled) {
   background-color: var(--ground-hover);
   color: var(--on-ground);
 }
@@ -493,10 +504,18 @@
   font-weight: 500;
 }
 
-.analyze-selection-button--primary:hover {
+.analyze-selection-button--primary:hover:not(:disabled) {
   background-color: var(--lapis-lit);
   color: var(--ground-deep);
   border-color: var(--lapis-lit);
+}
+
+/* Dimmed rather than hidden, as on Thoughts: "Add to note" is the action the
+   armed tray is being built toward, and a button that vanished until the first
+   verse was clicked would take the shape of the tray with it. */
+.analyze-selection-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────── */

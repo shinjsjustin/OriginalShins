@@ -3,19 +3,6 @@ import { describeReference } from './navigation';
 import { renderMarkdown } from './markdown';
 import MultiSelect from './MultiSelect';
 
-// What the "add from selection" button says. A selection with a gap in it — or
-// one spanning several chapters — is several references, and naming them all
-// would outrun the button, so past one it is counted rather than listed.
-const describeSelection = (books, references) => {
-    if (references.length === 0) {
-        return 'Add reference from selection';
-    }
-    if (references.length === 1) {
-        return `Add ${describeReference(books, references[0])}`;
-    }
-    return `Add ${references.length} references from selection`;
-};
-
 // One note, opened from the notes panel.
 //
 // Two modes rather than a live-saving form: read mode renders the markdown, and
@@ -30,11 +17,10 @@ const describeSelection = (books, references) => {
 const NoteEditor = ({
     note,
     books,
-    pendingReferences,
     ideaGroups,
     onSave,
     onDelete,
-    onAddReferences,
+    onAddPassage,
     onRemoveReference,
     onSaveIdeas,
     onClose,
@@ -162,18 +148,21 @@ const NoteEditor = ({
                     ))}
                 </ul>
 
-                {/* Disabled on an empty selection and on nothing else. The
-                    references come from the page's whole basket, not from
-                    whatever chapter is on screen, so this stays live while the
-                    reader is somewhere the note does not touch — anchoring
-                    across that boundary is the point of selecting there. */}
+                {/* Arms the page's selection for this note; it commits
+                    nothing itself. The passages are whatever the reader clicks
+                    next — in either scripture panel, in any chapter — and the
+                    tray above the panels is what names them and writes them.
+                    Anchoring across a chapter boundary is the point of picking
+                    them there, so the run outlives any navigation it takes.
+
+                    Never disabled: an empty selection is the ordinary way in,
+                    not a reason to refuse. */}
                 <button
                     type="button"
                     className="analyze-editor-button"
-                    disabled={pendingReferences.length === 0}
-                    onClick={() => onAddReferences(note.id, pendingReferences)}
+                    onClick={() => onAddPassage(note.id)}
                 >
-                    {describeSelection(books, pendingReferences)}
+                    Add passage
                 </button>
             </section>
 
