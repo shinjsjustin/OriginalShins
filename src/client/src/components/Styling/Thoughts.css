@@ -583,6 +583,14 @@
      3  the centred idea, above the ring it is the subject of
      4  a note under the cursor — over the idea too, because a card being
         pointed at is the card being read
+     5  the open passage fan (from the topics field's own rules)
+     6  the note that fan came out of
+     7  a passage under the cursor, over the arc it is sitting in
+
+   Five upwards are the fan's, shared with the topics field: one set of rules
+   opens both blooms, so the two canvases cannot drift into disagreeing about
+   which card is on top. The passages land above the centred idea on purpose —
+   they are what the reader asked to see, and the idea is what they are about.
    ──────────────────────────────────────────────────────────────────────────── */
 
 .thoughts-orbit {
@@ -619,11 +627,17 @@
   }
 }
 
-.thoughts-orbit .thoughts-bubble {
+/* Every card the ring itself draws — and not one card of a passage fan.
+   A petal is opened by a CLASS FLIP, the way the topics field's are: it is
+   mounted closed, and `.thoughts-cluster.is-active` transitions it out. An
+   animation outranks a transition in the cascade, so letting `orbit-in` reach a
+   petal would play it open the instant it mounted and then leave the class flip
+   with nothing to do — every note's passages, visible at once, over the ring. */
+.thoughts-orbit .thoughts-bubble:not(.thoughts-fan-item) {
   animation: orbit-in var(--thoughts-open-ms) var(--thoughts-ease) var(--card-delay, 0ms) backwards;
 }
 
-.thoughts-orbit.is-closing .thoughts-bubble {
+.thoughts-orbit.is-closing .thoughts-bubble:not(.thoughts-fan-item) {
   animation: none;
   opacity: 0;
   transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(var(--card-from-scale, 0.55));
@@ -727,6 +741,16 @@
   z-index: 4;
 }
 
+/* The note whose passages are open, lifted the way a spotlit topic is. Its
+   fan opens INWARD, over the centred idea, so the card has to read as the
+   subject of what is being drawn over the middle of the canvas. */
+.thoughts-cluster.is-active .thoughts-orbit-note {
+  --bubble-lift: 1.08;
+  --bubble-shadow: var(--shadow-lg);
+
+  z-index: 6;
+}
+
 /* The spec's three lines and its "…". The clamp is the browser's because only
    the browser knows where three lines of this width end — the card is handed
    the raw body and cuts nothing itself. */
@@ -740,6 +764,83 @@
   white-space: pre-wrap;
   color: var(--text-secondary);
   line-height: 1.35;
+}
+
+/* ─── A passage on the fan ───────────────────────────────────────────────── */
+
+/* The fourth kind of card, and the only one that exists in this view alone: a
+   note's anchor with the scripture it points at, blooming out of the note the
+   way an idea blooms out of a topic.
+
+   Dark, like the fanned idea cards on the topics field and for the same
+   reason. A bloom is the page's foreground while it is open and the canvas
+   behind it has faded to almost nothing, so the petals have to be the lit
+   thing — and paper petals over a paper backdrop would need a border to say
+   even that they were cards. It also keeps a passage from reading as another
+   note: a note card is paper edged in gold, and these two are never more than
+   a few hundred pixels apart. */
+.thoughts-bubble--passage {
+  /* The ring of near-black the fanned idea cards carry, for their reason: two
+     of these arcs can cross, and --shadow-md alone smears two dark cards into
+     one dark mass with no edge in it. */
+  --bubble-shadow: 0 0 0 1px var(--ground-deep), var(--shadow-md);
+
+  background-color: var(--ground-raised);
+  border-color: var(--ground-line);
+  color: var(--on-ground);
+}
+
+/* Scripture, so it reads from the top left like the note bodies and the
+   centred idea do — a passage centred in its card is a ragged block. */
+.thoughts-bubble--passage .thoughts-bubble-face {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  text-align: left;
+}
+
+/* The reference is the one gold line on the card, because it is the only part
+   of it the reader wrote: everything under it is the text of the passage.
+   `flex: 0 0 auto` for the reason the ring's titles have it — the body is
+   longer than the card in the normal case, and without it the label is what
+   gets crushed. */
+.thoughts-bubble--passage .thoughts-bubble-title {
+  flex: 0 0 auto;
+  color: var(--gold-lit);
+  font-size: calc(var(--font-sm) * var(--bubble-scale, 1));
+  letter-spacing: 0.02em;
+}
+
+/* It scrolls rather than clipping. A card sized for the longest passage anyone
+   might anchor would be a panel, and a passage cut off mid-sentence with no way
+   to see the rest would be worse than one that can be read to the end. */
+.thoughts-passage-text {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  color: var(--on-ground-soft);
+  font-size: calc(var(--font-sm) * var(--bubble-scale, 1));
+  line-height: 1.45;
+}
+
+.thoughts-passage-verse {
+  margin: 0 0 var(--space-xs);
+}
+
+.thoughts-passage-verse:last-child {
+  margin-bottom: 0;
+}
+
+/* Raised and a size down, the way a verse number is set in a printed bible:
+   the passage has to read as prose with markers in it and not as a numbered
+   list, which is what a full-size number at the head of each line would make
+   of it. */
+.thoughts-passage-number {
+  margin-right: 5px;
+  color: var(--on-ground-faint);
+  font-size: 0.8em;
+  font-weight: 600;
+  vertical-align: 0.35em;
 }
 
 /* ─── An idea with nothing under it yet ──────────────────────────────────── */

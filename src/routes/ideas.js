@@ -18,6 +18,7 @@ const {
     updateIdea,
     removeIdea,
 } = require('../lib/ideas');
+const { findPassagesForNotes } = require('../lib/passages');
 const { removePinsForItem } = require('../lib/pins');
 const { withTopics } = require('../lib/ideaTopics');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
@@ -96,6 +97,44 @@ router.get('/:id', async (req, res) => {
         res.status(200).json({ idea: { ...withItsTopics, notes } });
     } catch (err) {
         console.error(`GET /api/ideas/${req.params.id} error:`, err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /api/ideas/:id/passages — the scripture behind every note under one
+// idea: one entry per note reference, carrying its book name and its verses.
+//
+// The Thoughts page is what needs this. Its idea view rings an idea with its
+// notes and blooms each note into the passages it is anchored to — and that
+// page shows no scripture anywhere else, so a reference that arrived as
+// "John 3:16-18" alone would be a card naming a passage and showing none of it.
+//
+// One request for the whole ring rather than one per note. The view already
+// costs 1 + N requests (the idea, then each note's body); a passage endpoint
+// per note would have made it 1 + 2N for a payload the server can gather in two
+// queries. See src/lib/passages.js for why the verses are not simply part of
+// the reference shape everywhere.
+router.get('/:id/passages', async (req, res) => {
+    const ideaId = parseRowId(req.params.id);
+    if (ideaId === null) {
+        return res.status(400).json({ error: 'id must be a positive integer' });
+    }
+
+    try {
+        // findIdeaById scopes by user_id, so someone else's idea is a 404 here
+        // — and the check is what tells "no notes yet" apart from "not yours",
+        // since both would otherwise be an empty list.
+        const idea = await findIdeaById(req.user.id, ideaId);
+        if (!idea) {
+            return res.status(404).json({ error: 'Idea not found' });
+        }
+
+        const notes = await findNotesForIdea(req.user.id, ideaId);
+        const passages = await findPassagesForNotes(req.user.id, notes.map(note => note.id));
+
+        res.status(200).json({ passages });
+    } catch (err) {
+        console.error(`GET /api/ideas/${req.params.id}/passages error:`, err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

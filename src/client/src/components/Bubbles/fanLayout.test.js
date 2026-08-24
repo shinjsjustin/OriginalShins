@@ -319,3 +319,68 @@ describe('buildFan — a fan that is not what it should be', () => {
         expect(buildFan(5, CENTRE, canvas)).toMatchObject(EMPTY);
     });
 });
+
+// ─── A fan of something other than idea cards ───────────────────────────────
+//
+// The idea orbit blooms a note into the passages it is anchored to, using this
+// same arc at a card size of its own. The parameter exists so that there is one
+// arc rather than two, so what is checked here is that the override actually
+// reaches the geometry — a `style` that were quietly ignored would put passage
+// cards on the idea fan's radius, overlapping each other, and nothing in the
+// topics field's tests would notice.
+describe('a caller-supplied card style', () => {
+    const BIG = Object.freeze({
+        card: { width: 232, height: 156 },
+        scales: { full: 1, tight: 0.8 },
+        tightenThreshold: 3,
+        rowCapacity: 5,
+        radius: { first: 244, second: 392 },
+        spread: { perCard: Math.PI / 4, max: Math.PI * 1.15 },
+    });
+
+    test('sizes the cards and sets the radius from it', () => {
+        // Arrange / Act
+        const fan = buildFan(3, CENTRE, CANVAS, BIG);
+
+        // Assert
+        expect(fan.cards[0]).toMatchObject({ width: 232, height: 156 });
+        expect(radiusOf(fan.cards[0], CENTRE)).toBeCloseTo(244, RADIUS_PRECISION);
+    });
+
+    test('opens the arc at its own step', () => {
+        // Arrange / Act — three cards, two gaps, at the style's own perCard.
+        const fan = buildFan(3, CENTRE, CANVAS, BIG);
+
+        // Assert
+        stepsIn(fan.cards).forEach(step => expect(step).toBeCloseTo(Math.PI / 4, 5));
+    });
+
+    test('fills one arc at its own capacity, then opens a second', () => {
+        // Arrange / Act
+        const fan = buildFan(7, CENTRE, CANVAS, BIG);
+
+        // Assert
+        expect(rowOf(fan, 0)).toHaveLength(BIG.rowCapacity);
+        expect(rowOf(fan, 1)).toHaveLength(2);
+        expect(fan.overflow).toMatchObject({ count: 2 });
+    });
+
+    test('tightens at its own threshold', () => {
+        // Arrange / Act
+        const roomy = buildFan(BIG.tightenThreshold, CENTRE, CANVAS, BIG);
+        const crowded = buildFan(BIG.tightenThreshold + 1, CENTRE, CANVAS, BIG);
+
+        // Assert
+        expect(roomy.scale).toBe(BIG.scales.full);
+        expect(crowded.scale).toBe(BIG.scales.tight);
+    });
+
+    test('leaves the topics field alone when nothing is passed', () => {
+        // Arrange / Act
+        const fan = buildFan(3, CENTRE, CANVAS);
+
+        // Assert
+        expect(fan.cards[0]).toMatchObject({ width: FAN_CARD.width, height: FAN_CARD.height });
+        expect(radiusOf(fan.cards[0], CENTRE)).toBeCloseTo(FAN_RADIUS.first, RADIUS_PRECISION);
+    });
+});

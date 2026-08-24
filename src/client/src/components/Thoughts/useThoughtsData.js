@@ -30,6 +30,14 @@ import { LINK_HINTS } from './linkRules';
 // full. That is 1 + N requests on entering an idea, N being the spec's ~20
 // notes per idea; it is the price of not adding an endpoint, it is paid once
 // per idea opened, and the N are in flight together.
+//
+// The passages are the one thing that IS an endpoint of its own, and it is one
+// request for the whole ring rather than one per note — see
+// GET /api/ideas/:id/passages. A note carries WHERE it is anchored and never
+// what the passage says, so the verses behind those anchors have to be asked
+// for; asking per note would have doubled the N above for a payload the server
+// gathers in two queries. They are attached to the notes here, so nothing
+// downstream has to join two lists by hand.
 const TOPICS_PATH = '/topics';
 const IDEAS_PATH = '/ideas';
 
@@ -148,6 +156,14 @@ const linkFailureMessage = (group, title, done, total, err) => {
         : `Linked ${done} of ${total}, then could not link the ${label}. ${err.message}`;
 };
 
+// Passages arrive as one flat list for the whole idea, each carrying the
+// `noteId` it belongs to. Grouped in one pass here rather than filtered per
+// note, which would be a scan of the list for every card on the ring.
+const groupByNoteId = (passages) => passages.reduce((byNoteId, passage) => ({
+    ...byNoteId,
+    [passage.noteId]: [...(byNoteId[passage.noteId] || []), passage],
+}), {});
+
 const loadNotesForIdea = async (ideaId, signal) => {
     if (ideaId === null) return [];
 
@@ -156,12 +172,20 @@ const loadNotesForIdea = async (ideaId, signal) => {
 
     // Fetched in the order the idea listed them, which is their sort_order —
     // the orbit's ring order is the stored one (see the spec's out-of-scope
-    // list), so it must survive the second round trip.
-    const details = await Promise.all(
-        rows.map(row => fetchJson(`/notes/${row.id}`, { signal }))
-    );
+    // list), so it must survive the second round trip. The passages go out
+    // alongside the bodies rather than after them: neither read depends on the
+    // other, and the ring should not open a beat later than it has to.
+    const [details, passagePayload] = await Promise.all([
+        Promise.all(rows.map(row => fetchJson(`/notes/${row.id}`, { signal }))),
+        fetchJson(`/ideas/${ideaId}/passages`, { signal }),
+    ]);
 
-    return details.map(detail => detail.note);
+    const passagesByNoteId = groupByNoteId(passagePayload.passages || []);
+
+    return details.map(detail => ({
+        ...detail.note,
+        passages: passagesByNoteId[detail.note.id] || [],
+    }));
 };
 
 const loadThoughts = async (ideaId, signal) => {

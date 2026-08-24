@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef } from 'react';
 import BubbleCard from './BubbleCard';
+import BloomCluster from './BloomCluster';
+import useBloom from './useBloom';
 import buildField, { TOPIC_CARD } from './fieldLayout';
 import buildFan from './fanLayout';
 import useCanvasSize from './useCanvasSize';
-import { centreOf, collapseOnto, relativeTo } from './cardGeometry';
+import { centreOf } from './cardGeometry';
 import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
 import { countLabel } from '../Thoughts/format';
 // The cards' own styles, which Thoughts.css owns. Imported here rather than by
@@ -28,47 +30,17 @@ import '../Styling/Thoughts.css';
 // which is a page's way of saying this field has no pinning in it rather than
 // a page having to pass two no-ops.
 //
-// ── The cluster is the hover target, not the card ──────────────────────────
+// ── The hover region, the lock, and the fan are not this file's ────────────
 //
-// The fan opens at a radius of 190px from the topic's centre, which means the
-// reader's cursor has to cross ~90px of empty canvas to reach the idea it is
-// aiming at. If the hover lived on the topic card, the fan would close halfway
-// through that journey and the cards would be unreachable — the layout would
-// be drawing a menu that nothing can select from.
+// A topic, its fan and the gaps between them are one hit region that grows
+// when it opens, and which topic is open is hover-plus-a-lock. Both of those
+// are shared with the idea orbit, which blooms a note into its passages the
+// same way, so they live in BloomCluster and useBloom — read those two for why
+// the region is shaped the way it is, and why a click has to hold it open
+// before a petal can be reached.
 //
-// So a topic, its fan, and the gaps between them are ONE element with ONE pair
-// of enter/leave handlers. At rest that element is exactly the topic's card, so
-// thirty resting clusters do not overlap each other and empty canvas opens
-// nothing. On activation it grows to the bounding box of everything the cluster
-// is currently drawing, and the gaps become part of the target. That is the
-// whole trick, and it is why there are no per-card hover handlers below.
-//
-// ── Why the grown cluster does not trap the cursor ─────────────────────────
-//
-// An open cluster's box is wide enough to cover its neighbours, and a hit
-// region sitting on top of a neighbour is a topic the reader can no longer
-// reach — hovering another topic moves the spotlight to it, and clicking one
-// locks it open, so a box that swallowed its neighbours would take both away.
-// The fix is stacking order rather than geometry: the
-// cluster element takes no `z-index`, so it does not create a stacking context
-// and does not paint above anything; the cards inside it declare their own,
-// and they land in the canvas's stacking context alongside every other card.
-// Neighbouring topic cards therefore sit ABOVE the open cluster's empty region
-// and stay hoverable, while the open fan sits above them and stays clickable.
-// Nothing on the cluster element may ever set `transform`, `opacity`, `filter`
-// or `will-change` — any of those would make it a stacking context and put the
-// dead zone back.
-//
-// ── Hover opens a fan; a click sticks it open ──────────────────────────────
-//
-// Hovering is enough to READ a topic's ideas and not enough to REACH one. The
-// petals sit on an arc wide enough to overlap the neighbouring topic cards,
-// which by the paragraph above paint on top of the open cluster's empty
-// region — so the cursor's trip out to a petal crosses cards belonging to
-// other clusters. Clicking the topic locks its fan open so that trip can be
-// made, and while the lock is held no amount of hovering elsewhere disturbs
-// it. Only a second click on the same topic, a click on a different one, or
-// Esc lets it go.
+// What stays here is everything about topics and ideas in particular: which
+// clusters there are, where they sit, and what their cards do.
 //
 // ── Every fan is mounted, all the time ─────────────────────────────────────
 //
@@ -85,11 +57,6 @@ import '../Styling/Thoughts.css';
 
 export const UNFILED_ID = 'unfiled';
 export const UNFILED_TITLE = 'Unfiled ideas';
-
-// How much later each card leaves the topic than the one before it. Small on
-// purpose: enough that the fan sweeps rather than appears, short enough that
-// the last card of fifteen is not a quarter-second behind the first.
-const FAN_STAGGER_MS = 16;
 
 /**
  * The clusters the field draws: one per topic, plus the unfiled pseudo-bubble.
@@ -129,28 +96,6 @@ export const buildClusters = (topics, ideas) => {
         : [...clusters, { id: UNFILED_ID, kind: 'unfiled', title: UNFILED_TITLE, ideas: unfiled }];
 };
 
-/**
- * The cluster's hit region: its topic card at rest, everything it is drawing
- * when it is open.
- *
- * Row-1 cards are counted only once the chip has been pressed, because until
- * then they are sitting under the chip — a region stretched to where they will
- * eventually be would be a large piece of empty canvas that keeps the fan open.
- */
-const boundsFor = (topicBox, fan, isActive, isExpanded) => {
-    if (!isActive) return topicBox;
-
-    const boxes = [topicBox, ...fan.cards.filter(card => card.row === 0 || isExpanded)];
-    if (fan.overflow) boxes.push(fan.overflow);
-
-    const left = Math.min(...boxes.map(box => box.x));
-    const top = Math.min(...boxes.map(box => box.y));
-    const right = Math.max(...boxes.map(box => box.x + box.width));
-    const bottom = Math.max(...boxes.map(box => box.y + box.height));
-
-    return { x: left, y: top, width: right - left, height: bottom - top };
-};
-
 /** One topic, its fan, and the region that holds the two together. */
 const TopicCluster = ({
     cluster,
@@ -167,10 +112,6 @@ const TopicCluster = ({
     onChipClick,
     onSelectIdea,
 }) => {
-    const bounds = boundsFor(topicBox, fan, isActive, isExpanded);
-    const topicCentre = centreOf(topicBox);
-    const chipCentre = fan.overflow ? centreOf(fan.overflow) : topicCentre;
-
     // Nothing at all when the page did not ask for pinning, rather than a pin
     // wired to a no-op: BubbleCard draws no toggle unless it is handed one, so
     // the absent props have to stay absent all the way down.
@@ -181,86 +122,48 @@ const TopicCluster = ({
         }
         : {});
 
-    const classes = [
-        'thoughts-cluster',
-        isActive ? 'is-active' : '',
-        isExpanded ? 'is-expanded' : '',
-    ].filter(Boolean).join(' ');
-
     return (
-        <div
-            className={classes}
-            style={{
-                left: `${bounds.x}px`,
-                top: `${bounds.y}px`,
-                width: `${bounds.width}px`,
-                height: `${bounds.height}px`,
+        <BloomCluster
+            anchorBox={topicBox}
+            fan={fan}
+            isActive={isActive}
+            isExpanded={isExpanded}
+            onEnter={() => onEnter(cluster.id)}
+            onLeave={() => onLeave(cluster.id)}
+            onChipClick={() => onChipClick(cluster.id)}
+            renderAnchor={(position) => (
+                <BubbleCard
+                    kind={cluster.kind}
+                    title={cluster.title}
+                    subtitle={countLabel(cluster.ideas.length, 'idea')}
+                    position={position}
+                    scale={topicBox.width / TOPIC_CARD.width}
+                    isSelected={isActive}
+                    isFaded={isFaded}
+                    onActivate={() => onTopicClick(cluster.id)}
+                    {...(cluster.kind === 'topic'
+                        ? pinPropsFor('topic', cluster.id, cluster.title)
+                        : {})}
+                />
+            )}
+            renderPetal={(card, petal) => {
+                const idea = cluster.ideas[card.index];
+                if (!idea) return null;
+
+                const title = idea.title || UNTITLED_IDEA_LABEL;
+
+                return (
+                    <BubbleCard
+                        key={idea.id}
+                        kind="idea"
+                        title={title}
+                        onActivate={() => onSelectIdea(idea.id)}
+                        {...pinPropsFor('idea', idea.id, title)}
+                        {...petal}
+                    />
+                );
             }}
-            onMouseEnter={() => onEnter(cluster.id)}
-            onMouseLeave={() => onLeave(cluster.id)}
-        >
-            <BubbleCard
-                kind={cluster.kind}
-                title={cluster.title}
-                subtitle={countLabel(cluster.ideas.length, 'idea')}
-                position={relativeTo(bounds, topicBox)}
-                scale={topicBox.width / TOPIC_CARD.width}
-                isSelected={isActive}
-                isFaded={isFaded}
-                onActivate={() => onTopicClick(cluster.id)}
-                {...(cluster.kind === 'topic'
-                    ? pinPropsFor('topic', cluster.id, cluster.title)
-                    : {})}
-            />
-
-            <div className="thoughts-fan">
-                {fan.cards.map(card => {
-                    const idea = cluster.ideas[card.index];
-                    if (!idea) return null;
-
-                    const isStowed = card.row === 1 && !isExpanded;
-                    const title = idea.title || UNTITLED_IDEA_LABEL;
-
-                    return (
-                        <BubbleCard
-                            key={idea.id}
-                            kind="idea"
-                            title={title}
-                            position={relativeTo(bounds, card)}
-                            scale={fan.scale}
-                            onActivate={() => onSelectIdea(idea.id)}
-                            {...pinPropsFor('idea', idea.id, title)}
-                            className={`thoughts-fan-item${isStowed ? ' is-stowed' : ''}`}
-                            style={{
-                                ...collapseOnto(isStowed ? chipCentre : topicCentre, card),
-                                // Cards nearest the start of the arc leave
-                                // first, so the fan reads as one movement out
-                                // of the topic rather than fifteen at once.
-                                '--card-delay': `${card.index * FAN_STAGGER_MS}ms`,
-                            }}
-                        />
-                    );
-                })}
-
-                {fan.overflow && (
-                    <button
-                        type="button"
-                        className="thoughts-fan-chip"
-                        aria-expanded={isExpanded}
-                        style={{
-                            left: `${fan.overflow.x - bounds.x}px`,
-                            top: `${fan.overflow.y - bounds.y}px`,
-                            width: `${fan.overflow.width}px`,
-                            height: `${fan.overflow.height}px`,
-                            ...collapseOnto(topicCentre, fan.overflow),
-                        }}
-                        onClick={() => onChipClick(cluster.id)}
-                    >
-                        +{fan.overflow.count} more
-                    </button>
-                )}
-            </div>
-        </div>
+        />
     );
 };
 
@@ -285,16 +188,7 @@ const TopicIdeaField = ({
     const canvasRef = useRef(null);
     const canvas = useCanvasSize(canvasRef);
 
-    const [hoveredId, setHoveredId] = useState(null);
-    const [lockedId, setLockedId] = useState(null);
-    const [expandedId, setExpandedId] = useState(null);
-
-    // A lock outranks the pointer: that is what "locks the fan open" means. It
-    // is why leaving a locked cluster leaves it open, and why hovering any
-    // other one while a lock is held changes nothing on screen. `hoveredId` is
-    // still tracked underneath, so that releasing the lock hands the spotlight
-    // to whatever the cursor is actually on rather than closing everything.
-    const activeId = lockedId !== null ? lockedId : hoveredId;
+    const bloom = useBloom();
 
     const clusters = useMemo(() => buildClusters(topics, ideas), [topics, ideas]);
     const field = useMemo(() => buildField(clusters, canvas), [clusters, canvas]);
@@ -303,49 +197,6 @@ const TopicIdeaField = ({
     const fans = useMemo(() => field.map(
         (box, index) => buildFan(clusters[index].ideas.length, centreOf(box), canvas)
     ), [field, clusters, canvas]);
-
-    // A hover is recorded whatever else is going on, but it does not touch the
-    // lock. It used to: hovering another topic was a third way to unlock,
-    // alongside a second click and Esc — and it defeated the lock's whole
-    // purpose. The fan's petals sit on an arc wide enough to overlap the
-    // neighbouring topic cards, and those cards paint ABOVE the open cluster's
-    // region by design, so the cursor's trip out to a petal crosses them. With
-    // hover unlocking, that crossing shut the fan a card short of the one the
-    // reader was reaching for, which is the exact journey the lock exists to
-    // make possible. Ending it is now a deliberate act and nothing else: a
-    // second click on the locked topic, a click on a different one, or Esc.
-    const handleEnter = useCallback((id) => {
-        setHoveredId(id);
-    }, []);
-
-    const handleLeave = useCallback((id) => {
-        setHoveredId(hovered => (hovered === id ? null : hovered));
-    }, []);
-
-    // Click to stick, click again to unstick — and clicking a different topic
-    // moves the lock rather than adding a second one, so there is never more
-    // than one fan held open.
-    const handleTopicClick = useCallback((id) => {
-        setLockedId(locked => (locked === id ? null : id));
-    }, []);
-
-    const handleChipClick = useCallback((id) => {
-        setExpandedId(expanded => (expanded === id ? null : id));
-    }, []);
-
-    // Esc unlocks, and only unlocks: if the cursor is still on the cluster the
-    // fan stays open under it, because the pointer has not gone anywhere and
-    // the page would be lying about where the reader is.
-    useEffect(() => {
-        if (lockedId === null) return undefined;
-
-        const onKeyDown = (event) => {
-            if (event.key === 'Escape') setLockedId(null);
-        };
-
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [lockedId]);
 
     return (
         <div className="thoughts-field" ref={canvasRef}>
@@ -361,18 +212,15 @@ const TopicIdeaField = ({
                     cluster={clusters[index]}
                     topicBox={box}
                     fan={fans[index]}
-                    isActive={activeId === clusters[index].id}
-                    // Near-invisible rather than gone: the spotlight is meant to
-                    // read as the rest of the field receding, and a card that
-                    // vanished would take the shape of the field with it.
-                    isFaded={activeId !== null && activeId !== clusters[index].id}
-                    isExpanded={expandedId === clusters[index].id && activeId === clusters[index].id}
+                    isActive={bloom.isActive(clusters[index].id)}
+                    isFaded={bloom.isFaded(clusters[index].id)}
+                    isExpanded={bloom.isExpanded(clusters[index].id)}
                     isPinned={isPinned}
                     onTogglePin={onTogglePin}
-                    onEnter={handleEnter}
-                    onLeave={handleLeave}
-                    onTopicClick={handleTopicClick}
-                    onChipClick={handleChipClick}
+                    onEnter={bloom.onEnter}
+                    onLeave={bloom.onLeave}
+                    onTopicClick={bloom.onAnchorClick}
+                    onChipClick={bloom.onChipClick}
                     onSelectIdea={onSelectIdea}
                 />
             ))}

@@ -22,7 +22,7 @@ let store;
 let requests;
 
 const resetStore = () => {
-    store = { topics: [], pins: [], nextTopicId: 1 };
+    store = { topics: [], ideas: [], notes: [], passages: [], pins: [], nextTopicId: 1 };
 };
 
 const jsonResponse = (body, status = 200) => Promise.resolve({
@@ -66,7 +66,34 @@ const handleRequest = (url, options = {}) => {
     }
 
     if (url.endsWith('/ideas') && method === 'GET') {
-        return jsonResponse({ ideas: [] });
+        return jsonResponse({ ideas: store.ideas });
+    }
+
+    // The idea view's three reads, in the order the page issues them: the idea
+    // with its note rows, the passages for the whole ring, then each note's
+    // body. The passages come back as one flat list carrying `noteId`, exactly
+    // as GET /api/ideas/:id/passages ships them — the page is what groups them.
+    const ideaPassages = /\/ideas\/(\d+)\/passages$/.exec(url);
+    if (ideaPassages && method === 'GET') {
+        return jsonResponse({ passages: store.passages });
+    }
+
+    const idea = /\/ideas\/(\d+)$/.exec(url);
+    if (idea && method === 'GET') {
+        const found = store.ideas.find(row => row.id === Number(idea[1]));
+        if (!found) return jsonResponse({ error: 'not found' }, 404);
+
+        return jsonResponse({
+            idea: { ...found, notes: store.notes.map(({ id, title }) => ({ id, title })) },
+        });
+    }
+
+    const note = /\/notes\/(\d+)$/.exec(url);
+    if (note && method === 'GET') {
+        const found = store.notes.find(row => row.id === Number(note[1]));
+        if (!found) return jsonResponse({ error: 'not found' }, 404);
+
+        return jsonResponse({ note: found });
     }
 
     if (url.endsWith('/pins') && method === 'GET') {
@@ -93,12 +120,12 @@ afterEach(() => {
     localStorage.clear();
 });
 
-// Mounted inside an async act so the three load requests, which resolve on the
+// Mounted inside an async act so the load requests, which resolve on the
 // microtask queue right after render, land while React still expects updates.
-const renderThoughts = async () => {
+const renderThoughts = async (entry = '/thoughts') => {
     await act(async () => {
         render(
-            <MemoryRouter initialEntries={['/thoughts']}>
+            <MemoryRouter initialEntries={[entry]}>
                 <Thoughts />
             </MemoryRouter>
         );
@@ -158,5 +185,67 @@ describe('creating a topic from the top bar', () => {
         expect(screen.getByRole('alert')).toHaveTextContent(/server ran into a problem/i);
         // Still open, still holding what was typed, so the reader can retry.
         expect(screen.getByLabelText('Name')).toHaveValue('Providence');
+    });
+});
+
+// ─── The idea view's passages ───────────────────────────────────────────────
+//
+// A note stores WHERE it is anchored and never what the passage says, and this
+// page shows scripture nowhere else — so the verses behind a note's anchors are
+// a request of their own, and one the ring cannot draw without.
+//
+// The join is the thing worth a test here rather than in IdeaOrbit's own file.
+// The passages arrive as one flat list for the whole idea while the bodies
+// arrive one note at a time, and matching them up is this page's hook doing it:
+// a grouping keyed on the wrong field, or a fetch that never went out, is a
+// ring of note cards that bloom into nothing, and every component below would
+// still pass its own tests.
+describe('opening an idea', () => {
+    const seedIdea = () => {
+        store.ideas = [{ id: 5, title: 'Covenant renewal', body: '', topics: [] }];
+        store.notes = [
+            { id: 9, title: 'Light first', body: 'Order of creation', references: [], ideas: [] },
+            { id: 10, title: 'Unanchored', body: 'No verses here', references: [], ideas: [] },
+        ];
+        store.passages = [{
+            id: 3,
+            noteId: 9,
+            bookId: 1,
+            bookName: 'Genesis',
+            chapter: 1,
+            startVerse: 3,
+            endVerse: 3,
+            startIndex: 2,
+            endIndex: 2,
+            sortOrder: 0,
+            verses: [{ verse: 3, verseIndex: 2, text: 'Let there be light.' }],
+        }];
+    };
+
+    test('draws each note with the scripture its anchors point at', async () => {
+        // Arrange
+        seedIdea();
+
+        // Act
+        await renderThoughts('/thoughts?idea=5');
+
+        // Assert — the passage went to the note that owns it, and only to it.
+        expect(screen.getByText('Genesis 1:3')).toBeInTheDocument();
+        expect(screen.getByText('Let there be light.', { exact: false })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Light first/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Unanchored/ })).not.toBeInTheDocument();
+    });
+
+    test('asks for them once for the whole ring, not once per note', async () => {
+        // Arrange
+        seedIdea();
+
+        // Act
+        await renderThoughts('/thoughts?idea=5');
+
+        // Assert — two notes, one passages request.
+        const passageRequests = requests.filter(request => request.url.includes('/passages'));
+        expect(passageRequests).toHaveLength(1);
+        expect(passageRequests[0].url).toMatch(/\/ideas\/5\/passages$/);
     });
 });

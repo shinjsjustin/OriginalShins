@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import BubbleCard from '../Bubbles/BubbleCard';
+import BloomCluster from '../Bubbles/BloomCluster';
+import useBloom from '../Bubbles/useBloom';
+import buildFan from '../Bubbles/fanLayout';
 import buildOrbit, { NOTE_CARD, ORBIT_CENTRE_CLEARANCE } from './orbitLayout';
 import useCanvasSize from '../Bubbles/useCanvasSize';
 import { centreOf, collapseOnto } from '../Bubbles/cardGeometry';
 import { UNTITLED_IDEA_LABEL } from './TopBar';
 import { renderMarkdown } from '../Analyze/markdown';
+import { describeChapterVerses } from '../Analyze/navigation';
 
 // The idea view: one idea enlarged at the centre of the canvas, its notes
 // ringing it.
@@ -57,12 +61,26 @@ import { renderMarkdown } from '../Analyze/markdown';
 // element exists by the time its own layout effect runs, and it remeasures
 // every time the view is opened.
 //
-// ── Notes do not open anything ─────────────────────────────────────────────
+// ── A note opens its passages, and nothing else ────────────────────────────
 //
-// A note card has no `onActivate`, because there is nowhere for a note to go:
-// this ring is the only place notes are shown, and its cards already carry
-// their body. What they do carry is the pin, the same one every other card on
-// the page has, which is the route to editing them in the panel.
+// There is nowhere for a note to GO — this ring is the only place notes are
+// shown, and its cards already carry their body — so clicking one does not
+// navigate. What it does is bloom: a note card is anchored to scripture, and
+// the passages behind those anchors are drawn nowhere else on this page, so
+// each note opens into a fan of them exactly as a topic opens into its ideas.
+// Same hover, same fading of everything else, same click to hold it open.
+//
+// That is why the fan is BloomCluster's and not this file's: two canvases, one
+// interaction, one implementation. What differs is only what a petal contains
+// — a title there, a passage of scripture here — and how much room it needs,
+// which is the whole of PASSAGE_FAN below.
+//
+// A note with no anchors blooms nothing and is not clickable. An empty
+// spotlight — the ring faded out around a card with nothing beside it — would
+// be the page answering a click with a worse view than the one before it.
+//
+// The pin is unchanged, on every card, and is still the route to editing a
+// note in the panel.
 
 // How long the closing transition below takes, so the cards are still mounted
 // while it plays. Must stay in step with `.thoughts-orbit .is-closing` in
@@ -104,9 +122,67 @@ const IDEA_CARD_MAX_SHARE = Object.freeze({ width: 0.5, height: 0.6 });
 // behind the first.
 const NOTE_STAGGER_MS = 16;
 
+// A passage card holds scripture rather than a phrase, so it is the widest
+// card the page draws and the only one on a fan with a body. Tall enough for
+// four or five lines of verse; anything longer scrolls inside it, because a
+// card sized for the longest passage in the canon would be a panel.
+export const PASSAGE_CARD = Object.freeze({ width: 232, height: 156 });
+
+// What that size costs the arc, gathered as an override of FAN_STYLE.
+//
+// Every number here follows from the card being ~1.6× the width of a fanned
+// idea card. It needs a longer radius to clear the note it came out of, a
+// wider angular step so that neighbours do not lie on top of each other, and
+// it fills one arc after five rather than fifteen.
+//
+// The step and the radius are one decision made twice, because what a reader
+// sees is the CHORD between two cards: 2·r·sin(step/2), which has to clear the
+// card's own width or the passages are drawn over each other. At 60° and 260px
+// that chord is 260 against a 232px card, so three passages — the common case,
+// a note being anchored to one or two places and occasionally a handful — are
+// readable side by side without either number having to grow. Past four the
+// arc hits its ceiling and the cards drop a size instead, which keeps the
+// chord ahead of the width the whole way to a full row.
+export const PASSAGE_FAN = Object.freeze({
+    card: PASSAGE_CARD,
+    scales: Object.freeze({ full: 1, tight: 0.86 }),
+    tightenThreshold: 3,
+    rowCapacity: 5,
+    radius: Object.freeze({ first: 260, second: 404 }),
+    spread: Object.freeze({ perCard: Math.PI / 3, max: Math.PI * 1.15 }),
+});
+
 export const UNTITLED_NOTE_LABEL = 'Untitled note';
 
 export const NO_NOTES_MESSAGE = 'No notes on this idea yet.';
+
+/**
+ * "Genesis 1:3–5" — what a passage card is called.
+ *
+ * The book name rides in on the payload rather than being looked up from the
+ * canon, so this page needs no book catalogue of its own; the fallback is the
+ * one describeReference uses, so a passage is never a card with a blank title.
+ */
+export const passageLabel = (passage) =>
+    `${passage.bookName || `Book ${passage.bookId}`} ${describeChapterVerses(passage)}`;
+
+/**
+ * The verses themselves, verse number then text, one paragraph each.
+ *
+ * Not markdown and not run through renderMarkdown: this is scripture out of
+ * the `verses` table, it is plain text, and it is the one body on this page
+ * that was not written by the reader.
+ */
+const PassageText = ({ verses }) => (
+    <div className="thoughts-passage-text">
+        {verses.map(verse => (
+            <p key={verse.verseIndex} className="thoughts-passage-verse">
+                <span className="thoughts-passage-number">{verse.verse}</span>
+                {verse.text}
+            </p>
+        ))}
+    </div>
+);
 
 /** The centred card's box, in canvas coordinates. */
 export const ideaBoxFor = (canvas) => {
@@ -152,13 +228,98 @@ const useRetainedIdea = (idea, notes) => {
     return { shown: retained, isClosing: !idea && Boolean(retained) };
 };
 
+// An id no note can hold, so that `isFaded(CENTRE)` answers exactly one
+// question: is a bloom open at all? The centred idea is never the card that
+// blooms, and it recedes whenever a note does — otherwise the one card the fan
+// opens over would be the one card the fan could not dim.
+const CENTRE = Symbol('the centred idea');
+
+const passagesOf = (note) => (note && note.passages) || [];
+
+/** One note, the passages it is anchored to, and the region holding the two. */
+const NoteCluster = ({ note, card, ideaCentre, fan, bloom, isPinned, onTogglePin }) => {
+    const title = note.title || UNTITLED_NOTE_LABEL;
+    const passages = passagesOf(note);
+
+    // A note anchored to nothing has nothing to open, so it is not a control:
+    // no click handler, and no hover that would fade the ring around a card
+    // with nothing beside it.
+    const canBloom = passages.length > 0;
+
+    return (
+        <BloomCluster
+            anchorBox={card}
+            fan={fan}
+            isActive={bloom.isActive(note.id)}
+            isExpanded={bloom.isExpanded(note.id)}
+            onEnter={canBloom ? () => bloom.onEnter(note.id) : undefined}
+            onLeave={canBloom ? () => bloom.onLeave(note.id) : undefined}
+            onChipClick={() => bloom.onChipClick(note.id)}
+            renderAnchor={(position) => (
+                <BubbleCard
+                    kind="note"
+                    title={title}
+                    // The raw markdown, clamped by the stylesheet rather than
+                    // cut here: the spec asks for three lines and a "…", and
+                    // only the browser knows where three lines of this card's
+                    // width actually end.
+                    subtitle={note.body}
+                    position={position}
+                    scale={card.width / NOTE_CARD.width}
+                    isSelected={bloom.isActive(note.id)}
+                    isFaded={bloom.isFaded(note.id)}
+                    isPinned={isPinned('note', note.id)}
+                    onTogglePin={() => onTogglePin('note', note.id, title)}
+                    onActivate={canBloom ? () => bloom.onAnchorClick(note.id) : null}
+                    className="thoughts-orbit-note"
+                    style={{
+                        ...collapseOnto(ideaCentre, card),
+                        '--card-delay': `${card.index * NOTE_STAGGER_MS}ms`,
+                    }}
+                />
+            )}
+            renderPetal={(petalCard, petal) => {
+                const passage = passages[petalCard.index];
+                if (!passage) return null;
+
+                return (
+                    <BubbleCard
+                        key={passage.id}
+                        kind="passage"
+                        title={passageLabel(passage)}
+                        // `body` rather than `subtitle`, which is also why this
+                        // card gets no `onActivate`: BubbleCard's face is a
+                        // button whenever it activates, and paragraphs inside a
+                        // button are markup no browser agrees on. There is
+                        // nowhere for a passage to go from here anyway.
+                        body={<PassageText verses={passage.verses} />}
+                        {...petal}
+                    />
+                );
+            }}
+        />
+    );
+};
+
 /** The ring itself, mounted only when there is an idea to put at its centre. */
 const OrbitCanvas = ({ shown, isClosing, isPinned, onTogglePin }) => {
     const canvasRef = useRef(null);
     const canvas = useCanvasSize(canvasRef);
+    const bloom = useBloom();
 
     const notes = shown.notes;
     const orbit = useMemo(() => buildOrbit(notes.length, canvas), [notes.length, canvas]);
+
+    // Every note's fan, not only the open one: a petal needs a closed state
+    // that was actually rendered before it has anything to animate out of.
+    // Same reason the topics field builds all of its fans — see the note at the
+    // top of TopicIdeaField.
+    const fans = useMemo(() => orbit.cards.map(card => buildFan(
+        passagesOf(notes[card.index]).length,
+        centreOf(card),
+        canvas,
+        PASSAGE_FAN
+    )), [orbit, notes, canvas]);
 
     // Sanitized by DOMPurify inside renderMarkdown — the app's one renderer,
     // shared with the note editor and the overview drawer, so a body is
@@ -169,6 +330,15 @@ const OrbitCanvas = ({ shown, isClosing, isPinned, onTogglePin }) => {
     const ideaCentre = centreOf(ideaBox);
     const title = shown.idea.title || UNTITLED_IDEA_LABEL;
 
+    // A lock is held against one note of one idea. This component is not
+    // remounted when the reader moves to another idea — it is the same canvas
+    // redrawn — so without this the new ring would open with an old note's
+    // spotlight on it, or with every card faded around a note that is no longer
+    // there.
+    const ideaId = shown.idea.id;
+    const { reset } = bloom;
+    useEffect(() => { reset(); }, [ideaId, reset]);
+
     return (
         <div className={`thoughts-orbit${isClosing ? ' is-closing' : ''}`} ref={canvasRef}>
             <BubbleCard
@@ -177,6 +347,7 @@ const OrbitCanvas = ({ shown, isClosing, isPinned, onTogglePin }) => {
                 position={ideaBox}
                 scale={ideaBox.width / IDEA_CARD.width}
                 isSelected
+                isFaded={bloom.isFaded(CENTRE)}
                 isPinned={isPinned('idea', shown.idea.id)}
                 onTogglePin={() => onTogglePin('idea', shown.idea.id, title)}
                 className="thoughts-orbit-centre"
@@ -190,31 +361,20 @@ const OrbitCanvas = ({ shown, isClosing, isPinned, onTogglePin }) => {
                     : null}
             />
 
-            {orbit.cards.map(card => {
+            {orbit.cards.map((card, index) => {
                 const note = notes[card.index];
                 if (!note) return null;
 
-                const noteTitle = note.title || UNTITLED_NOTE_LABEL;
-
                 return (
-                    <BubbleCard
+                    <NoteCluster
                         key={note.id}
-                        kind="note"
-                        title={noteTitle}
-                        // The raw markdown, clamped by the stylesheet rather
-                        // than cut here: the spec asks for three lines and a
-                        // "…", and only the browser knows where three lines of
-                        // this card's width actually end.
-                        subtitle={note.body}
-                        position={card}
-                        scale={card.width / NOTE_CARD.width}
-                        isPinned={isPinned('note', note.id)}
-                        onTogglePin={() => onTogglePin('note', note.id, noteTitle)}
-                        className="thoughts-orbit-note"
-                        style={{
-                            ...collapseOnto(ideaCentre, card),
-                            '--card-delay': `${card.index * NOTE_STAGGER_MS}ms`,
-                        }}
+                        note={note}
+                        card={card}
+                        ideaCentre={ideaCentre}
+                        fan={fans[index]}
+                        bloom={bloom}
+                        isPinned={isPinned}
+                        onTogglePin={onTogglePin}
                     />
                 );
             })}

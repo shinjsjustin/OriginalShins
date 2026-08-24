@@ -74,6 +74,30 @@ export const FAN_EDGE_PADDING = 16;
 // cards are wider than they are tall and have more room that way.
 export const FAN_DEFAULT_BEARING = 0;
 
+// ── The numbers above, gathered ────────────────────────────────────────────
+//
+// Every constant this function tunes itself on, in one object, so that a second
+// caller can fan something OTHER than title-only idea cards without a second
+// copy of the arc.
+//
+// The idea orbit is that caller: it blooms a note's passages, and a passage
+// card is three times the area of an idea card because it holds scripture
+// rather than a phrase. Bigger cards need a wider arc at a longer radius, and
+// they fill one arc sooner — which is four numbers, not a new layout. So the
+// numbers are a parameter and the geometry below is shared.
+//
+// Anything a caller leaves out keeps the value here, which is why the topics
+// field passes nothing at all.
+export const FAN_STYLE = Object.freeze({
+    card: FAN_CARD,
+    scales: FAN_CARD_SCALES,
+    tightenThreshold: FAN_TIGHTEN_THRESHOLD,
+    rowCapacity: FAN_ROW_CAPACITY,
+    radius: FAN_RADIUS,
+    spread: FAN_SPREAD,
+    chip: FAN_OVERFLOW_CHIP,
+});
+
 const PRECISION = 2;
 
 const round = (value) => Number(value.toFixed(PRECISION));
@@ -88,11 +112,11 @@ const isUsableCanvas = (canvas) =>
     && Number.isFinite(canvas.width) && Number.isFinite(canvas.height)
     && canvas.width > 0 && canvas.height > 0;
 
-const EMPTY_FAN = Object.freeze({
+const emptyFan = (style) => Object.freeze({
     cards: [],
     rows: 0,
     overflow: null,
-    scale: FAN_CARD_SCALES.full,
+    scale: style.scales.full,
     bearing: FAN_DEFAULT_BEARING,
 });
 
@@ -103,8 +127,8 @@ const EMPTY_FAN = Object.freeze({
  * fan rather than three cards flung around a huge arc; flat afterwards, which
  * is what turns further growth into a tighter step instead of a wider arc.
  */
-const spreadFor = (count) =>
-    (count <= 1 ? 0 : Math.min(FAN_SPREAD.max, (count - 1) * FAN_SPREAD.perCard));
+const spreadFor = (count, spread) =>
+    (count <= 1 ? 0 : Math.min(spread.max, (count - 1) * spread.perCard));
 
 /**
  * The angles of one arc, centred on `bearing`.
@@ -113,14 +137,14 @@ const spreadFor = (count) =>
  * it, and an arc that extended in one direction would swing further off its
  * own card with every idea added.
  */
-const anglesFor = (count, bearing) => {
+const anglesFor = (count, bearing, spread) => {
     if (count <= 0) return [];
     if (count === 1) return [bearing];
 
-    const spread = spreadFor(count);
-    const step = spread / (count - 1);
+    const opening = spreadFor(count, spread);
+    const step = opening / (count - 1);
 
-    return Array.from({ length: count }, (unused, index) => bearing - spread / 2 + index * step);
+    return Array.from({ length: count }, (unused, index) => bearing - opening / 2 + index * step);
 };
 
 /**
@@ -164,13 +188,16 @@ const bearingFrom = (origin, canvas) => {
 };
 
 /**
- * The spotlight fan for one hovered topic.
+ * The spotlight fan for one hovered anchor: a topic's ideas, or a note's
+ * passages.
  *
- * @param ideaCount how many ideas the topic has
- * @param origin    { x, y } the centre of the topic card, in canvas coordinates
- * @param canvas    { width, height } of the drawing area
+ * @param count   how many cards the anchor has to fan
+ * @param origin  { x, y } the centre of the anchor card, in canvas coordinates
+ * @param canvas  { width, height } of the drawing area
+ * @param style   any of FAN_STYLE's fields, overriding it; omit for the topics
+ *                field's own idea-sized fan
  * @returns {
- *   cards: [{ index, row, angle, x, y, width, height }],  // every idea, in order
+ *   cards: [{ index, row, angle, x, y, width, height }],  // every card, in order
  *   rows: 0 | 1 | 2,
  *   overflow: null | { count, angle, x, y, width, height },
  *   scale, bearing
@@ -178,23 +205,28 @@ const bearingFrom = (origin, canvas) => {
  * `x, y` is each box's top-left corner. `overflow` is the `+N more` chip, and
  * its `count` is exactly how many cards sit on row 1.
  */
-export const buildFan = (ideaCount, origin, canvas) => {
-    if (!Number.isInteger(ideaCount) || ideaCount <= 0) return EMPTY_FAN;
-    if (!isFinitePoint(origin) || !isUsableCanvas(canvas)) return EMPTY_FAN;
+export const buildFan = (count, origin, canvas, style = null) => {
+    const tuning = style ? { ...FAN_STYLE, ...style } : FAN_STYLE;
+
+    if (!Number.isInteger(count) || count <= 0) return emptyFan(tuning);
+    if (!isFinitePoint(origin) || !isUsableCanvas(canvas)) return emptyFan(tuning);
 
     const bearing = bearingFrom(origin, canvas);
-    const scale = ideaCount > FAN_TIGHTEN_THRESHOLD
-        ? FAN_CARD_SCALES.tight
-        : FAN_CARD_SCALES.full;
-    const size = { width: FAN_CARD.width * scale, height: FAN_CARD.height * scale };
+    const scale = count > tuning.tightenThreshold
+        ? tuning.scales.tight
+        : tuning.scales.full;
+    const size = { width: tuning.card.width * scale, height: tuning.card.height * scale };
 
-    const firstCount = Math.min(ideaCount, FAN_ROW_CAPACITY);
-    const secondCount = ideaCount - firstCount;
-    const radii = [FAN_RADIUS.first, FAN_RADIUS.second];
+    const firstCount = Math.min(count, tuning.rowCapacity);
+    const secondCount = count - firstCount;
+    const radii = [tuning.radius.first, tuning.radius.second];
 
     // Each arc is spread on its own count, so a second arc of two is a small
     // arc rather than two cards at opposite ends of a wide one.
-    const angles = [anglesFor(firstCount, bearing), anglesFor(secondCount, bearing)];
+    const angles = [
+        anglesFor(firstCount, bearing, tuning.spread),
+        anglesFor(secondCount, bearing, tuning.spread),
+    ];
 
     const cards = angles.flatMap((rowAngles, row) =>
         rowAngles.map((angle, position) => ({
@@ -212,7 +244,9 @@ export const buildFan = (ideaCount, origin, canvas) => {
     return {
         cards,
         rows: secondCount > 0 ? 2 : 1,
-        overflow: secondCount > 0 ? buildChip(secondCount, angles[0], origin, canvas) : null,
+        overflow: secondCount > 0
+            ? buildChip(secondCount, angles[0], origin, canvas, tuning)
+            : null,
         scale,
         bearing,
     };
@@ -223,17 +257,17 @@ export const buildFan = (ideaCount, origin, canvas) => {
  * same arc, so it reads as the place that arc ran out rather than as a control
  * floating beside it.
  */
-const buildChip = (count, firstRowAngles, origin, canvas) => {
+const buildChip = (count, firstRowAngles, origin, canvas, tuning) => {
     const last = firstRowAngles[firstRowAngles.length - 1];
     const step = firstRowAngles.length > 1
         ? last - firstRowAngles[firstRowAngles.length - 2]
-        : FAN_SPREAD.perCard;
+        : tuning.spread.perCard;
     const angle = last + step;
 
     return {
         count,
         angle,
-        ...placeBox(onArc(origin, FAN_RADIUS.first, angle), FAN_OVERFLOW_CHIP, canvas),
+        ...placeBox(onArc(origin, tuning.radius.first, angle), tuning.chip, canvas),
     };
 };
 
