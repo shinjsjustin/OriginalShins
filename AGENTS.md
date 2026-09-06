@@ -1560,8 +1560,9 @@ Analyze page's notes panel renders.
 ## Testing
 
 ```bash
-npm run test:client              # watch mode, from the repo root
-CI=true npm run test:client      # single run (CI, pre-commit)
+npm run test:client                 # whole suite, one run, exits
+npm run test:client -- -t "name"    # only tests whose name matches
+npm run test:client:watch           # interactive watch, for a human
 ```
 
 Run it through the root script (or `npm test --prefix src/client`) rather than
@@ -1569,6 +1570,18 @@ invoking `react-scripts` from the repo root: CRA derives `rootDir` from the
 working directory, and from the root it fails to find `src/setupTests.js` — the
 jest-dom matchers then silently go missing and assertions fail for the wrong
 reason.
+
+**Do not "simplify" `test:client` back to `npm test --prefix src/client`.** The
+`CI=true` and the trailing `--` are both load-bearing, and dropping either fails
+in a way that looks like something else:
+
+  * Without the `--`, npm appends `-t "name"` inside its own argument list
+    instead of after the separator, and the nested `npm` eats the `-t` as one of
+    its flags. Jest then receives the bare word and reads it as a FILENAME
+    pattern — so the command reports passes from whatever files happen to match
+    and silently ignores the name you asked for. It does not error.
+  * Without `CI=true`, `react-scripts test` opens interactive watch mode, and a
+    non-interactive caller hangs with no output until it is killed.
 
 Client tests live beside the code they cover (`components/Analyze/*.test.js`,
 `components/Thoughts/*.test.js`). The pure modules are tested directly —
