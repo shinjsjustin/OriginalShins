@@ -1,5 +1,5 @@
-// The two link tables — note_ideas and idea_topics — write identically, so they
-// are written once here.
+// The three link tables — note_ideas, idea_topics and note_topics — write
+// identically, so they are written once here.
 //
 // A link set is REPLACED, never added to or removed from one row at a time. The
 // UI is a multi-select, and PUT-the-whole-set is the shape that matches it:
@@ -11,7 +11,7 @@
 // every child, because neither link table carries a user_id of its own.
 
 // Frozen table and column names. These are interpolated into SQL, so they must
-// never come from a request — every caller picks one of these two specs by
+// never come from a request — every caller picks one of these specs by
 // name and the ids alone are bound as parameters.
 const LINK_SPECS = Object.freeze({
     noteIdeas: Object.freeze({
@@ -26,6 +26,13 @@ const LINK_SPECS = Object.freeze({
         parentTable: 'ideas',
         childTable: 'topics',
         parentColumn: 'idea_id',
+        childColumn: 'topic_id',
+    }),
+    noteTopics: Object.freeze({
+        table: 'note_topics',
+        parentTable: 'notes',
+        childTable: 'topics',
+        parentColumn: 'note_id',
         childColumn: 'topic_id',
     }),
 });
