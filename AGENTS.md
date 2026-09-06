@@ -22,15 +22,18 @@ BibleApp/
     │       ├── 002_notes.sql       # notes, note_references
     │       ├── 003_ideas_topics.sql# topics, ideas, idea_topics, note_ideas
     │       ├── 004_search.sql      # the FULLTEXT index /api/search reads
-    │       └── 005_pins.sql        # pins: the Thoughts page's editable set
+    │       ├── 005_pins.sql        # pins: the Thoughts page's editable set
+    │       ├── 006_reading_location.sql # where each reader left off
+    │       ├── 007_chapter_ideas.sql# ideas filed against a chapter
+    │       └── 008_note_topics.sql # notes filed directly under a topic
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
     │   ├── references.js           # note_references reads/writes; index resolution
     │   ├── notes.js                # notes reads/writes, all scoped by user_id
     │   ├── ideas.js                # ideas reads/writes + the cross-tier lookups
-    │   ├── topics.js               # topics reads/writes + list counts
-    │   ├── links.js                # note_ideas / idea_topics: full-set replace
+    │   ├── topics.js               # topics reads/writes, list counts, both note_topics reads
+    │   ├── links.js                # note_ideas / idea_topics / note_topics: full-set replace
     │   ├── ordering.js             # sort_order + re-parenting (server-side only)
     │   ├── slug.js                 # Topic slug derivation + validation
     │   ├── textInput.js            # Shared body-validation primitives
@@ -62,10 +65,10 @@ BibleApp/
         ├── user.js                 # GET  /api/user/me  (protected)
         ├── books.js                # GET  /api/books    (protected, cached)
         ├── chapter.js              # GET  /api/chapter/:bookId/:chapter
-        ├── notes.js                # GET/POST/PATCH/DELETE /api/notes (+ one note, references, ideas)
+        ├── notes.js                # GET/POST/PATCH/DELETE /api/notes (+ one note, references, ideas, topics)
         ├── references.js           # DELETE /api/references/:id
         ├── ideas.js                # CRUD /api/ideas + PUT /api/ideas/:id/topics
-        ├── topics.js               # CRUD /api/topics (list carries counts)
+        ├── topics.js               # CRUD /api/topics (list carries counts + direct notes; + passages)
         ├── search.js               # GET /api/search?q= (four groups)
         ├── overview.js             # GET /api/overview?tiers=&topicId= (cached per scope)
         ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
@@ -284,6 +287,9 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/002_notes.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/003_ideas_topics.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/004_search.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/005_pins.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/006_reading_location.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/007_chapter_ideas.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/008_note_topics.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
