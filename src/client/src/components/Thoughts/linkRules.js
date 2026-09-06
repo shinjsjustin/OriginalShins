@@ -118,27 +118,23 @@ export const evaluateLink = (items) => {
     const occupied = TIER_ORDER.filter((unused, index) => byTier[index].length > 0);
 
     if (occupied.length === 1) return REFUSED(SINGLE_TIER_HINTS[occupied[0]]);
-    if (occupied.length > 2) return REFUSED(LINK_HINTS.allTiers);
 
-    const [parentTier, childTier] = occupied;
-    const isAdjacent = LINKABLE_PAIRS.some(
-        ([parent, child]) => parent === parentTier && child === childTier
-    );
-    if (!isAdjacent) return REFUSED(LINK_HINTS.nonAdjacent);
+    const itemsIn = (tier) => byTier[TIER_ORDER.indexOf(tier)];
 
-    const parents = byTier[TIER_ORDER.indexOf(parentTier)];
-    const children = byTier[TIER_ORDER.indexOf(childTier)];
-
-    // Child-major: every parent of one child before the next child, so the
-    // caller can slice the list into one PUT per child. Fresh objects, never
-    // the caller's own — this runs on every render of the action bar and must
-    // not hand React state back out by reference.
-    const pairs = children.flatMap(child =>
-        parents.map(parent => [
-            { itemType: parent.itemType, itemId: parent.itemId },
-            { itemType: child.itemType, itemId: child.itemId },
-        ])
-    );
+    // Every linkable pair the selection actually occupies, in LINKABLE_PAIRS
+    // order — so all three tiers come out topic>idea, topic>note, idea>note.
+    //
+    // Child-major inside each pair: every parent for one child before the next
+    // child, so the caller can slice the list into one PUT per child. Fresh
+    // objects, never the caller's own — this runs on every render of the action
+    // bar and must not hand React state back out by reference.
+    const pairs = LINKABLE_PAIRS
+        .filter(([parent, child]) => itemsIn(parent).length > 0 && itemsIn(child).length > 0)
+        .flatMap(([parentTier, childTier]) => itemsIn(childTier).flatMap(child =>
+            itemsIn(parentTier).map(parent => [
+                { itemType: parent.itemType, itemId: parent.itemId },
+                { itemType: child.itemType, itemId: child.itemId },
+            ])));
 
     return { canLink: true, reason: null, pairs };
 };

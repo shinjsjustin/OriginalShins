@@ -34,8 +34,8 @@ describe('evaluateLink — the truth table over the three tiers', () => {
         [false, false, true, false, LINK_HINTS.topicOnly],
         [true, true, false, true, null],
         [false, true, true, true, null],
-        [true, false, true, false, LINK_HINTS.nonAdjacent],
-        [true, true, true, false, LINK_HINTS.allTiers],
+        [true, false, true, true, null],
+        [true, true, true, true, null],
     ])(
         'notes=%s ideas=%s topics=%s -> canLink=%s',
         (hasNotes, hasIdeas, hasTopics, canLink, reason) => {
@@ -63,8 +63,6 @@ describe('evaluateLink — the truth table over the three tiers', () => {
             NOTES,
             IDEAS,
             TOPICS,
-            [...NOTES, ...TOPICS],
-            [...NOTES, ...IDEAS, ...TOPICS],
         ];
 
         // Act / Assert
@@ -199,6 +197,80 @@ describe('evaluateLink — a selection that is not what it should be', () => {
     });
 });
 
+describe('evaluateLink across all three tiers', () => {
+    const selectionOfThree = [
+        { itemType: 'topic', itemId: 4 },
+        { itemType: 'idea', itemId: 7 },
+        { itemType: 'note', itemId: 9 },
+    ];
+
+    test('writes all three downward edges rather than refusing', () => {
+        const { canLink, reason, pairs } = evaluateLink(selectionOfThree);
+
+        expect(canLink).toBe(true);
+        expect(reason).toBeNull();
+        expect(pairs.map(([parent, child]) => `${parent.itemType}>${child.itemType}`))
+            .toEqual(['topic>idea', 'topic>note', 'idea>note']);
+    });
+
+    test('never emits an upward edge', () => {
+        const { pairs } = evaluateLink(selectionOfThree);
+
+        expect(pairs.some(([parent, child]) =>
+            parent.itemType === 'note' || child.itemType === 'topic')).toBe(false);
+    });
+
+    test('links a note directly to a topic', () => {
+        const { canLink, pairs } = evaluateLink([
+            { itemType: 'topic', itemId: 4 },
+            { itemType: 'note', itemId: 9 },
+        ]);
+
+        expect(canLink).toBe(true);
+        expect(pairs).toEqual([[
+            { itemType: 'topic', itemId: 4 },
+            { itemType: 'note', itemId: 9 },
+        ]]);
+    });
+
+    test('is child-major within one tier pair', () => {
+        // Arrange — two topics over two ideas
+        const items = [
+            { itemType: 'topic', itemId: 1 },
+            { itemType: 'topic', itemId: 2 },
+            { itemType: 'idea', itemId: 8 },
+            { itemType: 'idea', itemId: 9 },
+        ];
+
+        // Act
+        const { pairs } = evaluateLink(items);
+
+        // Assert — every parent for idea 8 before idea 9 begins
+        expect(pairs.map(([parent, child]) => `${parent.itemId}->${child.itemId}`))
+            .toEqual(['1->8', '2->8', '1->9', '2->9']);
+    });
+
+    test('still refuses a selection sitting in one tier', () => {
+        expect(evaluateLink([{ itemType: 'note', itemId: 1 }]))
+            .toEqual({ canLink: false, reason: LINK_HINTS.noteOnly, pairs: [] });
+    });
+
+    test('still refuses an unknown type outright', () => {
+        expect(evaluateLink([
+            { itemType: 'topic', itemId: 1 },
+            { itemType: 'chapter', itemId: 2 },
+        ])).toEqual({ canLink: false, reason: LINK_HINTS.unknownType, pairs: [] });
+    });
+
+    test('a row selected twice produces one pair, not two', () => {
+        expect(evaluateLink([
+            { itemType: 'topic', itemId: 4 },
+            { itemType: 'note', itemId: 9 },
+            { itemType: 'note', itemId: 9 },
+        ]).pairs).toHaveLength(1);
+    });
+});
+
 describe('the tiers themselves', () => {
     test('orders the tiers parent to child', () => {
         // Arrange / Act / Assert — the order the rest of the module reads
@@ -206,9 +278,9 @@ describe('the tiers themselves', () => {
         expect(TIER_ORDER).toEqual(['topic', 'idea', 'note']);
     });
 
-    test('makes exactly the two adjacent pairs linkable', () => {
-        // Arrange / Act / Assert — topic-to-note is the one gap in the chain,
-        // and it is the whole reason this module exists.
-        expect(LINKABLE_PAIRS).toEqual([['topic', 'idea'], ['idea', 'note']]);
+    test('makes every downward pair linkable, not only adjacent ones', () => {
+        // Arrange / Act / Assert — note_topics closed the topic-to-note gap, so
+        // descent rather than adjacency is what makes a pair linkable.
+        expect(LINKABLE_PAIRS).toEqual([['topic', 'idea'], ['topic', 'note'], ['idea', 'note']]);
     });
 });
