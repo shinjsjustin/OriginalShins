@@ -1,8 +1,9 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import TopicIdeaField, { UNFILED_TITLE, buildClusters } from './TopicIdeaField';
+import TopicIdeaField, { UNFILED_TITLE, buildClusters, clusterMembers } from './TopicIdeaField';
 import useThoughtsView from '../Thoughts/useThoughtsView';
+import { UNTITLED_NOTE_LABEL } from '../Thoughts/IdeaOrbit';
 
 // ─── What the field has to get right ────────────────────────────────────────
 //
@@ -74,6 +75,61 @@ describe('buildClusters', () => {
         expect(clusters).toHaveLength(3);
         expect(clusters[2]).toMatchObject({ kind: 'unfiled', title: UNFILED_TITLE });
         expect(clusters[2].ideas).toEqual([loose]);
+    });
+});
+
+describe('buildClusters with notes', () => {
+    const topicsWithNotes = [
+        { id: 1, name: 'Faith', notes: [{ id: 50, title: 'On grace', body: 'b' }] },
+        { id: 2, name: 'Works', notes: [] },
+    ];
+    const ideas = [
+        { id: 10, title: 'Grace alone', topics: [{ id: 1 }] },
+        { id: 11, title: 'Loose thought', topics: [] },
+    ];
+
+    test('a topic carries the notes filed directly under it', () => {
+        const [faith] = buildClusters(topicsWithNotes, ideas);
+
+        expect(faith.notes.map(note => note.id)).toEqual([50]);
+        expect(faith.ideas.map(idea => idea.id)).toEqual([10]);
+    });
+
+    test('a topic with no direct notes carries an empty list, never undefined', () => {
+        const [, works] = buildClusters(topicsWithNotes, ideas);
+
+        expect(works.notes).toEqual([]);
+    });
+
+    test('a topic row with no notes key at all is tolerated', () => {
+        const [faith] = buildClusters([{ id: 1, name: 'Faith' }], []);
+
+        expect(faith.notes).toEqual([]);
+    });
+
+    test('the unfiled bubble holds ideas only — notes are never unfiled here', () => {
+        const clusters = buildClusters(topicsWithNotes, ideas);
+        const unfiled = clusters[clusters.length - 1];
+
+        expect(unfiled).toMatchObject({ kind: 'unfiled' });
+        expect(unfiled.ideas.map(idea => idea.id)).toEqual([11]);
+        expect(unfiled.notes).toEqual([]);
+    });
+});
+
+describe('clusterMembers', () => {
+    test('puts every idea before every note, so adding a note never moves an idea', () => {
+        const cluster = { ideas: [{ id: 10 }, { id: 11 }], notes: [{ id: 50 }] };
+
+        expect(clusterMembers(cluster)).toEqual([
+            { kind: 'idea', item: { id: 10 } },
+            { kind: 'idea', item: { id: 11 } },
+            { kind: 'note', item: { id: 50 } },
+        ]);
+    });
+
+    test('is empty for a cluster holding neither', () => {
+        expect(clusterMembers({ ideas: [], notes: [] })).toEqual([]);
     });
 });
 

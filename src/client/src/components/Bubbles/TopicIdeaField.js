@@ -69,6 +69,11 @@ export const UNFILED_TITLE = 'Unfiled ideas';
  * The unfiled bubble is appended last so it lands in the field's final cell,
  * and only when it has something in it: a permanent "0 unfiled" card would be
  * a cell of the field spent on nothing.
+ *
+ * Each cluster carries both what fans out of it: the ideas filed under the
+ * topic, and the notes filed DIRECTLY under it. A note reached through one of
+ * those ideas is not here — it belongs to the idea's orbit, and repeating it
+ * would draw the same note twice on one screen.
  */
 export const buildClusters = (topics, ideas) => {
     const safeIdeas = Array.isArray(ideas) ? ideas : [];
@@ -87,14 +92,40 @@ export const buildClusters = (topics, ideas) => {
         kind: 'topic',
         title: topic.name,
         ideas: byTopic.get(topic.id) || [],
+        // Straight off the topic row: GET /api/topics carries them, so unlike
+        // ideas — which are regrouped from the flat list because that is where
+        // an idea's topic membership lives — there is nothing to regroup.
+        notes: Array.isArray(topic.notes) ? topic.notes : [],
     }));
 
     const unfiled = safeIdeas.filter(idea => (idea.topics || []).length === 0);
 
     return unfiled.length === 0
         ? clusters
-        : [...clusters, { id: UNFILED_ID, kind: 'unfiled', title: UNFILED_TITLE, ideas: unfiled }];
+        : [...clusters, {
+            id: UNFILED_ID,
+            kind: 'unfiled',
+            title: UNFILED_TITLE,
+            ideas: unfiled,
+            // Always empty. A note with no topic is not surfaced on this view at
+            // all — it is reachable through its idea, /analyze and /search — so
+            // the bubble means "unfiled ideas" exactly as its title says.
+            notes: [],
+        }];
 };
+
+/**
+ * A cluster's fan, in the order it is drawn: every idea, then every note.
+ *
+ * The fan is one arc over two kinds of thing, so the petal renderer needs one
+ * indexable list rather than two and some arithmetic. Ideas come first so a
+ * topic's ideas keep the positions they have today — filing a note under a
+ * topic must not reshuffle the fan the reader already knows.
+ */
+export const clusterMembers = (cluster) => [
+    ...cluster.ideas.map(item => ({ kind: 'idea', item })),
+    ...cluster.notes.map(item => ({ kind: 'note', item })),
+];
 
 /** One topic, its fan, and the region that holds the two together. */
 const TopicCluster = ({
