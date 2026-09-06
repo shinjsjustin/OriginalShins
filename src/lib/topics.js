@@ -4,6 +4,7 @@
 // reads exactly one table, so the two tiers never require each other.
 const db = require('../db/db');
 const { applyOrder, isSameSet, STALE_MEMBERSHIP } = require('./ordering');
+const { withFirstReferences } = require('./references');
 
 const toTopic = (row, extras = {}) => ({
     id: row.id,
@@ -139,6 +140,43 @@ const findTopicsForNotes = async (userId, noteIds) => {
     }));
 };
 
+// Every note filed directly under any of `topicIds`, flat and tagged with the
+// topic that reached it.
+//
+// Batched across topics rather than one call per topic, because the topics view
+// draws every card's fan at once — one query for the whole field, the same way
+// findTopicsForIdeas hydrates a whole ideas payload.
+//
+// The body comes back with it: the fan's note card shows a clamped body, and
+// the alternative is the 1+N round trips the idea view pays. `withFirstReferences`
+// attaches the anchor each card labels itself with.
+const findNotesForTopics = async (userId, topicIds) => {
+    if (topicIds.length === 0) {
+        return [];
+    }
+
+    const placeholders = topicIds.map(() => '?').join(', ');
+    const [rows] = await db.execute(
+        `SELECT nt.topic_id, nt.sort_order, n.id, n.title, n.body
+         FROM note_topics nt
+         JOIN notes n  ON n.id = nt.note_id
+         JOIN topics t ON t.id = nt.topic_id
+         WHERE nt.topic_id IN (${placeholders})
+           AND n.user_id = ?
+           AND t.user_id = ?
+         ORDER BY nt.topic_id, nt.sort_order, n.id`,
+        [...topicIds, userId, userId]
+    );
+
+    return withFirstReferences(userId, rows.map(row => ({
+        topicId: row.topic_id,
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        sortOrder: row.sort_order,
+    })));
+};
+
 const insertTopic = async (userId, { name, slug, description }) => {
     const [orderRows] = await db.execute(
         'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ?',
@@ -241,6 +279,7 @@ module.exports = {
     ownsTopic,
     findTopicsForIdeas,
     findTopicsForNotes,
+    findNotesForTopics,
     insertTopic,
     updateTopic,
     removeTopic,
