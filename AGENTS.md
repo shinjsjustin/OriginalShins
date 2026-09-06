@@ -716,16 +716,24 @@ module exists to prevent: they drift, and the failure is a button enabled for a
 selection the builder then reads differently, against the reader's real corpus,
 with no undo on this page.
 
-The rule is that a link joins a tier to the tier immediately under it, because
-those are the only two link tables that exist:
+The rule is that a link joins a tier to any tier BELOW it. It used to be "the
+tier immediately under it", because `note_ideas` and `idea_topics` were the only
+link tables there were; `note_topics` ended that, so the corpus is a DAG rather
+than a chain and descent rather than adjacency is what makes a pair linkable:
 
 | Selection | Result |
 |-----------|--------|
 | Notes + ideas | Links, `PUT /api/notes/:id/ideas` |
 | Ideas + topics | Links, `PUT /api/ideas/:id/topics` |
-| Notes + topics | Refused — there is no topic-to-note edge to write |
+| Notes + topics | Links, `PUT /api/notes/:id/topics` — no idea in between |
 | One tier | Refused — that is half a link |
-| All three | Refused — genuinely ambiguous, and picking a reading writes edges nobody asked for |
+| All three | Links all three downward edges: note→idea, idea→topic and note→topic |
+
+A note therefore owns TWO link sets, its ideas and its topics, and they are
+written by two separate full-set replaces. `useThoughtsData`'s `LINK_TARGETS` is
+keyed by `parent:child` for exactly that reason — keyed by the child alone, a
+three-tier selection would send both sets to one endpoint and silently empty the
+other.
 
 Pairs come out `[parent, child]`, child-major, so the caller can collapse one
 child's pairs into the single full-set PUT the endpoint wants instead of
