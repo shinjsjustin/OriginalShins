@@ -10,6 +10,7 @@ const {
 const {
     findTopics,
     findTopicById,
+    findNotesForTopics,
     insertTopic,
     updateTopic,
     removeTopic,
@@ -39,12 +40,28 @@ const respondToWriteError = (res, err, context) => {
 };
 
 // GET /api/topics
-// Every topic with the size of what hangs beneath it: how many ideas are filed
-// under it, and how many distinct notes those ideas gather between them.
+// Every topic with the size of what hangs beneath it, and the notes filed
+// directly under it.
+//
+// The notes ride along on the list rather than being a request per card: the
+// topics view draws every fan at once, so a per-topic endpoint would be one
+// round trip per card on a view that opens cold. Two queries either way.
 router.get('/', async (req, res) => {
     try {
         const topics = await findTopics(req.user.id);
-        res.status(200).json({ topics });
+        const notes = await findNotesForTopics(req.user.id, topics.map(topic => topic.id));
+
+        const notesByTopicId = notes.reduce((byTopicId, note) => ({
+            ...byTopicId,
+            [note.topicId]: [...(byTopicId[note.topicId] || []), note],
+        }), {});
+
+        res.status(200).json({
+            topics: topics.map(topic => ({
+                ...topic,
+                notes: notesByTopicId[topic.id] || [],
+            })),
+        });
     } catch (err) {
         console.error('GET /api/topics error:', err);
         res.status(500).json({ error: 'Internal server error' });
