@@ -172,17 +172,25 @@ describe('Link, which answers to linkRules and to nothing else', () => {
         expect(screen.getByText(LINK_HINTS.ideaOnly)).toBeInTheDocument();
     });
 
-    test('is refused for two tiers that are not adjacent', () => {
-        // Arrange
-        renderPanel();
+    test('is allowed for a note and a topic, which no longer needs an idea between them', async () => {
+        // Arrange — this pair used to be the one refusal in the chain. note_topics
+        // closed that gap, so the panel must now offer the link rather than
+        // explain why it cannot.
+        const { onLink } = renderPanel();
 
         // Act
         check(NOTE.title);
         check(TOPIC.title);
 
         // Assert
-        expect(screen.getByRole('button', { name: 'Link' })).toBeDisabled();
-        expect(screen.getByText(LINK_HINTS.nonAdjacent)).toBeInTheDocument();
+        const link = screen.getByRole('button', { name: 'Link' });
+        expect(link).toBeEnabled();
+
+        await clickButton('Link');
+        expect(onLink).toHaveBeenCalledWith([[
+            { itemType: 'topic', itemId: TOPIC.itemId },
+            { itemType: 'note', itemId: NOTE.itemId },
+        ]]);
     });
 
     test('is allowed for a note and an idea, and sends linkRules pairs', async () => {
