@@ -11,22 +11,13 @@
 // on this page. So the button reads `canLink`, the hint reads `reason`, and
 // the handler iterates `pairs`, all from one call.
 //
-// ── The chain, and its one gap ─────────────────────────────────────────────
+// ── The corpus is a DAG, not a chain ───────────────────────────────────────
 //
-// The corpus is three tiers deep — topic contains idea contains note — and a
-// link only ever joins a tier to the tier immediately under it. That is not a
-// UI restriction: those are the only two link tables that exist. There is no
-// topic-to-note edge to write, which is why a selection of notes and topics is
-// refused rather than interpreted as "put these notes under that topic
-// somehow".
-//
-// ── Two tiers, and exactly two ─────────────────────────────────────────────
-//
-// One tier is not a link, it is half of one. All three is ambiguous in a way
-// no default resolves honestly: notes+ideas+topics could mean "link the notes
-// to the ideas", "link the ideas to the topics", or both, and picking one for
-// the reader writes edges they did not ask for. Refusing costs them one click
-// (deselect a tier) and tells them exactly which one.
+// Topic contains idea contains note, AND a topic may contain a note directly:
+// there are three link tables, not two. So a link joins any tier to any tier
+// below it, and every two-tier selection is linkable. A three-tier selection is
+// no longer ambiguous either — it means all three downward edges, and writes
+// them.
 //
 // ── Which side of a pair is the parent ─────────────────────────────────────
 //
@@ -43,9 +34,20 @@
 // fourth tier could never be added to one and forgotten in the other.
 export const TIER_ORDER = Object.freeze(['topic', 'idea', 'note']);
 
-// Every [parent, child] a link may join — consecutive entries of TIER_ORDER.
+// Every [parent, child] a link may join: any tier to any tier below it.
+//
+// This used to be "consecutive entries of TIER_ORDER", because the corpus was a
+// chain and a link only ever joined a tier to the one immediately under it.
+// note_topics ended that — a note may now be filed under a topic directly, with
+// no idea in between — so the corpus is a DAG and the rule is descent rather
+// than adjacency.
+//
+// Still derived from TIER_ORDER rather than listed out, for the reason the
+// original derivation existed: a fourth tier cannot be added to one and
+// forgotten in the other.
 export const LINKABLE_PAIRS = Object.freeze(
-    TIER_ORDER.slice(0, -1).map((parent, index) => Object.freeze([parent, TIER_ORDER[index + 1]]))
+    TIER_ORDER.flatMap((parent, index) =>
+        TIER_ORDER.slice(index + 1).map(child => Object.freeze([parent, child])))
 );
 
 // The one line shown under a disabled Link button.
@@ -53,13 +55,15 @@ export const LINKABLE_PAIRS = Object.freeze(
 // Each is phrased as the next move rather than as the rule that was broken:
 // "why is this greyed out" is the only question a disabled control provokes,
 // and the useful answer is what to select next, not which constraint failed.
+//
+// `nonAdjacent` and `allTiers` are gone. Every two-tier selection is now
+// linkable, so the first is unreachable, and a three-tier selection writes
+// every downward edge rather than being refused.
 export const LINK_HINTS = Object.freeze({
     empty: 'Select pinned items to link.',
-    noteOnly: 'Also select an idea — notes link to ideas.',
+    noteOnly: 'Also select an idea or a topic to link these notes to.',
     ideaOnly: 'Also select a note or a topic to link these ideas to.',
-    topicOnly: 'Also select an idea — topics link to ideas.',
-    nonAdjacent: 'A note links to an idea and an idea to a topic, so a note and a topic cannot be linked directly.',
-    allTiers: 'Link two tiers at a time: notes with ideas, or ideas with topics.',
+    topicOnly: 'Also select an idea or a note to link these topics to.',
     unknownType: 'Only topics, ideas and notes can be linked.',
 });
 
