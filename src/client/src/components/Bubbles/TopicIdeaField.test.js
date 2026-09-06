@@ -304,3 +304,76 @@ describe('opening an idea from the fan', () => {
         expect(screen.getByText(/^view:/)).toHaveTextContent('view: idea 11');
     });
 });
+
+describe('TopicIdeaField note petals', () => {
+    const topicsWithNote = [{
+        id: 1,
+        name: 'Faith',
+        notes: [{ id: 50, title: 'On grace', body: 'and it is not of yourselves' }],
+    }];
+    const ideasForFaith = [{ id: 10, title: 'Grace alone', topics: [{ id: 1 }] }];
+
+    const renderField = (props = {}) => render(
+        <MemoryRouter>
+            <TopicIdeaField topics={topicsWithNote} ideas={ideasForFaith} {...props} />
+        </MemoryRouter>
+    );
+
+    test('draws a card for a directly-linked note beside the topic ideas', () => {
+        renderField();
+
+        // Every fan is mounted in its closed state, so both petals exist
+        // without hovering — see the note at the top of TopicIdeaField.
+        expect(screen.getByText('Grace alone')).toBeInTheDocument();
+        expect(screen.getByText('On grace')).toBeInTheDocument();
+    });
+
+    test('the subtitle still counts ideas only', () => {
+        renderField();
+
+        expect(screen.getByText('1 idea')).toBeInTheDocument();
+        // No "1 note" tally anywhere. Matched narrowly so the note's own body
+        // cannot satisfy it.
+        expect(screen.queryByText(/\d+ notes?\b/)).not.toBeInTheDocument();
+    });
+
+    test('a note card is not a way into the idea view', () => {
+        renderField();
+
+        fireEvent.click(screen.getByText('On grace'));
+
+        // Still on the topics view: the idea fan is what opens an idea, and a
+        // note has no view of its own to open.
+        expect(screen.getByText('Grace alone')).toBeInTheDocument();
+    });
+
+    test('a note petal pins as a note', () => {
+        const onTogglePin = jest.fn();
+        renderField({ isPinned: () => false, onTogglePin });
+
+        // The pin is not rendered until the card is hovered.
+        fireEvent.mouseOver(screen.getByText('On grace'));
+        fireEvent.click(screen.getByRole('button', { name: 'Pin On grace' }));
+
+        expect(onTogglePin).toHaveBeenCalledWith('note', 50, 'On grace');
+    });
+
+    test('an untitled note is still pinnable by name', () => {
+        const onTogglePin = jest.fn();
+        render(
+            <MemoryRouter>
+                <TopicIdeaField
+                    topics={[{ id: 1, name: 'Faith', notes: [{ id: 51, title: '', body: 'nameless' }] }]}
+                    ideas={[]}
+                    isPinned={() => false}
+                    onTogglePin={onTogglePin}
+                />
+            </MemoryRouter>
+        );
+
+        fireEvent.mouseOver(screen.getByText('nameless'));
+        fireEvent.click(screen.getByRole('button', { name: `Pin ${UNTITLED_NOTE_LABEL}` }));
+
+        expect(onTogglePin).toHaveBeenCalledWith('note', 51, UNTITLED_NOTE_LABEL);
+    });
+});

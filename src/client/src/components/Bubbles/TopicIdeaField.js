@@ -7,6 +7,7 @@ import buildFan from './fanLayout';
 import useCanvasSize from './useCanvasSize';
 import { centreOf } from './cardGeometry';
 import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
+import { UNTITLED_NOTE_LABEL } from '../Thoughts/IdeaOrbit';
 import { countLabel } from '../Thoughts/format';
 // The cards' own styles, which Thoughts.css owns. Imported here rather than by
 // each page, because a page that used this field and forgot the stylesheet
@@ -178,18 +179,38 @@ const TopicCluster = ({
                 />
             )}
             renderPetal={(card, petal) => {
-                const idea = cluster.ideas[card.index];
-                if (!idea) return null;
+                const member = clusterMembers(cluster)[card.index];
+                if (!member) return null;
 
-                const title = idea.title || UNTITLED_IDEA_LABEL;
+                if (member.kind === 'note') {
+                    const note = member.item;
+                    const noteTitle = note.title || UNTITLED_NOTE_LABEL;
+
+                    return (
+                        <BubbleCard
+                            key={`note-${note.id}`}
+                            kind="note"
+                            title={noteTitle}
+                            // The raw markdown, clamped by the stylesheet rather
+                            // than cut here — the same treatment the idea view's
+                            // note cards get.
+                            subtitle={note.body}
+                            {...pinPropsFor('note', note.id, noteTitle)}
+                            {...petal}
+                        />
+                    );
+                }
+
+                const idea = member.item;
+                const ideaTitle = idea.title || UNTITLED_IDEA_LABEL;
 
                 return (
                     <BubbleCard
-                        key={idea.id}
+                        key={`idea-${idea.id}`}
                         kind="idea"
-                        title={title}
+                        title={ideaTitle}
                         onActivate={() => onSelectIdea(idea.id)}
-                        {...pinPropsFor('idea', idea.id, title)}
+                        {...pinPropsFor('idea', idea.id, ideaTitle)}
                         {...petal}
                     />
                 );
@@ -225,8 +246,9 @@ const TopicIdeaField = ({
     const field = useMemo(() => buildField(clusters, canvas), [clusters, canvas]);
 
     // Every fan, not just the open one — see the note at the top of the file.
+    // Sized to ideas + notes, because both fan out of the same topic on one arc.
     const fans = useMemo(() => field.map(
-        (box, index) => buildFan(clusters[index].ideas.length, centreOf(box), canvas)
+        (box, index) => buildFan(clusterMembers(clusters[index]).length, centreOf(box), canvas)
     ), [field, clusters, canvas]);
 
     return (
