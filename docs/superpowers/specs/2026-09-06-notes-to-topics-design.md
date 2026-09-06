@@ -21,6 +21,7 @@ those four is a legal state, exactly as every existing relationship is optional.
 | Where notes appear | In the topic card's hover fan, beside its ideas. No new view, no new URL param. |
 | Which notes appear | **Directly-linked only.** A note reached through an idea stays in that idea's orbit and is not repeated in the topic's fan. |
 | Note card in the fan | Title, clamped body, pin toggle — and it blooms its scripture passages, the way `IdeaOrbit`'s note cards do. |
+| Counting notes | **Not done.** No note count on the card, and the existing `noteCount` is left as it is. Nothing on the client reads it. |
 | Unfiled bubble | **Unchanged.** It keeps holding only ideas. Notes with no topic are not surfaced here; they remain reachable through their idea, `/analyze` and `/search`. |
 | Three-tier selection | **Links everything downward** — `note→idea`, `idea→topic` and `note→topic`, three writes from one press. The previous "two tiers at a time" refusal is removed. |
 | How the view loads notes | Inline on `GET /api/topics`. One request, the one the field already makes. |
@@ -30,6 +31,7 @@ those four is a legal state, exactly as every existing relationship is optional.
 
 - No `?topic=` orbit view. Clicking a fanned note does nothing beyond pinning.
 - No "unfiled notes" bucket.
+- No note count on the topic card, and no change to the existing `noteCount`.
 - No change to `/api/overview`, `/api/search`, `/api/pins`, or the Analyze page.
 - No reordering UI for a topic's notes. `sort_order` is written by the
   full-set replace and read back, nothing drags it.
@@ -84,40 +86,18 @@ unchanged. This is the entire server-side linking change.
 existing `findTopicsForIdeas`. Returns `[{ noteId, id, name, slug }, ...]` for
 grouping by the caller.
 
-**`findTopics` note count** — the existing `note_count` counts notes reached
-*through ideas*. It must become the DISTINCT union of both paths, or a card
-will say "2 notes" over a fan of five:
+**Counts are untouched.** No note count is added anywhere, and the existing
+`note_count` in `findTopics` / `findTopicById` is left exactly as it is — still
+counting notes reached through ideas, still ignoring the direct path.
 
-It cannot be done by adding two more `LEFT JOIN`s to the existing query. Those
-joins already fan out — a note filed under two of a topic's ideas is reached
-twice — and a second independent path would multiply against the first, giving
-a cross product that `COUNT(DISTINCT)` over either column alone cannot undo. So
-the count moves to a scalar subquery over the union of the two paths, the shape
-`findTopicById` already uses:
-
-```sql
-(SELECT COUNT(*) FROM (
-    SELECT ni.note_id
-      FROM idea_topics it
-      JOIN note_ideas ni ON ni.idea_id = it.idea_id
-     WHERE it.topic_id = t.id
-    UNION                      -- not UNION ALL: a note on both paths counts once
-    SELECT nt.note_id
-      FROM note_topics nt
-     WHERE nt.topic_id = t.id
-) AS reached) AS note_count
-```
-
-`idea_count` stays a joined `COUNT(DISTINCT i.id)`; with the note joins gone
-there is nothing left to fan out against it.
-
-`findTopicById` carries the same change to its own note subquery, so a write's
-response and the list agree.
-
-Note that `noteCount` and the fan's own note count are **different numbers on
-purpose**: `noteCount` is every note the topic gathers by any path, and the fan
-shows only the direct ones. The card's subtitle is counted from the array the
-cluster holds, never from `noteCount` — see §3.
+That leaves it arguably incomplete, which is deliberate and worth recording so
+a later reader does not "fix" it: **nothing on the client reads a topic's
+`noteCount`.** The server computes it and no page displays it. (Every
+`noteCount` in client code is the *idea* tier's, consumed by `orbitLayout`.)
+Extending it correctly would mean replacing the joined `COUNT(DISTINCT)` with a
+scalar subquery over a `UNION` of the two paths — the joins already fan out, so
+a second independent path would multiply against the first — which is real work
+for a number with no reader.
 
 ### `src/lib/notes.js`
 
@@ -222,10 +202,10 @@ so a topic's ideas keep the positions they have today and adding a note never
 reshuffles them. Note cards get a modifier class so they read as a different
 kind of thing at a glance.
 
-The card subtitle becomes `3 ideas · 2 notes`, both counted from the arrays the
-cluster holds. The "one source, one answer" rule in `buildClusters` is the
-reason: a subtitle counted from `topic.noteCount` would say something the fan
-below it contradicts, because those two numbers legitimately differ (§1).
+The card subtitle is **unchanged** — still `3 ideas`, still counted from
+`cluster.ideas.length`. Notes are visible in the fan and are not tallied on the
+card. This keeps `buildClusters`' "one source, one answer" rule trivially true:
+there is no second number that could disagree with what the fan shows.
 
 A note card nests a `BloomCluster` for its passages. `IdeaOrbit` already blooms
 a note into its passages this way, so the nesting is an existing pattern rather
@@ -295,7 +275,7 @@ running app.
 | File | Covers |
 |---|---|
 | `linkRules.test.js` | Every two-tier pair now links. Three tiers produce three edges, child-major. `nonAdjacent` and `allTiers` are gone. Rewritten single-tier hints. Duplicate-selection dedupe still holds. |
-| `TopicIdeaField.test.js` | `buildClusters` with notes; direct-only membership; subtitle counts from the arrays, not `noteCount`; unfiled cluster carries no notes; fan card ordering (ideas first). |
+| `TopicIdeaField.test.js` | `buildClusters` with notes; direct-only membership; unfiled cluster carries no notes; fan card ordering (ideas first); subtitle still reports ideas only. |
 | `useThoughtsData` (new tests) | `groupPairs` keyed by `parent:child` — a note with both an idea and a topic produces two PUTs to two endpoints, not one. |
 
 Manual verification in the app: link a note to a topic from the pinned panel,
