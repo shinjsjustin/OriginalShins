@@ -105,6 +105,40 @@ const findTopicsForIdeas = async (userId, ideaIds) => {
     }));
 };
 
+// Every topic linked DIRECTLY to any of `noteIds`, flat, for hydrating a notes
+// payload in one query rather than one per note.
+//
+// The mirror of findTopicsForIdeas above, one tier further down. It reads
+// note_topics alone: a topic a note reaches through an idea is not returned
+// here, because the two paths mean different things and the note's own set is
+// the one the editor replaces.
+const findTopicsForNotes = async (userId, noteIds) => {
+    if (noteIds.length === 0) {
+        return [];
+    }
+
+    const placeholders = noteIds.map(() => '?').join(', ');
+    const [rows] = await db.execute(
+        `SELECT nt.note_id, nt.sort_order, t.id, t.name, t.slug
+         FROM note_topics nt
+         JOIN topics t ON t.id = nt.topic_id
+         JOIN notes n  ON n.id = nt.note_id
+         WHERE nt.note_id IN (${placeholders})
+           AND t.user_id = ?
+           AND n.user_id = ?
+         ORDER BY nt.note_id, nt.sort_order, t.id`,
+        [...noteIds, userId, userId]
+    );
+
+    return rows.map(row => ({
+        noteId: row.note_id,
+        id: row.id,
+        name: row.name,
+        slug: row.slug,
+        sortOrder: row.sort_order,
+    }));
+};
+
 const insertTopic = async (userId, { name, slug, description }) => {
     const [orderRows] = await db.execute(
         'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ?',
@@ -206,6 +240,7 @@ module.exports = {
     findTopicById,
     ownsTopic,
     findTopicsForIdeas,
+    findTopicsForNotes,
     insertTopic,
     updateTopic,
     removeTopic,
