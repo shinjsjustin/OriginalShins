@@ -374,30 +374,62 @@ const TopicIdeaField = ({
                 out of; a passage fan has no such entrance — it appears when its
                 note is clicked — and mounting every note's passages on every
                 card of the field would be hundreds of cards holding scripture. */}
-            {openFans.map(noteFan => (
-                <div className="thoughts-passage-fan" key={noteFan.key}>
-                    {noteFan.fan.cards.map(card => {
-                        const passage = noteFan.passages[card.index];
-                        if (!passage) return null;
+            {openFans.map((noteFan) => {
+                const isExpanded = noteBloom.isExpanded(noteFan.noteId);
 
-                        return (
-                            <BubbleCard
-                                key={passage.id}
-                                kind="passage"
-                                title={passageLabel(passage)}
-                                // `body` rather than `subtitle`, which is also
-                                // why this card gets no `onActivate`:
-                                // BubbleCard's face is a button whenever it
-                                // activates, and paragraphs inside a button are
-                                // markup no browser agrees on.
-                                body={<PassageText verses={passage.verses} />}
-                                position={card}
-                                scale={noteFan.fan.scale}
-                            />
-                        );
-                    })}
-                </div>
-            ))}
+                return (
+                    <div className="thoughts-passage-fan" key={noteFan.key}>
+                        {noteFan.fan.cards.map(card => {
+                            const passage = noteFan.passages[card.index];
+                            if (!passage) return null;
+
+                            // Everything past one arc is placed on a second,
+                            // wider one — but for cards this size that arc is
+                            // nearer the first than a card is tall, so drawing
+                            // it straight away lays these over the passages
+                            // already on show. They wait under the chip, which
+                            // is what BloomCluster does for a topic's ideas and
+                            // what this fan has to do for itself: it is drawn
+                            // outside any cluster, for the offset reason above.
+                            const isStowed = card.row === 1 && !isExpanded;
+
+                            return (
+                                <BubbleCard
+                                    key={passage.id}
+                                    kind="passage"
+                                    className={isStowed ? 'is-stowed' : ''}
+                                    title={passageLabel(passage)}
+                                    // `body` rather than `subtitle`, which is
+                                    // also why this card gets no `onActivate`:
+                                    // BubbleCard's face is a button whenever it
+                                    // activates, and paragraphs inside a button
+                                    // are markup no browser agrees on.
+                                    body={<PassageText verses={passage.verses} />}
+                                    position={card}
+                                    scale={noteFan.fan.scale}
+                                />
+                            );
+                        })}
+
+                        {noteFan.fan.overflow && (
+                            <button
+                                type="button"
+                                className="thoughts-fan-chip"
+                                aria-expanded={isExpanded}
+                                style={{
+                                    left: `${noteFan.fan.overflow.x}px`,
+                                    top: `${noteFan.fan.overflow.y}px`,
+                                    width: `${noteFan.fan.overflow.width}px`,
+                                    height: `${noteFan.fan.overflow.height}px`,
+                                }}
+                                onClick={() => noteBloom.onChipClick(noteFan.noteId)}
+                            >
+                                +{noteFan.fan.overflow.count} more
+                            </button>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 };

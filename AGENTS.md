@@ -724,15 +724,26 @@ suite, because nothing in it measured a layout. `radiusClearing` in
 capacity, taking the longest that any count on one arc demands. Change the card
 size or the spread and the radius follows; do not put a literal back.
 
-**Its second arc is a known shortcoming.** A note with more than
+**Its second arc is still a known shortcoming.** A note with more than
 `PASSAGE_FAN.rowCapacity` (5) passages opens a second arc only 144px beyond the
-first, which is less than a passage card's own height — so those cards overlap
-row one. Unlike the idea fan, the field draws every passage card immediately
-instead of holding the overflow behind the `+N more` chip, so they are visible
-rather than waiting on a press. Nothing in the seeded data reaches six passages
-on one note, which is why it has not bitten. Fixing it properly is a product
-decision (cap the arc, wire up the chip, or shrink the card) rather than another
-tuning pass.
+first, which is less than a passage card's own height — so a card on that arc
+can overlap one on the first.
+
+The `+N more` chip now holds those cards back, so nothing overlaps until a
+reader presses it: `TopicIdeaField` stows every row-1 passage and reveals them
+on the chip, the way `BloomCluster` already does for a topic's ideas. It has to
+do that itself rather than borrow BloomCluster, for the same offset reason the
+passage fan is drawn outside the cluster at all, and it needs its own CSS
+because `.thoughts-fan-item`/`.thoughts-fan-chip` are revealed by
+`.thoughts-cluster.is-active`, which this layer is deliberately not inside.
+
+What the chip does not fix is the arc behind it — press it and those cards are
+still drawn over the first arc. Two things that look like cheap fixes are not:
+offsetting the second arc by half a step only takes the overlapping pairs from
+734 to 596 of 10440 across counts 6–10, and giving the arc enough radial gap to
+clear a card from every angle needs ~280px, putting row two ~560px from the note
+and off most canvases. A real fix means capping the fan or shrinking the card,
+which is a product decision rather than another tuning pass.
 
 ### Linking: one authority, two adjacent tiers
 

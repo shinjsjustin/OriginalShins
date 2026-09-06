@@ -403,6 +403,63 @@ describe('TopicIdeaField passages', () => {
         expect(screen.queryByText(/Ephesians/)).not.toBeInTheDocument();
     });
 
+    // ── More passages than one arc holds ──────────────────────────────────
+    //
+    // fanLayout puts everything past `rowCapacity` on a second, wider arc and
+    // asks for a `+N more` chip. For a passage card that second arc sits closer
+    // to the first than a card is tall, so drawing it immediately lays those
+    // cards over the ones already there. The idea fan has never had that
+    // problem visibly because BloomCluster stows its row-1 cards under the chip
+    // — and the passage fan is drawn OUTSIDE BloomCluster, so it has to stow
+    // its own.
+    const sixPassages = Array.from({ length: 6 }, (unused, index) => ({
+        ...passage,
+        id: 900 + index,
+        chapter: index + 1,
+        startVerse: 1,
+        endVerse: 2,
+        verses: [{ verseIndex: index, verse: 1, text: `Verse of chapter ${index + 1}` }],
+    }));
+
+    const passageCards = () => [...document.querySelectorAll('.thoughts-passage-fan .thoughts-bubble')];
+
+    test('stows the passages past one arc behind a chip', () => {
+        // Arrange
+        renderWithPassages({ passagesByTopicId: { 1: sixPassages } });
+
+        // Act
+        fireEvent.click(noteFace());
+
+        // Assert — every card is placed, but the sixth is stowed rather than
+        // drawn on top of the arc, and the chip says how many are behind it.
+        expect(passageCards()).toHaveLength(6);
+        expect(passageCards().filter(card => card.classList.contains('is-stowed')))
+            .toHaveLength(1);
+        expect(screen.getByRole('button', { name: '+1 more' })).toBeInTheDocument();
+    });
+
+    test('the chip lets the stowed passage out', () => {
+        // Arrange
+        renderWithPassages({ passagesByTopicId: { 1: sixPassages } });
+        fireEvent.click(noteFace());
+
+        // Act
+        fireEvent.click(screen.getByRole('button', { name: '+1 more' }));
+
+        // Assert
+        expect(passageCards().filter(card => card.classList.contains('is-stowed')))
+            .toHaveLength(0);
+    });
+
+    test('draws no chip when every passage fits one arc', () => {
+        // Arrange / Act
+        renderWithPassages({ passagesByTopicId: { 1: [passage] } });
+        fireEvent.click(noteFace());
+
+        // Assert
+        expect(screen.queryByRole('button', { name: /more$/ })).not.toBeInTheDocument();
+    });
+
     test('a note anchored to nothing is not a control', () => {
         // Arrange — passages loaded for the topic, but none for this note.
         renderWithPassages({ passagesByTopicId: { 1: [] } });

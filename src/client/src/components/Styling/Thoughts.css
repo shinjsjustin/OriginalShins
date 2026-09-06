@@ -505,6 +505,34 @@
   pointer-events: auto;
 }
 
+/* The second arc, stowed, and the chip holding it — the passage fan's own copy
+   of what BloomCluster does for a topic's ideas.
+
+   It cannot borrow those rules. `.thoughts-fan-item` and `.thoughts-fan-chip`
+   start at `opacity: 0` and are revealed by `.thoughts-cluster.is-active`
+   above them, and this layer is deliberately NOT inside a cluster — so a card
+   given those classes here would simply never appear.
+
+   It also needs no closed state to animate out of: every topic fan stays
+   mounted, while a passage fan is mounted only while it is open. So the stow
+   is a plain hide rather than a transform back to the anchor, and the chip is
+   visible from the moment it exists. */
+.thoughts-passage-fan .thoughts-bubble.is-stowed {
+  display: none;
+}
+
+.thoughts-passage-fan .thoughts-fan-chip {
+  z-index: 5;
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.thoughts-passage-fan .thoughts-fan-chip:hover {
+  background-color: var(--ground-hover);
+  color: var(--on-ground);
+}
+
 .thoughts-fan-chip {
   position: absolute;
   display: flex;
