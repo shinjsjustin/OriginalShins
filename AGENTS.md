@@ -707,6 +707,33 @@ to face the middle of the canvas before drawing, clamps each box into the canvas
 as a backstop, and caps the arc rather than letting a well-filled topic walk its
 cards past a full turn and back onto the first.
 
+`buildFan` is shared: the same arc draws a topic's ideas and, with `PASSAGE_FAN`
+as a style override, a note's passages in both canvases. Two things about that
+override are worth knowing before touching it.
+
+**Its radius is derived, not chosen.** Cards on an arc are separated by the
+CHORD between their centres, and the test that chord has to pass is the card's
+**diagonal** — not its width. Two axis-aligned boxes clear each other when their
+centres are a width apart in x OR a height apart in y, so a chord running
+diagonally can be short of both at once and the cards overlap while a
+width-based test still passes. Comparing the chord to the width is what
+`PASSAGE_FAN` used to do, and at the old 260px radius it drew passages on top of
+each other at roughly one anchor direction in nine — invisible to the whole test
+suite, because nothing in it measured a layout. `radiusClearing` in
+`IdeaOrbit.js` now derives the radius from the card, the spread and the row
+capacity, taking the longest that any count on one arc demands. Change the card
+size or the spread and the radius follows; do not put a literal back.
+
+**Its second arc is a known shortcoming.** A note with more than
+`PASSAGE_FAN.rowCapacity` (5) passages opens a second arc only 144px beyond the
+first, which is less than a passage card's own height — so those cards overlap
+row one. Unlike the idea fan, the field draws every passage card immediately
+instead of holding the overflow behind the `+N more` chip, so they are visible
+rather than waiting on a press. Nothing in the seeded data reaches six passages
+on one note, which is why it has not bitten. Fixing it properly is a product
+decision (cap the arc, wire up the chip, or shrink the card) rather than another
+tuning pass.
+
 ### Linking: one authority, two adjacent tiers
 
 `linkRules.evaluateLink` answers three questions from one call — whether Link is
