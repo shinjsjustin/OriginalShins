@@ -18,6 +18,7 @@ const {
     isDuplicateSlugError,
 } = require('../lib/topics');
 const { findIdeasForTopic } = require('../lib/ideas');
+const { findPassagesForNotes } = require('../lib/passages');
 const { removePinsForItem } = require('../lib/pins');
 const { TREE_SPECS, reorderMembers, inTransaction } = require('../lib/ordering');
 const { respondToOrderingError } = require('./orderingErrors');
@@ -116,6 +117,42 @@ router.get('/:id', async (req, res) => {
         res.status(200).json({ topic: { ...topic, ideas } });
     } catch (err) {
         console.error(`GET /api/topics/${req.params.id} error:`, err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// GET /api/topics/:id/passages — the scripture behind every note filed directly
+// under one topic: one entry per note reference, carrying its book name and its
+// verses.
+//
+// The mirror of GET /api/ideas/:id/passages one tier up, and it exists for the
+// same reason: the topics view blooms a note card into the passages it is
+// anchored to, and a reference that arrived as "John 3:16-18" alone would be a
+// card naming a passage and showing none of it.
+//
+// Fetched per topic when its fan first opens rather than for every topic on
+// entry — see useThoughtsData. One request for a whole fan, two queries.
+router.get('/:id/passages', async (req, res) => {
+    const topicId = parseRowId(req.params.id);
+    if (topicId === null) {
+        return res.status(400).json({ error: 'id must be a positive integer' });
+    }
+
+    try {
+        // findTopicById scopes by user_id, so someone else's topic is a 404 here
+        // — and the check is what tells "no notes yet" apart from "not yours",
+        // since both would otherwise be an empty list.
+        const topic = await findTopicById(req.user.id, topicId);
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+
+        const notes = await findNotesForTopics(req.user.id, [topicId]);
+        const passages = await findPassagesForNotes(req.user.id, notes.map(note => note.id));
+
+        res.status(200).json({ passages });
+    } catch (err) {
+        console.error(`GET /api/topics/${req.params.id}/passages error:`, err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
