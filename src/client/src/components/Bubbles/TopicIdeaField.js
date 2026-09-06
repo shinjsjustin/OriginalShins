@@ -7,7 +7,12 @@ import buildFan from './fanLayout';
 import useCanvasSize from './useCanvasSize';
 import { centreOf } from './cardGeometry';
 import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
-import { UNTITLED_NOTE_LABEL } from '../Thoughts/IdeaOrbit';
+import {
+    UNTITLED_NOTE_LABEL,
+    PASSAGE_FAN,
+    PassageText,
+    passageLabel,
+} from '../Thoughts/IdeaOrbit';
 import { countLabel } from '../Thoughts/format';
 // The cards' own styles, which Thoughts.css owns. Imported here rather than by
 // each page, because a page that used this field and forgot the stylesheet
@@ -143,6 +148,9 @@ const TopicCluster = ({
     onTopicClick,
     onChipClick,
     onSelectIdea,
+    bloomableNoteIds,
+    isNoteBlooming,
+    onNoteClick,
 }) => {
     // Nothing at all when the page did not ask for pinning, rather than a pin
     // wired to a no-op: BubbleCard draws no toggle unless it is handed one, so
@@ -185,6 +193,10 @@ const TopicCluster = ({
                 if (member.kind === 'note') {
                     const note = member.item;
                     const noteTitle = note.title || UNTITLED_NOTE_LABEL;
+                    // A note anchored to nothing has nothing to open, so it is
+                    // not a control — the same rule the idea orbit's notes
+                    // follow. Its pin still works; only the face goes inert.
+                    const canBloom = bloomableNoteIds.includes(note.id);
 
                     return (
                         <BubbleCard
@@ -195,6 +207,8 @@ const TopicCluster = ({
                             // than cut here — the same treatment the idea view's
                             // note cards get.
                             subtitle={note.body}
+                            isSelected={isNoteBlooming(note.id)}
+                            onActivate={canBloom ? () => onNoteClick(note.id) : null}
                             {...pinPropsFor('note', note.id, noteTitle)}
                             {...petal}
                         />
@@ -229,6 +243,13 @@ const TopicCluster = ({
  *                      and only meaningful alongside onTogglePin
  * @param onTogglePin   (itemType, itemId, title) -> void, from usePins.
  *                      Omit it and the field draws no pins at all
+ * @param passagesByTopicId { [topicId]: [passage, ...] } — the scripture behind
+ *                      a topic's own notes, each passage carrying the `noteId`
+ *                      it belongs to. Absent until that topic's fan has been
+ *                      opened once; a topic with none simply blooms nothing
+ * @param onTopicOpen   (topicId) -> void, fired the first time a fan opens, so
+ *                      the caller can fetch that topic's passages then rather
+ *                      than fetching every topic's on entry
  */
 const TopicIdeaField = ({
     topics = [],
@@ -236,11 +257,17 @@ const TopicIdeaField = ({
     onSelectIdea = () => {},
     isPinned = () => false,
     onTogglePin = null,
+    passagesByTopicId = {},
+    onTopicOpen = () => {},
 }) => {
     const canvasRef = useRef(null);
     const canvas = useCanvasSize(canvasRef);
 
     const bloom = useBloom();
+    // A second bloom, over notes rather than topics. They are independent
+    // subjects — a topic is open OR closed regardless of which of its notes is
+    // showing its passages — so two hooks rather than one keyed on both.
+    const noteBloom = useBloom();
 
     const clusters = useMemo(() => buildClusters(topics, ideas), [topics, ideas]);
     const field = useMemo(() => buildField(clusters, canvas), [clusters, canvas]);
@@ -251,6 +278,55 @@ const TopicIdeaField = ({
         (box, index) => buildFan(clusterMembers(clusters[index]).length, centreOf(box), canvas)
     ), [field, clusters, canvas]);
 
+    // One entry per note that HAS passages, carrying the arc they sit on.
+    //
+    // ── Why these are built here and not inside the petal ──────────────────
+    //
+    // A BloomCluster positions itself in canvas coordinates, and a petal is
+    // already rendered inside its parent cluster's offset region — so a
+    // BloomCluster nested in a petal would be offset twice and land nowhere
+    // near its note. The passage cards are therefore siblings of the clusters,
+    // drawn straight onto the field, off the canvas box the fan gave the note.
+    // `fans[i].cards[j]` are canvas boxes for exactly that reason: BloomCluster
+    // converts them with relativeTo() on the way in.
+    const passageFans = useMemo(() => clusters.flatMap((cluster, index) => {
+        const byNoteId = (passagesByTopicId[cluster.id] || []).reduce((acc, passage) => ({
+            ...acc,
+            [passage.noteId]: [...(acc[passage.noteId] || []), passage],
+        }), {});
+
+        return clusterMembers(cluster).flatMap((member, memberIndex) => {
+            if (member.kind !== 'note') return [];
+
+            const passages = byNoteId[member.item.id] || [];
+            const card = fans[index] && fans[index].cards[memberIndex];
+            if (passages.length === 0 || !card) return [];
+
+            return [{
+                key: `${cluster.id}:${member.item.id}`,
+                clusterId: cluster.id,
+                noteId: member.item.id,
+                passages,
+                fan: buildFan(passages.length, centreOf(card), canvas, PASSAGE_FAN),
+            }];
+        });
+    }), [clusters, fans, passagesByTopicId, canvas]);
+
+    // Which of a cluster's notes could bloom at all, so a note anchored to
+    // nothing is not dressed up as a control.
+    const bloomableIdsByClusterId = useMemo(() => passageFans.reduce((acc, noteFan) => ({
+        ...acc,
+        [noteFan.clusterId]: [...(acc[noteFan.clusterId] || []), noteFan.noteId],
+    }), {}), [passageFans]);
+
+    const openFans = passageFans.filter(noteFan => noteBloom.isActive(noteFan.noteId));
+
+    // A topic whose note is showing its passages stays open, even though the
+    // cursor has left its region to reach them. Without this the fan closes the
+    // moment the pointer crosses onto a passage card, taking the passages with
+    // it — the same journey the topic lock exists to protect, one tier down.
+    const heldOpenClusterId = openFans.length > 0 ? openFans[0].clusterId : null;
+
     return (
         <div className="thoughts-field" ref={canvasRef}>
             {clusters.length === 0 && (
@@ -259,23 +335,68 @@ const TopicIdeaField = ({
                 </p>
             )}
 
-            {field.map((box, index) => (
-                <TopicCluster
-                    key={clusters[index].id}
-                    cluster={clusters[index]}
-                    topicBox={box}
-                    fan={fans[index]}
-                    isActive={bloom.isActive(clusters[index].id)}
-                    isFaded={bloom.isFaded(clusters[index].id)}
-                    isExpanded={bloom.isExpanded(clusters[index].id)}
-                    isPinned={isPinned}
-                    onTogglePin={onTogglePin}
-                    onEnter={bloom.onEnter}
-                    onLeave={bloom.onLeave}
-                    onTopicClick={bloom.onAnchorClick}
-                    onChipClick={bloom.onChipClick}
-                    onSelectIdea={onSelectIdea}
-                />
+            {field.map((box, index) => {
+                const clusterId = clusters[index].id;
+                const isHeldOpen = heldOpenClusterId === clusterId;
+
+                return (
+                    <TopicCluster
+                        key={clusterId}
+                        cluster={clusters[index]}
+                        topicBox={box}
+                        fan={fans[index]}
+                        isActive={bloom.isActive(clusterId) || isHeldOpen}
+                        isFaded={bloom.isFaded(clusterId) && !isHeldOpen}
+                        isExpanded={bloom.isExpanded(clusterId)}
+                        isPinned={isPinned}
+                        onTogglePin={onTogglePin}
+                        onEnter={(id) => {
+                            // The passages this fan may need, asked for once.
+                            // The unfiled bubble's id is a string, which the
+                            // caller rejects — the intended no-op, not an
+                            // accident.
+                            onTopicOpen(id);
+                            bloom.onEnter(id);
+                        }}
+                        onLeave={bloom.onLeave}
+                        onTopicClick={bloom.onAnchorClick}
+                        onChipClick={bloom.onChipClick}
+                        onSelectIdea={onSelectIdea}
+                        bloomableNoteIds={bloomableIdsByClusterId[clusterId] || []}
+                        isNoteBlooming={noteBloom.isActive}
+                        onNoteClick={noteBloom.onAnchorClick}
+                    />
+                );
+            })}
+
+            {/* Only the open one is mounted, unlike the topic fans above. Those
+                are all mounted so a CSS transition has a closed state to animate
+                out of; a passage fan has no such entrance — it appears when its
+                note is clicked — and mounting every note's passages on every
+                card of the field would be hundreds of cards holding scripture. */}
+            {openFans.map(noteFan => (
+                <div className="thoughts-passage-fan" key={noteFan.key}>
+                    {noteFan.fan.cards.map(card => {
+                        const passage = noteFan.passages[card.index];
+                        if (!passage) return null;
+
+                        return (
+                            <BubbleCard
+                                key={passage.id}
+                                kind="passage"
+                                title={passageLabel(passage)}
+                                // `body` rather than `subtitle`, which is also
+                                // why this card gets no `onActivate`:
+                                // BubbleCard's face is a button whenever it
+                                // activates, and paragraphs inside a button are
+                                // markup no browser agrees on.
+                                body={<PassageText verses={passage.verses} />}
+                                position={card}
+                                scale={noteFan.fan.scale}
+                            />
+                        );
+                    })}
+                </div>
             ))}
         </div>
     );

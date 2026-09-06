@@ -482,6 +482,29 @@
   line-height: 1.3;
 }
 
+/* A note petal's passages, drawn straight onto the field rather than inside the
+   cluster they belong to.
+
+   They have to be siblings: a cluster positions itself in canvas coordinates
+   and its petals render inside that offset region, so a passage fan nested in a
+   petal would be offset twice. This layer spans the whole canvas instead, and
+   each card carries its own absolute position — the same coordinates the fan
+   gave it.
+
+   Above the petals (z-index 5) because it is drawn on top of the arc it hangs
+   off, and transparent to the pointer except on the cards themselves, so the
+   layer does not swallow hovers meant for the topics underneath it. */
+.thoughts-passage-fan {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.thoughts-passage-fan .thoughts-bubble {
+  pointer-events: auto;
+}
+
 .thoughts-fan-chip {
   position: absolute;
   display: flex;

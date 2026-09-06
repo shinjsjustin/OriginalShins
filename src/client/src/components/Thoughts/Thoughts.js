@@ -99,6 +99,8 @@ const Thoughts = () => {
         removeIdea,
         removeNote,
         linkPairs,
+        passagesByTopicId,
+        loadPassagesFor,
     } = useThoughtsData(ideaId);
     const {
         pins,
@@ -203,6 +205,8 @@ const Thoughts = () => {
                                 onSelectIdea={showIdea}
                                 isPinned={isPinned}
                                 onTogglePin={togglePin}
+                                passagesByTopicId={passagesByTopicId}
+                                onTopicOpen={loadPassagesFor}
                             />
                         )}
 

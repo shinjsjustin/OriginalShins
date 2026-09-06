@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJson } from '../../config/api';
 import { LINK_HINTS } from './linkRules';
 
@@ -216,6 +216,46 @@ const loadThoughts = async (ideaId, signal) => {
 
 const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [] });
 
+// A topic's passages, fetched when its fan first opens rather than for every
+// topic when the view does.
+//
+// The idea view fetches all of its passages up front because there is one idea.
+// The topics field has a card per topic, and asking for every one on entry
+// would be a request per card for blooms most readers never open. So this is
+// lazy, cached per topic id, and dropped whenever the corpus reloads — a write
+// may have changed which notes a topic holds.
+const useTopicPassages = (revision) => {
+    const [passagesByTopicId, setPassagesByTopicId] = useState({});
+    const requested = useRef(new Set());
+
+    useEffect(() => {
+        setPassagesByTopicId({});
+        requested.current = new Set();
+    }, [revision]);
+
+    const loadPassagesFor = useCallback(async (topicId) => {
+        // The unfiled bubble's id is the string 'unfiled', and it has no notes
+        // of its own. Rejecting anything that is not a real row id here is what
+        // lets the field call this on every open without knowing the difference.
+        if (!Number.isInteger(topicId) || requested.current.has(topicId)) return;
+        requested.current.add(topicId);
+
+        try {
+            const payload = await fetchJson(`/topics/${topicId}/passages`);
+            setPassagesByTopicId(previous => ({ ...previous, [topicId]: payload.passages || [] }));
+        } catch (err) {
+            // Deliberately quiet, and the one place on this page that is.
+            // The fan is correct without its passages — the bloom is simply
+            // empty, exactly as it is for a note anchored to nothing — so an
+            // error banner over a page that is still right would be the louder
+            // wrong answer. Forgetting the request lets the next open retry.
+            requested.current.delete(topicId);
+        }
+    }, []);
+
+    return { passagesByTopicId, loadPassagesFor };
+};
+
 /**
  * @param ideaId the idea whose notes to load, or null in the topics view
  */
@@ -225,6 +265,7 @@ const useThoughtsData = (ideaId = null) => {
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
     const [revision, setRevision] = useState(0);
+    const { passagesByTopicId, loadPassagesFor } = useTopicPassages(revision);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -371,6 +412,8 @@ const useThoughtsData = (ideaId = null) => {
         removeIdea,
         removeNote,
         linkPairs,
+        passagesByTopicId,
+        loadPassagesFor,
     };
 };
 

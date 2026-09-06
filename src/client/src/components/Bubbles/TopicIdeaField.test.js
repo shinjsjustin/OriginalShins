@@ -305,6 +305,113 @@ describe('opening an idea from the fan', () => {
     });
 });
 
+// ─── A note petal's passages ────────────────────────────────────────────────
+//
+// The bloom is drawn OUTSIDE the cluster it belongs to — a BloomCluster
+// positions itself in canvas coordinates and a petal already sits inside its
+// parent's offset region, so a nested one would be offset twice. That makes two
+// things worth asserting here rather than by eye: that the topic stays open
+// while its note is blooming (the cursor has to leave the cluster to reach a
+// passage, and without this the fan would shut under it), and that the fetch is
+// asked for once, lazily, rather than for every topic on the field.
+describe('TopicIdeaField passages', () => {
+    const topicsWithNote = [{
+        id: 1,
+        name: 'Faith',
+        notes: [{ id: 50, title: 'On grace', body: 'b' }],
+    }];
+
+    const passage = {
+        id: 900,
+        noteId: 50,
+        bookId: 49,
+        bookName: 'Ephesians',
+        chapter: 2,
+        startVerse: 8,
+        endVerse: 9,
+        verses: [{ verseIndex: 1, verse: 8, text: 'For by grace you have been saved' }],
+    };
+
+    const renderWithPassages = (props = {}) => render(
+        <MemoryRouter>
+            <TopicIdeaField topics={topicsWithNote} ideas={[]} {...props} />
+        </MemoryRouter>
+    );
+
+    const noteFace = () => screen.getByText('On grace').closest('.thoughts-bubble')
+        .querySelector('.thoughts-bubble-face');
+
+    test('asks for a topic\'s passages when its fan opens', () => {
+        // Arrange
+        const onTopicOpen = jest.fn();
+        renderWithPassages({ onTopicOpen });
+
+        // Act
+        fireEvent.mouseOver(topicCard('Faith'));
+
+        // Assert
+        expect(onTopicOpen).toHaveBeenCalledWith(1);
+    });
+
+    test('does not ask for anything before a fan is opened', () => {
+        const onTopicOpen = jest.fn();
+        renderWithPassages({ onTopicOpen });
+
+        expect(onTopicOpen).not.toHaveBeenCalled();
+    });
+
+    test('draws no passage until its note is opened', () => {
+        renderWithPassages({ passagesByTopicId: { 1: [passage] } });
+
+        // The passages are loaded, but the bloom is a deliberate act.
+        expect(screen.queryByText(/Ephesians/)).not.toBeInTheDocument();
+    });
+
+    test('blooms the note into its passages when the note is opened', () => {
+        // Arrange
+        renderWithPassages({ passagesByTopicId: { 1: [passage] } });
+
+        // Act
+        fireEvent.click(noteFace());
+
+        // Assert
+        expect(screen.getByText('Ephesians 2:8–9')).toBeInTheDocument();
+        expect(screen.getByText(/For by grace/)).toBeInTheDocument();
+    });
+
+    test('keeps the topic open while its note is blooming', () => {
+        // Arrange — open the fan, bloom the note, then take the cursor off the
+        // topic, which is what reaching a passage card actually does.
+        renderWithPassages({ passagesByTopicId: { 1: [passage] } });
+        fireEvent.mouseOver(topicCard('Faith'));
+        fireEvent.click(noteFace());
+
+        // Act
+        unhoverTopic('Faith');
+
+        // Assert — the fan has not shut, so the passages are still reachable.
+        expect(isOpen('Faith')).toBe(true);
+        expect(screen.getByText('Ephesians 2:8–9')).toBeInTheDocument();
+    });
+
+    test('closes the bloom when the note is opened again', () => {
+        renderWithPassages({ passagesByTopicId: { 1: [passage] } });
+
+        fireEvent.click(noteFace());
+        fireEvent.click(noteFace());
+
+        expect(screen.queryByText(/Ephesians/)).not.toBeInTheDocument();
+    });
+
+    test('a note anchored to nothing is not a control', () => {
+        // Arrange — passages loaded for the topic, but none for this note.
+        renderWithPassages({ passagesByTopicId: { 1: [] } });
+
+        // Assert — no button, so no click that promises a bloom and gives none.
+        expect(noteFace().tagName).toBe('DIV');
+    });
+});
+
 describe('TopicIdeaField note petals', () => {
     const topicsWithNote = [{
         id: 1,

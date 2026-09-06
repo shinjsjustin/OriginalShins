@@ -173,7 +173,7 @@ export const passageLabel = (passage) =>
  * the `verses` table, it is plain text, and it is the one body on this page
  * that was not written by the reader.
  */
-const PassageText = ({ verses }) => (
+export const PassageText = ({ verses }) => (
     <div className="thoughts-passage-text">
         {verses.map(verse => (
             <p key={verse.verseIndex} className="thoughts-passage-verse">
