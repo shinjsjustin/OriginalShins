@@ -20,11 +20,16 @@
 
 ```bash
 npm run dev                      # server on :3001 + client on :3000
-npm run test:client              # the whole client suite
-npm run test:client -- --watchAll=false -t "name"   # one test, no watch
+cd src/client && CI=true npm test -- --watchAll=false            # whole suite
+cd src/client && CI=true npm test -- --watchAll=false -t "name"  # one test
 ```
 
-The client suite is CRA's, so `--watchAll=false` is needed for a single non-interactive run in every command below.
+**Run the client suite from `src/client`, not the repo root.** The root's
+`npm run test:client` shells out via `npm --prefix`, which does not forward
+`-t "name"` through the nested invocation — the flag is dropped, CRA falls back
+to interactive watch mode, and the command hangs forever with no output. `CI=true`
+is belt-and-braces on top of `--watchAll=false`. Every test command below assumes
+you are in `src/client`.
 
 **Database:** apply migrations with
 `mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/<file>.sql`
@@ -836,7 +841,7 @@ describe('evaluateLink with a note and a topic', () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `npm run test:client -- --watchAll=false -t "LINKABLE_PAIRS"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "LINKABLE_PAIRS"`
 Expected: FAIL — the pairs array is `['topic>idea','idea>note']`.
 
 - [ ] **Step 3: Replace the pair derivation**
@@ -901,10 +906,10 @@ put this in their place:
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `npm run test:client -- --watchAll=false -t "LINKABLE_PAIRS"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "LINKABLE_PAIRS"`
 Expected: PASS.
 
-Run: `npm run test:client -- --watchAll=false -t "LINK_HINTS"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "LINK_HINTS"`
 Expected: PASS.
 
 The `evaluateLink with a note and a topic` test will still fail — Task 11
@@ -1001,7 +1006,7 @@ describe('evaluateLink across all three tiers', () => {
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `npm run test:client -- --watchAll=false -t "evaluateLink across all three tiers"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "evaluateLink across all three tiers"`
 Expected: FAIL — the three-tier selection is currently refused with
 `LINK_HINTS.allTiers`, which is now `undefined`.
 
@@ -1040,12 +1045,12 @@ and `occupied` is only used for the single-tier refusal.
 
 - [ ] **Step 4: Run the tests**
 
-Run: `npm run test:client -- --watchAll=false -t "evaluateLink"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "evaluateLink"`
 Expected: PASS, including the `note and a topic` test from Task 10.
 
 - [ ] **Step 5: Run the whole suite for regressions**
 
-Run: `npm run test:client -- --watchAll=false`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false`
 Expected: PASS. Any pre-existing `linkRules` test asserting `nonAdjacent` or
 `allTiers` will fail — those assertions describe behaviour this task
 deliberately removes, so delete them rather than restoring the old rule.
@@ -1142,7 +1147,7 @@ describe('groupPairs', () => {
 
 - [ ] **Step 3: Run to verify it fails**
 
-Run: `npm run test:client -- --watchAll=false -t "groupPairs"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "groupPairs"`
 Expected: FAIL — `a note under a topic` resolves to `/notes/9/ideas`, because
 the map is keyed by `note` alone.
 
@@ -1223,12 +1228,12 @@ about on every build.
 
 - [ ] **Step 6: Run the tests**
 
-Run: `npm run test:client -- --watchAll=false -t "groupPairs"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "groupPairs"`
 Expected: PASS, all six.
 
 - [ ] **Step 7: Run the whole suite**
 
-Run: `npm run test:client -- --watchAll=false`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false`
 Expected: PASS.
 
 - [ ] **Step 8: Verify end to end in the app**
@@ -1332,7 +1337,7 @@ describe('clusterMembers', () => {
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `npm run test:client -- --watchAll=false -t "buildClusters with notes"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "buildClusters with notes"`
 Expected: FAIL — `faith.notes` is `undefined`, and `clusterMembers` is not
 exported.
 
@@ -1399,15 +1404,15 @@ export const clusterMembers = (cluster) => [
 
 - [ ] **Step 5: Run the tests**
 
-Run: `npm run test:client -- --watchAll=false -t "buildClusters with notes"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "buildClusters with notes"`
 Expected: PASS.
 
-Run: `npm run test:client -- --watchAll=false -t "clusterMembers"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "clusterMembers"`
 Expected: PASS.
 
 - [ ] **Step 6: Run the whole suite**
 
-Run: `npm run test:client -- --watchAll=false`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false`
 Expected: PASS. Existing `buildClusters` tests pass unchanged — the new field is
 additive.
 
@@ -1513,7 +1518,7 @@ actually renders, read `BubbleCard.js` and use the real ones — do not change
 
 - [ ] **Step 2: Run to verify it fails**
 
-Run: `npm run test:client -- --watchAll=false -t "TopicIdeaField note petals"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "TopicIdeaField note petals"`
 Expected: FAIL — "On grace" is not in the document; the fan is built from
 `cluster.ideas.length` and renders idea cards only.
 
@@ -1617,12 +1622,12 @@ token already exists, use it instead of introducing `--card-surface-note`.
 
 - [ ] **Step 7: Run the tests**
 
-Run: `npm run test:client -- --watchAll=false -t "TopicIdeaField note petals"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "TopicIdeaField note petals"`
 Expected: PASS, all five.
 
 - [ ] **Step 8: Run the whole suite**
 
-Run: `npm run test:client -- --watchAll=false`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false`
 Expected: PASS.
 
 - [ ] **Step 9: Verify in the app**
@@ -1800,7 +1805,7 @@ describe('TopicIdeaField passages', () => {
 
 - [ ] **Step 5: Run to verify it fails**
 
-Run: `npm run test:client -- --watchAll=false -t "TopicIdeaField passages"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "TopicIdeaField passages"`
 Expected: FAIL — `onTopicOpen` is not called and no passage card renders.
 
 - [ ] **Step 6: Draw the passage fans**
@@ -1928,12 +1933,12 @@ In `Thoughts.css`, add:
 
 - [ ] **Step 8: Run the tests**
 
-Run: `npm run test:client -- --watchAll=false -t "TopicIdeaField passages"`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false -t "TopicIdeaField passages"`
 Expected: PASS, all three.
 
 - [ ] **Step 9: Run the whole suite**
 
-Run: `npm run test:client -- --watchAll=false`
+Run (from `src/client`): `CI=true npm test -- --watchAll=false`
 Expected: PASS.
 
 - [ ] **Step 10: Verify in the app, and check the request count**
