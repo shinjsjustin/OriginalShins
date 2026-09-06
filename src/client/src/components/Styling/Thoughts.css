@@ -458,6 +458,30 @@
   transform: translate(var(--card-dx, 0), var(--card-dy, 0)) scale(0.55);
 }
 
+/* A note petal's body gets ONE line, where the same note at the centre of the
+   idea orbit gets three.
+
+   Not a style preference — it is what the arc has room for. buildFan spaces
+   every petal for FAN_CARD.height (52px), and it spaces them for that whether
+   the petal is an idea (title only) or a note (title plus body). A note wrapping
+   to two lines stands taller than the box the arc allotted it, overlapping the
+   petal above and clipping both titles. One line fits; two does not.
+
+   The clamp is the browser's rather than a substring, for the reason the orbit's
+   is: only the browser knows where one line of this card's width ends. */
+.thoughts-fan-item.thoughts-bubble--note .thoughts-bubble-subtitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  /* Markdown source, so a body may arrive with its own line breaks; they are
+     what the clamp counts. */
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.3;
+}
+
 .thoughts-fan-chip {
   position: absolute;
   display: flex;
