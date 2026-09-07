@@ -45,3 +45,93 @@
      is — the cards inside carry their own. */
   outline: none;
 }
+
+/* ─── The Import Picker ──────────────────────────────────────────────────────
+   The field, and a strip under it holding what is picked and the two buttons
+   that end the dialog.
+
+   A column rather than a bar laid over the canvas: TopicIdeaField measures the
+   box it is rendered in and spreads its cards across the whole of it, so a
+   floating bar would sit on top of the bottom row of bubbles. Giving the bar
+   its own strip takes that height out of the canvas instead, and the field
+   simply lays out in what remains. */
+
+.bubble-picker {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The field's own box. min-height: 0 is what lets it shrink inside the column
+   rather than pushing the bar off the bottom of the overlay. */
+.bubble-picker-field {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.bubble-picker-bar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--ground-raised);
+  border-top: 1px solid var(--ground-line);
+}
+
+/* Takes the slack so the buttons sit at the far end, and truncates rather than
+   wrapping — a long idea title must not make the strip two lines tall and
+   shove the field upward as you pick. */
+.bubble-picker-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  color: var(--on-ground-soft);
+  font-size: var(--font-base);
+}
+
+.bubble-picker-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-sm);
+}
+
+.bubble-picker-button {
+  padding: var(--space-xs) var(--space-md);
+  background-color: transparent;
+  color: var(--on-ground);
+  border: 1px solid var(--ground-line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+
+.bubble-picker-button:hover {
+  border-color: var(--gold-lit);
+}
+
+.bubble-picker-button--primary {
+  background-color: var(--gold);
+  color: var(--on-gold, #1a1206);
+  border-color: var(--gold);
+}
+
+.bubble-picker-button--primary:hover {
+  background-color: var(--gold-lit);
+  border-color: var(--gold-lit);
+}
+
+/* Visibly inert, and actually inert: `disabled` is on the element, this only
+   says so. */
+.bubble-picker-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.bubble-picker-button:disabled:hover {
+  border-color: var(--ground-line);
+  background-color: var(--gold);
+}
