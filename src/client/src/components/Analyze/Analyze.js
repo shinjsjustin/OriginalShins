@@ -293,7 +293,9 @@ const Analyze = () => {
                     {/* Above the panel row, because a selection spanning two
                         chapters is not either panel's business. It also stays
                         put while a panel scrolls, which is what the old corner
-                        widget was pinned for. */}
+                        widget was pinned for. It hangs out of the flow in the
+                        navbar clearance (see Analyze.css), so appearing does
+                        not push the panels down. */}
                     <PendingSelectionTray
                         books={books}
                         places={selectedPlaces}

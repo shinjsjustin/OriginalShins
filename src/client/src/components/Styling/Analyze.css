@@ -21,6 +21,12 @@
   --analyze-panel-min-width:  300px;
   --analyze-spine-width:      46px;
 
+  /* Where the profile icon sits (see Navbar.css), so the selection tray can
+     line up with it and stop short of it rather than run underneath. */
+  --analyze-avatar-top:   20px;
+  --analyze-avatar-right: 20px;
+  --analyze-avatar-size:  40px;
+
   /* The verse rail. Deliberately narrow: it is a margin mark, not a column,
      and everything left of the text is space taken from the text. */
   --analyze-rail-width:   4px;
@@ -39,10 +45,10 @@
   --analyze-panel-transition: 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
 
   height: 100vh;
-  /* A column: the selection tray takes its own strip off the top when there is
-     a selection, and the panel row takes whatever is left. The row used to
-     compute its own height from the viewport, which it can no longer do — what
-     sits above it now comes and goes. */
+  /* A column of one thing: the panel row. The selection tray hangs in the
+     navbar clearance above it (position: absolute below), so a selection
+     appearing does not push the panels down the page. */
+  position: relative;
   display: flex;
   flex-direction: column;
   /* A faint lift behind the centre column, so the three panels read as lying
@@ -386,22 +392,39 @@
 }
 
 /* ─── Selection Tray ─────────────────────────────────────────────────────────
-   A strip above the panel row naming every chapter the reader has verses
-   selected in, however far apart they are. It sits on the ground rather than
-   on paper because it belongs to the page: the selection it describes may run
-   through chapters no panel is showing.
+   A strip naming every chapter the reader has verses selected in, however far
+   apart they are. It sits on the ground rather than on paper because it
+   belongs to the page: the selection it describes may run through chapters no
+   panel is showing.
 
-   Above the row rather than in a panel corner, which also keeps the old
-   reason the corner had: a selection can run past the fold, and scrolling down
-   to click a fifth verse must not mean scrolling back up to act on the first
-   four. Nothing here scrolls with a panel. */
+   It hangs in the band the navbar clearance already leaves empty above the
+   panels, centred on the profile icon and stopping short of it. Out of the
+   flow, so a selection appearing does not drop the whole page down; and above
+   the panels rather than in a panel corner, which keeps the old reason the
+   corner had: a selection can run past the fold, and scrolling down to click a
+   fifth verse must not mean scrolling back up to act on the first four.
+   Nothing here scrolls with a panel.
+
+   One line, always: the band is a fixed height, so the places list scrolls
+   sideways rather than the tray growing into the panels. */
 
 .analyze-selection-tray {
+  position: absolute;
+  top: calc(var(--analyze-avatar-top) + var(--analyze-avatar-size) / 2);
+  /* Flush with the panel row's left edge. */
+  left: var(--space-md);
+  /* Stopping a gap short of the icon: its own inset, plus its width, plus the
+     gap. Both offsets are measured from the page's padding box, so the page
+     padding is not part of this sum. */
+  right: calc(
+    var(--analyze-avatar-right) + var(--analyze-avatar-size) + var(--space-sm)
+  );
+  transform: translateY(-50%);
+  z-index: 2;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-xs) var(--space-sm);
-  margin-bottom: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
   background-color: var(--ground-raised);
   border: var(--analyze-border-width) solid var(--ground-line);
@@ -412,6 +435,7 @@
 }
 
 .analyze-selection-tray-label {
+  flex: 0 0 auto;
   color: var(--on-ground-soft);
   font-size: 11px;
   text-transform: uppercase;
@@ -424,6 +448,10 @@
    actions stay pinned to the far end either way. */
 .analyze-selection-tray-prompt {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin: 0;
   color: var(--on-ground-soft);
   font-size: var(--font-base);
@@ -434,17 +462,23 @@
 .analyze-selection-places {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-xs);
   margin: 0;
   padding: 0;
   list-style: none;
-  /* Takes the slack, so the buttons sit at the far end of the strip. */
+  /* Takes the slack, so the buttons sit at the far end of the strip. Past that
+     the chips scroll: the strip keeps its one line whatever is selected.
+     min-width: 0 is what lets it shrink below its content and scroll. */
   flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .analyze-selection-place {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--space-xs);
   padding: 2px var(--space-xs);
@@ -476,6 +510,7 @@
 .analyze-selection-tray-actions {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: var(--space-xs);
   margin-left: auto;
 }
@@ -1124,5 +1159,15 @@
 
   .analyze-spine--left .analyze-spine-text {
     transform: none;
+  }
+}
+
+/* The profile icon draws smaller and tighter into the corner below 500px
+   (Navbar.css). The tray is measured off it, so it follows. */
+@media (max-width: 500px) {
+  .analyze-page {
+    --analyze-avatar-top:   10px;
+    --analyze-avatar-right: 10px;
+    --analyze-avatar-size:  30px;
   }
 }
