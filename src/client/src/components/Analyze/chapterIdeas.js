@@ -1,15 +1,15 @@
-// Which ideas belong to the chapter under study, and the order the note editor
-// offers every idea in.
+// Which ideas belong to the chapter under study.
 //
-// Both are pure derivations over lists Analyze already holds, and both are
-// needed in two places at once — the panel's "Ideas in this chapter" section
-// and the editor's picker are the same judgement rendered twice — so they live
-// here rather than being worked out inline where they happen to be read.
-
-// The two halves of the editor's picker. Exported because the tests name them
-// and because a heading spelled twice is a heading that drifts.
-export const IN_CHAPTER_HEADING = 'In this chapter';
-export const OTHER_IDEAS_HEADING = 'Other ideas';
+// A pure derivation over lists Analyze already holds, and needed in one place
+// — the panel's "Ideas in this chapter" section. It lives here rather than
+// inline because it is a judgement about what belongs to a chapter, not about
+// how a list is drawn.
+//
+// It used to have a companion, groupIdeaOptions, which ordered the note
+// editor's picker with this chapter's ideas first. That picker is now a field
+// of bubbles laid out by TOPIC, and a chapter is not a topic — there is no
+// cell in that field for "here". The ordering went with it deliberately; the
+// shortlist below is still where a chapter's own ideas are seen.
 
 /**
  * The ideas this chapter holds: the ones imported into it, followed by the
@@ -51,36 +51,4 @@ export const collectChapterIdeas = (imported = [], notes = [], ideas = []) => {
     notes.forEach(note => (note.ideas || []).forEach(take));
 
     return collected;
-};
-
-// The picker's shape: an id and the label to show. The editor never sees an
-// idea's body, so this is everything it needs.
-const toOption = (idea) => ({ id: idea.id, label: idea.title });
-
-/**
- * Every idea, offered to the note editor with this chapter's first.
- *
- * A note written here is usually filed under an idea imported here, so those
- * go at the top under a heading. The rest stay below and stay checkable: an
- * idea is not confined to the chapters it has been imported into, and a picker
- * that hid the others would make filing a note under anything else impossible
- * rather than merely less likely.
- *
- * With nothing imported there is no top group and no heading either — one
- * ungrouped list, exactly what a reader who has never imported anything sees.
- *
- * @returns [{ heading?, options: [{ id, label }] }] for MultiSelect
- */
-export const groupIdeaOptions = (ideas = [], chapterIdeas = []) => {
-    const here = new Set(chapterIdeas.map(idea => idea.id));
-    const rest = ideas.filter(idea => !here.has(idea.id)).map(toOption);
-
-    if (chapterIdeas.length === 0) {
-        return [{ options: rest }];
-    }
-
-    return [
-        { heading: IN_CHAPTER_HEADING, options: chapterIdeas.map(toOption) },
-        ...(rest.length > 0 ? [{ heading: OTHER_IDEAS_HEADING, options: rest }] : []),
-    ];
 };

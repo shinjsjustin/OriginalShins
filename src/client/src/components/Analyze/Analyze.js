@@ -14,7 +14,7 @@ import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
 import useTopics from './useTopics';
 import useChapterIdeas from './useChapterIdeas';
-import { collectChapterIdeas, groupIdeaOptions } from './chapterIdeas';
+import { collectChapterIdeas } from './chapterIdeas';
 import { describePosition } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';
@@ -134,10 +134,9 @@ const Analyze = () => {
     );
 
     // What this chapter holds: what was imported into it, plus what the notes
-    // anchored here are already filed under. One derivation, read twice — the
-    // panel lists it and the editor's picker is ordered by it.
+    // anchored here are already filed under. The panel's "Ideas in this
+    // chapter" section is the one place that reads it.
     const chapterIdeaList = collectChapterIdeas(importedIdeas, notes.notes, ideas);
-    const ideaGroups = groupIdeaOptions(ideas, chapterIdeaList);
 
     // The open note comes from the current lists whenever they hold it, so the
     // editor always shows the latest fetch. It survives navigating to a chapter
@@ -385,7 +384,6 @@ const Analyze = () => {
                             hoveredNoteId={hoveredNoteId}
                             scrollRequest={scrollRequest}
                             isComposingIdea={isComposingIdea}
-                            ideaGroups={ideaGroups}
                             onHoverNote={setHoveredNoteId}
                             onOpenNote={setActiveNoteId}
                             onCloseNote={handleCloseNote}

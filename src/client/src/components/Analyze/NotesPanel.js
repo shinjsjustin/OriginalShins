@@ -46,7 +46,6 @@ const NotesPanel = ({
     hoveredNoteId,
     scrollRequest,
     isComposingIdea,
-    ideaGroups,
     onHoverNote,
     onOpenNote,
     onCloseNote,
