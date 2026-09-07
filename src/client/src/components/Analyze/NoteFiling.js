@@ -46,8 +46,31 @@ const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
     // the same rule NotesPanel follows for the chapter importer.
     const [isImporting, setIsImporting] = useState(false);
 
+    // There is no optimistic update: a row stays on screen, closed over this
+    // render's ideaIds/topicIds, until its write returns and a refreshed note
+    // comes back down. Both endpoints replace the whole membership, so two
+    // rows removed in quick succession send two whole-set writes racing on
+    // stale copies of the same list — whichever lands second silently puts
+    // back what the first one just removed. One flag rather than one per
+    // tier: cross-tier writes (one idea, one topic) can't actually race, but
+    // the window is milliseconds and "a filing write is in flight, wait" is
+    // the simpler and more honest thing to hold the reader to than tracking
+    // which tier is busy.
+    const [isSaving, setIsSaving] = useState(false);
+
     const ideaIds = note.ideas.map(idea => idea.id);
     const topicIds = note.topics.map(topic => topic.id);
+
+    // Runs one whole-set write while isSaving is held. handleSaveIdeas and
+    // handleSaveTopics are async and resolve to the saved note — but they
+    // resolve to null, rather than rejecting, when the underlying write
+    // fails (useCollection.run catches it and returns null). Promise.resolve
+    // plus finally clears the flag either way, so a failed save doesn't leave
+    // this section frozen.
+    const runWrite = (save) => {
+        setIsSaving(true);
+        Promise.resolve(save()).finally(() => setIsSaving(false));
+    };
 
     // A plain function rather than a useCallback: both id lists above are
     // rebuilt by .map() on every render, so a memo keyed on them could never
@@ -55,16 +78,20 @@ const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
     const handleImport = (pick) => {
         setIsImporting(false);
 
+        // A write from an unfile click, or an earlier import, is still in
+        // flight — see isSaving above. Drop this one rather than race it.
+        if (isSaving) return;
+
         if (pick.kind === 'topic') {
             const next = withMember(topicIds, pick.id);
             // Referentially equal means the note already holds it — see
             // withMember. Nothing to send.
-            if (next !== topicIds) onSaveTopics(note.id, next);
+            if (next !== topicIds) runWrite(() => onSaveTopics(note.id, next));
             return;
         }
 
         const next = withMember(ideaIds, pick.id);
-        if (next !== ideaIds) onSaveIdeas(note.id, next);
+        if (next !== ideaIds) runWrite(() => onSaveIdeas(note.id, next));
     };
 
     // Ideas first, then topics — the order the two memberships are written in
@@ -74,13 +101,13 @@ const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
             key: `idea-${idea.id}`,
             kind: 'idea',
             title: idea.title,
-            onUnfile: () => onSaveIdeas(note.id, withoutMember(ideaIds, idea.id)),
+            onUnfile: () => runWrite(() => onSaveIdeas(note.id, withoutMember(ideaIds, idea.id))),
         })),
         ...note.topics.map(topic => ({
             key: `topic-${topic.id}`,
             kind: 'topic',
             title: topic.name,
-            onUnfile: () => onSaveTopics(note.id, withoutMember(topicIds, topic.id)),
+            onUnfile: () => runWrite(() => onSaveTopics(note.id, withoutMember(topicIds, topic.id))),
         })),
     ];
 
@@ -104,6 +131,7 @@ const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
                             className="analyze-filing-remove"
                             onClick={row.onUnfile}
                             aria-label={unfileLabelFor(row.title)}
+                            disabled={isSaving}
                         >
                             ×
                         </button>

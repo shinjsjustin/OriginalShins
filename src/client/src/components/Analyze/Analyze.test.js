@@ -1815,6 +1815,53 @@ describe('Filing a note under ideas and topics', () => {
         await waitFor(() => expect(filedTitles()).toEqual(['Abiding']));
     });
 
+    test('a second unfile is blocked while an earlier write is still in flight, so a removal cannot be resurrected', async () => {
+        // Arrange — two ideas, and a fetch whose ideas PUT hangs until this
+        // test releases it by hand — standing in for the real race, where the
+        // first PUT is simply slower than the click that starts the second.
+        const abiding = addIdea('Abiding');
+        const pruning = addIdea('Pruning');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id, pruning.id]);
+
+        let releaseIdeasPut;
+        const answer = global.fetch.getMockImplementation();
+        global.fetch = jest.fn((url, options = {}) => {
+            const method = options.method || 'GET';
+            if (/\/notes\/\d+\/ideas$/.test(url) && method === 'PUT') {
+                requests.push({ url, method, body: options.body ? JSON.parse(options.body) : undefined });
+                return new Promise(resolve => { releaseIdeasPut = resolve; });
+            }
+            return answer(url, options);
+        });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act — unfile Abiding. The PUT is sent and stays in flight.
+        await unfile('Abiding');
+        expect(ideaLinkRequests()).toHaveLength(1);
+
+        // Assert — Pruning's × is disabled while that write is out, so a
+        // click on it cannot start a second, racing whole-set write.
+        const pruningUnfile = within(panel('Notes')).getByRole('button', {
+            name: 'Unfile Pruning from this note',
+        });
+        expect(pruningUnfile).toBeDisabled();
+
+        await act(async () => {
+            fireEvent.click(pruningUnfile);
+        });
+        expect(ideaLinkRequests()).toHaveLength(1);
+
+        // Cleanup — release the held write so nothing is left in flight.
+        await act(async () => {
+            releaseIdeasPut(await jsonResponse({ note: hydrate(store.notes.find(item => item.id === note.id)) }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
+    });
+
     test('the link survives a round trip to the server, not just the click', async () => {
         // Arrange
         const abiding = addIdea('Abiding');
