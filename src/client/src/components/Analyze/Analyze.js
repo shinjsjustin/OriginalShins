@@ -226,6 +226,16 @@ const Analyze = () => {
         }
     }, [notes, retain]);
 
+    // The topic tier's copy of handleSaveIdeas, retained for the same reason:
+    // the response is the freshest copy of the note and the list refetch that
+    // follows has not landed yet.
+    const handleSaveTopics = useCallback(async (noteId, topicIds) => {
+        const note = await notes.setNoteTopics(noteId, topicIds);
+        if (note) {
+            retain(note);
+        }
+    }, [notes, retain]);
+
     // A new idea starts in the chapter it was started in. "+ New idea" sits in
     // this panel, beside this passage, which says the idea belongs here as
     // plainly as importing one does — and without the second call the button's
@@ -389,6 +399,7 @@ const Analyze = () => {
                             onAddPassage={setAddingToNoteId}
                             onRemoveReference={notes.removeReference}
                             onSaveIdeas={handleSaveIdeas}
+                            onSaveTopics={handleSaveTopics}
                         />
                     )}
                     </main>

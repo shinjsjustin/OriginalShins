@@ -23,6 +23,7 @@ const NoteEditor = ({
     onAddPassage,
     onRemoveReference,
     onSaveIdeas,
+    onSaveTopics,
     onClose,
 }) => {
     const [isEditing, setIsEditing] = useState(false);

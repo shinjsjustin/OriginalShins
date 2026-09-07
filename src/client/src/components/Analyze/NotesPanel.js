@@ -60,6 +60,7 @@ const NotesPanel = ({
     onAddPassage,
     onRemoveReference,
     onSaveIdeas,
+    onSaveTopics,
 }) => {
     const heading = describePosition(books, position);
     const bodyRef = useRef(null);
@@ -138,6 +139,7 @@ const NotesPanel = ({
                         onAddPassage={onAddPassage}
                         onRemoveReference={onRemoveReference}
                         onSaveIdeas={onSaveIdeas}
+                        onSaveTopics={onSaveTopics}
                         onClose={onCloseNote}
                     />
                 )}
