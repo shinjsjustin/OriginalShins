@@ -1478,9 +1478,20 @@ describe('The notes API harness', () => {
         await renderAnalyze();
         await waitForPanels();
 
-        // Assert — the two memberships stay apart.
-        expect(store.noteTopics).toEqual([{ noteId: note.id, topicId: faith.id, sortOrder: 0 }]);
-        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+        // Assert — read the note back the way the panel does, through GET
+        // /notes and hydrate, rather than the store this Arrange block just
+        // wrote by hand. topics carry Faith under `name`; ideas carry Abiding
+        // under `title` — a hydrate that swapped or merged the two fields
+        // would fail one of these, where reading back store.noteTopics /
+        // store.noteIdeas directly could not have caught it.
+        const { unreferenced } = await fetchJson('/notes?bookId=1&chapter=1');
+        const hydrated = unreferenced.find(item => item.id === note.id);
+        expect(hydrated.topics).toEqual([
+            { noteId: note.id, id: faith.id, name: 'Faith', sortOrder: 0 },
+        ]);
+        expect(hydrated.ideas).toEqual([
+            { noteId: note.id, id: abiding.id, title: 'Abiding', sortOrder: 0 },
+        ]);
     });
 
     // The test above seeds note_topics by calling the store helper directly,
