@@ -63,8 +63,19 @@
 }
 
 /* The field's own box. min-height: 0 is what lets it shrink inside the column
-   rather than pushing the bar off the bottom of the overlay. */
+   rather than pushing the bar off the bottom of the overlay.
+
+   `position` is what keeps the field INSIDE it. `.thoughts-field` is
+   `absolute; inset: 0`, so it fills the nearest positioned ancestor — and with
+   no position here that was `.bubble-overlay-surface`, the whole viewport. The
+   field then reached down over the bar: it paints no background, so Cancel and
+   Import stayed perfectly visible under a transparent layer that ate every
+   click on them. It also handed the layout functions a canvas taller than the
+   box the cards are drawn in, putting the bottom row partly behind the bar.
+   The Thoughts page never showed either, because `.thoughts-canvas` has
+   carried `position: relative` from the start. */
 .bubble-picker-field {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
 }
