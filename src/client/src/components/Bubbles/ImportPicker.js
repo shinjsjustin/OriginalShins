@@ -37,19 +37,39 @@ import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
 // Notes are never selectable. A topic's fan holds its notes beside its ideas
 // (see buildClusters), and a note is not importable into anything.
 
-const PROMPT = 'Pick a topic or an idea to import.';
+// The empty-state prompt has to match what selectableKinds actually allows —
+// a chapter's importer offers ideas only (PUT /api/chapter-ideas takes
+// ideaIds; a chapter has no topic membership), and telling its reader to
+// "pick a topic" invites a click that opens a fan and forms no pick. Topic-
+// only is not a case any caller uses today, but the branch costs nothing to
+// keep correct, so it gets its own line rather than a silent fallthrough to
+// the idea wording.
+const PROMPT_BOTH = 'Pick a topic or an idea to import.';
+const PROMPT_IDEA_ONLY = 'Pick an idea to import.';
+const PROMPT_TOPIC_ONLY = 'Pick a topic to import.';
+
+const emptyPrompt = (selectableKinds) => {
+    const canPickTopic = selectableKinds.includes('topic');
+    const canPickIdea = selectableKinds.includes('idea');
+
+    if (canPickTopic && canPickIdea) return PROMPT_BOTH;
+    if (canPickTopic) return PROMPT_TOPIC_ONLY;
+    return PROMPT_IDEA_ONLY;
+};
 
 /**
  * The line the confirm bar shows.
  *
  * A function rather than JSX inline, because the phrasing is the whole point
  * of the bar: it has to name WHICH KIND as well as which thing, and the empty
- * case is a prompt rather than a blank. Exported so a caller wanting a
- * different wording has something to read; the tests reach it through the
- * bar's own `role="status"`, which is where a reader meets it.
+ * case is a prompt rather than a blank. `selectableKinds` is threaded through
+ * so the empty-state prompt names only what this caller can actually accept
+ * — see emptyPrompt. Exported so a caller wanting a different wording has
+ * something to read; the tests reach it through the bar's own
+ * `role="status"`, which is where a reader meets it.
  */
-export const describePick = (pick, topics, ideas) => {
-    if (!pick) return PROMPT;
+export const describePick = (pick, topics, ideas, selectableKinds) => {
+    if (!pick) return emptyPrompt(selectableKinds);
 
     if (pick.kind === 'topic') {
         const topic = topics.find(item => item.id === pick.id);
@@ -113,7 +133,7 @@ const ImportPicker = ({
                     them. */}
                 <div className="bubble-picker-bar">
                     <p className="bubble-picker-pick" role="status">
-                        {describePick(pick, topics, ideas)}
+                        {describePick(pick, topics, ideas, selectableKinds)}
                     </p>
 
                     <div className="bubble-picker-actions">

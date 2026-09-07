@@ -92,6 +92,21 @@ describe('ImportPicker', () => {
         expect(screen.getByRole('status')).toHaveTextContent(/pick/i);
     });
 
+    test('the empty prompt names both kinds when both are selectable', () => {
+        renderPicker({ selectableKinds: ['idea', 'topic'] });
+
+        expect(screen.getByRole('status')).toHaveTextContent('Pick a topic or an idea to import.');
+    });
+
+    test('the empty prompt does not invite a topic when only ideas are selectable', () => {
+        // The chapter importer's case: PUT /api/chapter-ideas takes ideaIds
+        // and a chapter has no topic membership to write, so the bar must not
+        // tell the reader to pick something the dialog will silently refuse.
+        renderPicker({ selectableKinds: ['idea'] });
+
+        expect(screen.getByRole('status')).toHaveTextContent('Pick an idea to import.');
+    });
+
     test('imports the picked idea, and does not close itself', () => {
         // The caller closes it. Only the caller knows whether the write was
         // attempted, so only the caller can decide the overlay is finished.
