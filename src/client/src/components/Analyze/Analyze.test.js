@@ -503,6 +503,12 @@ const bubble = (name) => within(importerOverlay())
     .getByText(name, { selector: '.thoughts-bubble-title' })
     .closest('button');
 
+// The confirm step. The overlay holds the pick and writes nothing until this
+// is pressed — see ImportPicker.
+const confirmImport = () => clickAndSettle(
+    within(importerOverlay()).getByRole('button', { name: 'Import' })
+);
+
 // The panel's per-chapter shortlist, by the titles it lists.
 const chapterIdeaTitles = () => Array.from(ideaRows()).map(
     row => row.querySelector('.analyze-entry-title').textContent
@@ -1680,7 +1686,7 @@ describe('Importing an idea into the chapter', () => {
         expect(bubble('Unfiled ideas')).toBeInTheDocument();
     });
 
-    test('clicking an idea imports it into the chapter and closes the overlay', async () => {
+    test('picking an idea and confirming imports it into the chapter', async () => {
         // Arrange
         const abiding = addIdea('Abiding');
 
@@ -1688,8 +1694,11 @@ describe('Importing an idea into the chapter', () => {
         await waitForPanels();
         await openImporter();
 
-        // Act
+        // Act — the pick alone must write nothing.
         await clickAndSettle(bubble('Abiding'));
+        expect(chapterIdeaRequests()).toHaveLength(0);
+
+        await confirmImport();
 
         // Assert — the whole set, against the chapter the primary panel shows.
         expect(chapterIdeaRequests()).toHaveLength(1);
@@ -1698,6 +1707,24 @@ describe('Importing an idea into the chapter', () => {
         expect(importerOverlay()).toBeNull();
         await waitFor(() => expect(panel('Notes')).toHaveTextContent('Ideas in this chapter'));
         expect(chapterIdeaTitles()).toEqual(['Abiding']);
+    });
+
+    test('cancelling the importer writes nothing', async () => {
+        // Arrange
+        addIdea('Abiding');
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openImporter();
+
+        // Act
+        await clickAndSettle(bubble('Abiding'));
+        await clickAndSettle(within(importerOverlay()).getByRole('button', { name: 'Cancel' }));
+
+        // Assert
+        expect(chapterIdeaRequests()).toHaveLength(0);
+        expect(importerOverlay()).toBeNull();
+        expect(store.chapterIdeas).toEqual([]);
     });
 
     test('moving the primary panel shows that chapter\'s shortlist instead', async () => {
