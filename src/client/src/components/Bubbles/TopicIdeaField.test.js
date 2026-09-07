@@ -599,12 +599,17 @@ describe('picking from the field', () => {
     });
 
     test('an idea and a topic sharing an id are not confused for each other', () => {
-        // Topic 1 and idea 11 are different rows in different tables. A pick
-        // that carried only an id would light the wrong card the moment the
-        // two tiers' ids overlapped.
-        renderField({ pick: { kind: 'topic', id: 1 }, onPickTopic: jest.fn() });
+        // Topic 11 and idea 11 are different rows in different tables. A pick
+        // that carried only an id would light both at once — so the ids here
+        // deliberately collide, which is the only arrangement that can catch
+        // a `kind` the field forgot to check.
+        renderField({
+            topics: [...TOPICS, { id: 11, name: 'Remnant', ideaCount: 0 }],
+            pick: { kind: 'topic', id: 11 },
+            onPickTopic: jest.fn(),
+        });
 
-        expect(cardOf('Faith')).toHaveClass('is-picked');
+        expect(cardOf('Remnant')).toHaveClass('is-picked');
         expect(cardOf('Covenant renewal')).not.toHaveClass('is-picked');
     });
 
