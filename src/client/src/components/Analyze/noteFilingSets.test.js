@@ -1,4 +1,4 @@
-import { withMember, withoutMember } from './noteFiling';
+import { withMember, withoutMember } from './noteFilingSets';
 
 // Filing a note is always a whole-set PUT, so every write here is "the set it
 // has, plus or minus one". Two functions rather than four inline spreads: an

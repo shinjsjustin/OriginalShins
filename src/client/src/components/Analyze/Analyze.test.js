@@ -1536,12 +1536,6 @@ describe('The notes API harness', () => {
     });
 });
 
-// ─── Linking a note to ideas ────────────────────────────────────────────────
-//
-// The multi-select is the reason PUT /notes/:id/ideas replaces the whole set
-// rather than adding one link at a time, so what these tests watch is the body
-// of that request: it must always be the complete membership the checkboxes
-// show, including the empty one.
 describe('Adding passages to an open note', () => {
     const openFirstNote = async () => {
         await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
@@ -1664,34 +1658,74 @@ describe('Adding passages to an open note', () => {
     });
 });
 
-describe('Linking a note to ideas', () => {
+// ─── Filing an open note ────────────────────────────────────────────────────
+//
+// The editor files a note through the same field of bubbles the chapter
+// importer uses, and it can file under a TOPIC as well as an idea. The two are
+// separate memberships written to separate endpoints, so the assertions that
+// matter are the ones proving a write to one leaves the other alone.
+describe('Filing a note under ideas and topics', () => {
     const openFirstNote = async () => {
         await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
         await clickAndSettle(noteRows()[0]);
     };
 
-    const ideaCheckbox = (name) => within(panel('Notes')).getByRole('checkbox', { name });
+    const ideaLinkRequests = () =>
+        requestsMatching(r => r.method === 'PUT' && /\/notes\/\d+\/ideas$/.test(r.url));
 
-    const ideaLinkRequests = () => requestsMatching(r => r.method === 'PUT' && r.url.endsWith('/ideas'));
+    const topicLinkRequests = () =>
+        requestsMatching(r => r.method === 'PUT' && /\/notes\/\d+\/topics$/.test(r.url));
 
-    test('offers every idea, with the note\'s current ones already checked', async () => {
+    // The rows the editor lists, by the titles they print.
+    const filedTitles = () => Array.from(
+        panel('Notes').querySelectorAll('.analyze-filing-title')
+    ).map(row => row.textContent);
+
+    const openFiler = () => clickAndSettle(
+        within(panel('Notes')).getByRole('button', { name: 'Import' })
+    );
+
+    const unfile = (name) => clickAndSettle(
+        within(panel('Notes')).getByRole('button', { name: `Unfile ${name} from this note` })
+    );
+
+    test('lists the ideas and the topics the note is filed under', async () => {
         // Arrange
+        const faith = addTopic('Faith');
         const abiding = addIdea('Abiding');
         addIdea('Pruning');
-        const note = addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+        const note = addNote({ title: 'The vine',
+                               reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
         replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
 
         // Act
         await renderAnalyze();
         await waitForPanels();
         await openFirstNote();
 
-        // Assert
-        expect(ideaCheckbox('Abiding')).toBeChecked();
-        expect(ideaCheckbox('Pruning')).not.toBeChecked();
+        // Assert — what it holds, and nothing it does not. "Pruning" exists
+        // and is not listed, because this is the note's filing, not a picker.
+        expect(filedTitles()).toEqual(['Abiding', 'Faith']);
+        expect(panel('Notes')).not.toHaveTextContent('Pruning');
     });
 
-    test('checking an idea PUTs the complete set, not just the one clicked', async () => {
+    test('marks which rows are topics', async () => {
+        // The × means different things on the two and goes to different
+        // endpoints, so a flat list that hid the difference would be a list
+        // whose buttons cannot be told apart.
+        const faith = addTopic('Faith');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        expect(within(panel('Notes')).getByText('topic')).toBeInTheDocument();
+    });
+
+    test('importing an idea PUTs the note\'s ideas plus that one', async () => {
         // Arrange
         const abiding = addIdea('Abiding');
         const pruning = addIdea('Pruning');
@@ -1703,17 +1737,20 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Act
-        await clickAndSettle(ideaCheckbox('Pruning'));
+        await openFiler();
+        await clickAndSettle(bubble('Pruning'));
+        await confirmImport();
 
-        // Assert — both ids, in the order the widget holds them.
+        // Assert — the complete set, in the order the note holds it.
         expect(ideaLinkRequests()).toHaveLength(1);
         expect(ideaLinkRequests()[0].body).toEqual({ ideaIds: [abiding.id, pruning.id] });
-        await waitFor(() => expect(ideaCheckbox('Pruning')).toBeChecked());
-        expect(ideaCheckbox('Abiding')).toBeChecked();
+        expect(topicLinkRequests()).toHaveLength(0);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding', 'Pruning']));
     });
 
-    test('unchecking the last idea sends an empty set and leaves the note behind', async () => {
+    test('importing a topic PUTs the note\'s topics and leaves its ideas alone', async () => {
         // Arrange
+        const faith = addTopic('Faith');
         const abiding = addIdea('Abiding');
         const note = addNote({ title: 'The vine' });
         replaceNoteIdeas(note.id, [abiding.id]);
@@ -1723,12 +1760,59 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Act
-        await clickAndSettle(ideaCheckbox('Abiding'));
+        await openFiler();
+        await clickAndSettle(bubble('Faith'));
+        await confirmImport();
 
-        // Assert — an orphan note is a legal state, so this is a normal save.
+        // Assert — the topic set was written, the idea set was not touched.
+        expect(topicLinkRequests()).toHaveLength(1);
+        expect(topicLinkRequests()[0].body).toEqual({ topicIds: [faith.id] });
+        expect(ideaLinkRequests()).toHaveLength(0);
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding', 'Faith']));
+    });
+
+    test('unfiling an idea sends the set without it and leaves the topics', async () => {
+        // Arrange
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await unfile('Abiding');
+
+        // Assert — a note under no idea is a legal state, so this is a normal
+        // save, and the topic membership is untouched.
         expect(ideaLinkRequests()[0].body).toEqual({ ideaIds: [] });
-        await waitFor(() => expect(ideaCheckbox('Abiding')).not.toBeChecked());
-        expect(within(panel('Notes')).getByRole('heading', { level: 3 })).toHaveTextContent('The vine');
+        expect(store.noteTopics).toEqual([{ noteId: note.id, topicId: faith.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Faith']));
+    });
+
+    test('unfiling a topic sends the set without it and leaves the ideas', async () => {
+        // Arrange
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await unfile('Faith');
+
+        // Assert
+        expect(topicLinkRequests()[0].body).toEqual({ topicIds: [] });
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding']));
     });
 
     test('the link survives a round trip to the server, not just the click', async () => {
@@ -1740,18 +1824,41 @@ describe('Linking a note to ideas', () => {
         await waitForPanels();
         await openFirstNote();
 
-        // Act — link it, close the editor, and open it again from the list.
-        await clickAndSettle(ideaCheckbox('Abiding'));
+        // Act — file it, close the editor, open it again from the list.
+        await openFiler();
+        await clickAndSettle(bubble('Abiding'));
+        await confirmImport();
         await clickAndSettle(within(panel('Notes')).getByRole('button', { name: '← All notes' }));
         await openFirstNote();
 
-        // Assert — the checkbox is checked because the server said so.
+        // Assert — it is listed because the server said so.
         expect(store.noteIdeas).toEqual([{ noteId: 1, ideaId: abiding.id, sortOrder: 0 }]);
-        expect(ideaCheckbox('Abiding')).toBeChecked();
+        expect(filedTitles()).toEqual(['Abiding']);
     });
 
-    test('says so when there are no ideas to file the note under', async () => {
-        // Arrange — no ideas at all, which is the state a new user is in.
+    test('importing something the note already holds writes nothing', async () => {
+        // Arrange
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await openFiler();
+        await clickAndSettle(bubble('Abiding'));
+        await confirmImport();
+
+        // Assert — a PUT storing what is already stored is a round trip spent
+        // redrawing the same list.
+        expect(ideaLinkRequests()).toHaveLength(0);
+        expect(filedTitles()).toEqual(['Abiding']);
+    });
+
+    test('says so when the note is filed under nothing, and still offers Import', async () => {
+        // Arrange
         addNote({ title: 'The vine' });
 
         // Act
@@ -1760,8 +1867,9 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Assert
-        expect(panel('Notes')).toHaveTextContent('No ideas yet');
-        expect(within(panel('Notes')).queryAllByRole('checkbox')).toHaveLength(0);
+        expect(filedTitles()).toEqual([]);
+        expect(panel('Notes')).toHaveTextContent('Not filed under anything yet');
+        expect(within(panel('Notes')).getByRole('button', { name: 'Import' })).toBeInTheDocument();
     });
 });
 
@@ -1899,33 +2007,8 @@ describe('Importing an idea into the chapter', () => {
         expect(requestsMatching(r => r.method === 'DELETE')).toHaveLength(0);
 
         await clickAndSettle(noteRows()[0]);
-        expect(within(panel('Notes')).getByRole('checkbox', { name: 'Abiding' })).toBeInTheDocument();
-    });
-
-    test('the editor offers this chapter\'s ideas first, with the rest below', async () => {
-        // Arrange — two ideas, one of them in this chapter. The corpus order
-        // puts the other one first, so a picker that ignored the chapter would
-        // list them the other way round.
-        addIdea('Pruning');
-        const abiding = addIdea('Abiding');
-        replaceChapterIdeas(1, 1, [abiding.id]);
-        addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
-
-        await renderAnalyze();
-        await waitForPanels();
-        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
-
-        // Act
-        await clickAndSettle(noteRows()[0]);
-
-        // Assert — grouped, chapter first, and every other idea still there to
-        // be filed under.
-        expect(within(panel('Notes')).getByText('In this chapter')).toBeInTheDocument();
-        expect(within(panel('Notes')).getByText('Other ideas')).toBeInTheDocument();
-
-        const offered = Array.from(panel('Notes').querySelectorAll('.analyze-multiselect-option'))
-            .map(option => option.textContent);
-        expect(offered).toEqual(['Abiding', 'Pruning']);
+        await clickAndSettle(within(panel('Notes')).getByRole('button', { name: 'Import' }));
+        expect(bubble('Abiding')).toBeInTheDocument();
     });
 });
 

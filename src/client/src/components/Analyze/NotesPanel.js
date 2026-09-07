@@ -133,7 +133,8 @@ const NotesPanel = ({
                     <NoteEditor
                         note={activeNote}
                         books={books}
-                        ideaGroups={ideaGroups}
+                        topics={topics}
+                        ideas={ideas}
                         onSave={onSaveNote}
                         onDelete={onDeleteNote}
                         onAddPassage={onAddPassage}

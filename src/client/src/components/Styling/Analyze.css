@@ -1130,6 +1130,63 @@
   color: var(--madder);
 }
 
+/* ─── The editor's filing ────────────────────────────────────────────────────
+   What the open note is filed under: its ideas, then its topics. Shaped like
+   the reference list above it, because it is the same kind of thing — a short
+   list of what this note is attached to, each row with a way off. */
+
+.analyze-filing-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-sm);
+  padding: 0;
+  list-style: none;
+}
+
+.analyze-filing-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-xs);
+  border: var(--analyze-border-width) solid var(--ground-line);
+  border-radius: var(--radius-sm);
+}
+
+/* Takes the slack so the × sits at the far end, and truncates rather than
+   wrapping the row onto a second line. */
+.analyze-filing-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Quiet, and only on topics — an unmarked row is an idea. */
+.analyze-filing-kind {
+  flex: 0 0 auto;
+  color: var(--gold-lit);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.analyze-filing-remove {
+  flex: 0 0 auto;
+  padding: 0 var(--space-xs);
+  background: none;
+  border: none;
+  color: var(--on-ground-soft);
+  cursor: pointer;
+  font-size: var(--font-base);
+  line-height: 1;
+}
+
+.analyze-filing-remove:hover {
+  color: var(--gold-lit);
+}
+
 /* ─── Narrow Screens ─────────────────────────────────────────────────────── */
 
 /* Below three panel widths plus gaps, stack instead of squeezing. A stacked
