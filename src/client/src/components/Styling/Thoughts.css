@@ -381,6 +381,20 @@
   border-color: var(--color-primary);
 }
 
+/* The card the reader has chosen in the importer, as opposed to the one the
+   spotlight is on. A full ring rather than the left edge `is-selected` draws,
+   because the two arrive together — the topic you picked is normally the topic
+   whose fan you opened — and one of them has to still be legible.
+
+   It is placed after `.is-selected` deliberately: both write `--bubble-edge`,
+   and on a card that is both, "chosen" is the stronger statement and should be
+   the one that survives. */
+.thoughts-bubble.is-picked {
+  --bubble-edge: inset 0 0 0 2px var(--gold);
+
+  border-color: var(--gold);
+}
+
 /* Near-invisible, not gone. The field keeps its shape while one topic is lit,
    and — the practical half — a card at 0.08 is still a hit target, so hovering
    another topic is still how the reader moves the spotlight. */

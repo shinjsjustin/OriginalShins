@@ -2,8 +2,11 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import TopicIdeaField, { UNFILED_TITLE, buildClusters, clusterMembers } from './TopicIdeaField';
+import BubbleCard from './BubbleCard';
 import useThoughtsView from '../Thoughts/useThoughtsView';
 import { UNTITLED_NOTE_LABEL } from '../Thoughts/IdeaOrbit';
+
+const BOX = { x: 0, y: 0, width: 100, height: 60 };
 
 // ─── What the field has to get right ────────────────────────────────────────
 //
@@ -539,5 +542,31 @@ describe('TopicIdeaField note petals', () => {
         fireEvent.click(screen.getByRole('button', { name: `Pin ${UNTITLED_NOTE_LABEL}` }));
 
         expect(onTogglePin).toHaveBeenCalledWith('note', 51, UNTITLED_NOTE_LABEL);
+    });
+});
+
+describe('BubbleCard picked state', () => {
+    test('a picked card carries is-picked, and an unpicked one does not', () => {
+        const { rerender } = render(
+            <BubbleCard title="Faith" position={BOX} onActivate={() => {}} />
+        );
+
+        expect(screen.getByRole('button', { name: /Faith/ }).closest('.thoughts-bubble'))
+            .not.toHaveClass('is-picked');
+
+        rerender(<BubbleCard title="Faith" position={BOX} isPicked onActivate={() => {}} />);
+
+        expect(screen.getByRole('button', { name: /Faith/ }).closest('.thoughts-bubble'))
+            .toHaveClass('is-picked');
+    });
+
+    test('picked and selected are independent — a card can be both at once', () => {
+        // The importer's common case: the topic you picked is the topic whose
+        // fan you opened to pick it.
+        render(<BubbleCard title="Faith" position={BOX} isPicked isSelected onActivate={() => {}} />);
+
+        const card = screen.getByRole('button', { name: /Faith/ }).closest('.thoughts-bubble');
+        expect(card).toHaveClass('is-picked');
+        expect(card).toHaveClass('is-selected');
     });
 });
