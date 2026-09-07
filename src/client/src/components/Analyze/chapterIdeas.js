@@ -5,11 +5,11 @@
 // inline because it is a judgement about what belongs to a chapter, not about
 // how a list is drawn.
 //
-// It used to have a companion, groupIdeaOptions, which ordered the note
-// editor's picker with this chapter's ideas first. That picker is now a field
-// of bubbles laid out by TOPIC, and a chapter is not a topic — there is no
-// cell in that field for "here". The ordering went with it deliberately; the
-// shortlist below is still where a chapter's own ideas are seen.
+// It used to have a companion that ordered the note editor's picker with
+// this chapter's ideas first. That picker is now a field of bubbles laid out
+// by TOPIC, and a chapter is not a topic — there is no cell in that field for
+// "here". The ordering went with it deliberately; the shortlist below is
+// still where a chapter's own ideas are seen.
 
 /**
  * The ideas this chapter holds: the ones imported into it, followed by the
