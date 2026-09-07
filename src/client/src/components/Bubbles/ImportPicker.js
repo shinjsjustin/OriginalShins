@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useState } from 'react';
 import BubbleOverlay from './BubbleOverlay';
 import TopicIdeaField from './TopicIdeaField';
 import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
@@ -79,20 +79,17 @@ const ImportPicker = ({
 }) => {
     const [pick, setPick] = useState(null);
 
-    const canPick = useCallback(
-        (kind) => selectableKinds.includes(kind),
-        [selectableKinds]
-    );
+    const canPick = (kind) => selectableKinds.includes(kind);
 
     // Guarded at the point the pick is FORMED rather than where it is drawn, so
     // a kind the caller did not offer cannot become picked by any route.
-    const pickIdea = useCallback((id) => {
+    const pickIdea = (id) => {
         if (canPick('idea')) setPick({ kind: 'idea', id });
-    }, [canPick]);
+    };
 
-    const pickTopic = useCallback((id) => {
+    const pickTopic = (id) => {
         if (canPick('topic')) setPick({ kind: 'topic', id });
-    }, [canPick]);
+    };
 
     return (
         <BubbleOverlay label={label} onClose={onClose}>
