@@ -395,6 +395,15 @@
   border-color: var(--gold);
 }
 
+/* The same swap the pinned card makes below: the idea card is the dark one,
+   and paper gold goes to a brown smudge on ground-raised. Both halves of the
+   edge move, not just the border — the ring is the part that has to be seen. */
+.thoughts-bubble--idea.is-picked {
+  --bubble-edge: inset 0 0 0 2px var(--gold-lit);
+
+  border-color: var(--gold-lit);
+}
+
 /* Near-invisible, not gone. The field keeps its shape while one topic is lit,
    and — the practical half — a card at 0.08 is still a hit target, so hovering
    another topic is still how the reader moves the spotlight. */
