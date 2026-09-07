@@ -545,6 +545,76 @@ describe('TopicIdeaField note petals', () => {
     });
 });
 
+describe('picking from the field', () => {
+    const renderField = (props = {}) => render(
+        <MemoryRouter>
+            <TopicIdeaField topics={TOPICS} ideas={IDEAS} {...props} />
+        </MemoryRouter>
+    );
+
+    const cardOf = (name) => screen.getByText(name, { selector: '.thoughts-bubble-title' })
+        .closest('.thoughts-bubble');
+
+    test('a topic click reports the pick when the caller asked for topic picking', () => {
+        const onPickTopic = jest.fn();
+        renderField({ onPickTopic });
+
+        clickTopic('Faith');
+
+        expect(onPickTopic).toHaveBeenCalledWith(1);
+    });
+
+    test('a topic click still opens the fan while picking it', () => {
+        // The two are not rivals: the fan is how the reader reaches the
+        // topic's ideas, and looking inside a topic is not evidence against
+        // wanting to file under it.
+        renderField({ onPickTopic: jest.fn() });
+
+        clickTopic('Faith');
+
+        expect(isOpen('Faith')).toBe(true);
+    });
+
+    test('without onPickTopic a topic click only opens the fan', () => {
+        // The Thoughts page's behaviour, unchanged.
+        renderField();
+
+        clickTopic('Faith');
+
+        expect(isOpen('Faith')).toBe(true);
+    });
+
+    test('draws the picked topic as picked, and nothing else', () => {
+        renderField({ pick: { kind: 'topic', id: 1 }, onPickTopic: jest.fn() });
+
+        expect(cardOf('Faith')).toHaveClass('is-picked');
+        expect(cardOf('Law')).not.toHaveClass('is-picked');
+    });
+
+    test('draws the picked idea as picked, and not the topic it sits under', () => {
+        renderField({ pick: { kind: 'idea', id: 11 }, onPickTopic: jest.fn() });
+
+        expect(cardOf('Covenant renewal')).toHaveClass('is-picked');
+        expect(cardOf('Faith')).not.toHaveClass('is-picked');
+    });
+
+    test('an idea and a topic sharing an id are not confused for each other', () => {
+        // Topic 1 and idea 11 are different rows in different tables. A pick
+        // that carried only an id would light the wrong card the moment the
+        // two tiers' ids overlapped.
+        renderField({ pick: { kind: 'topic', id: 1 }, onPickTopic: jest.fn() });
+
+        expect(cardOf('Faith')).toHaveClass('is-picked');
+        expect(cardOf('Covenant renewal')).not.toHaveClass('is-picked');
+    });
+
+    test('nothing is picked when pick is null', () => {
+        renderField({ pick: null, onPickTopic: jest.fn() });
+
+        expect(document.querySelectorAll('.is-picked')).toHaveLength(0);
+    });
+});
+
 describe('BubbleCard picked state', () => {
     test('a picked card carries is-picked, and an unpicked one does not', () => {
         const { rerender } = render(

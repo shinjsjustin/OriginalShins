@@ -141,6 +141,7 @@ const TopicCluster = ({
     isActive,
     isFaded,
     isExpanded,
+    isPicked,
     isPinned,
     onTogglePin,
     onEnter,
@@ -148,6 +149,7 @@ const TopicCluster = ({
     onTopicClick,
     onChipClick,
     onSelectIdea,
+    pickedIdeaId,
     bloomableNoteIds,
     isNoteBlooming,
     onNoteClick,
@@ -179,6 +181,7 @@ const TopicCluster = ({
                     position={position}
                     scale={topicBox.width / TOPIC_CARD.width}
                     isSelected={isActive}
+                    isPicked={isPicked}
                     isFaded={isFaded}
                     onActivate={() => onTopicClick(cluster.id)}
                     {...(cluster.kind === 'topic'
@@ -223,6 +226,7 @@ const TopicCluster = ({
                         key={`idea-${idea.id}`}
                         kind="idea"
                         title={ideaTitle}
+                        isPicked={pickedIdeaId === idea.id}
                         onActivate={() => onSelectIdea(idea.id)}
                         {...pinPropsFor('idea', idea.id, ideaTitle)}
                         {...petal}
@@ -239,6 +243,13 @@ const TopicCluster = ({
  * @param onSelectIdea  (ideaId) -> void; what clicking a fanned idea card
  *                      does. Thoughts opens the idea view with it, the
  *                      importer files the idea against the open chapter
+ * @param pick          { kind: 'idea' | 'topic', id } | null — which card is
+ *                      drawn as picked. It carries the KIND as well as the id
+ *                      because the two tiers number independently, and an id
+ *                      alone would light an idea and a topic together
+ * @param onPickTopic   (topicId) -> void. Optional: without it a topic card is
+ *                      not selectable and a click merely opens its fan, which
+ *                      is what the Thoughts page wants
  * @param isPinned      (itemType, itemId) -> boolean, from usePins. Optional,
  *                      and only meaningful alongside onTogglePin
  * @param onTogglePin   (itemType, itemId, title) -> void, from usePins.
@@ -255,6 +266,8 @@ const TopicIdeaField = ({
     topics = [],
     ideas = [],
     onSelectIdea = () => {},
+    pick = null,
+    onPickTopic = null,
     isPinned = () => false,
     onTogglePin = null,
     passagesByTopicId = {},
@@ -348,6 +361,8 @@ const TopicIdeaField = ({
                         isActive={bloom.isActive(clusterId) || isHeldOpen}
                         isFaded={bloom.isFaded(clusterId) && !isHeldOpen}
                         isExpanded={bloom.isExpanded(clusterId)}
+                        isPicked={Boolean(pick) && pick.kind === 'topic' && pick.id === clusterId}
+                        pickedIdeaId={pick && pick.kind === 'idea' ? pick.id : null}
                         isPinned={isPinned}
                         onTogglePin={onTogglePin}
                         onEnter={(id) => {
@@ -359,7 +374,14 @@ const TopicIdeaField = ({
                             bloom.onEnter(id);
                         }}
                         onLeave={bloom.onLeave}
-                        onTopicClick={bloom.onAnchorClick}
+                        onTopicClick={(id) => {
+                            // Both, and in this order. Picking is the caller's
+                            // business and opening is the field's, and a topic
+                            // that only did one of them would either be
+                            // unpickable or unopenable.
+                            if (onPickTopic) onPickTopic(id);
+                            bloom.onAnchorClick(id);
+                        }}
                         onChipClick={bloom.onChipClick}
                         onSelectIdea={onSelectIdea}
                         bloomableNoteIds={bloomableIdsByClusterId[clusterId] || []}
