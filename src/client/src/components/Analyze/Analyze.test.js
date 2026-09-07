@@ -54,6 +54,10 @@ const resetStore = () => {
         // server replaces it.
         ideas: [],
         noteIdeas: [],
+        // The note tier's DIRECT edge to topics — note_topics, not the topics
+        // a note reaches through an idea. Replaced whole, exactly as the
+        // server replaces it.
+        noteTopics: [],
         // The topics the importer's field of bubbles is built from, and the
         // per-chapter shortlist it writes into. Both are seeded by the tests
         // that need them; an idea under no topic still reaches the field
@@ -133,6 +137,23 @@ const ideasOf = (noteId) => store.noteIdeas
         return { noteId, id: idea.id, title: idea.title, sortOrder: link.sortOrder };
     });
 
+// The full-set replace for the note's direct topics, the mirror of
+// replaceNoteIdeas. A separate membership: writing one leaves the other alone.
+const replaceNoteTopics = (noteId, topicIds) => {
+    store.noteTopics = [
+        ...store.noteTopics.filter(link => link.noteId !== noteId),
+        ...topicIds.map((topicId, index) => ({ noteId, topicId, sortOrder: index })),
+    ];
+};
+
+const topicsOf = (noteId) => store.noteTopics
+    .filter(link => link.noteId === noteId)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(link => {
+        const topic = store.topics.find(item => item.id === link.topicId);
+        return { noteId, id: topic.id, name: topic.name, sortOrder: link.sortOrder };
+    });
+
 // The server computes index bounds from the verse table; the fake computes them
 // from the same formula. A client-supplied index is ignored here too.
 const resolveRange = ({ bookId, chapter, startVerse, endVerse }) => ({
@@ -180,6 +201,7 @@ const hydrate = (note) => ({
     ...note,
     references: referencesOf(note.id),
     ideas: ideasOf(note.id),
+    topics: topicsOf(note.id),
 });
 
 // The plan's overlap rule, which is the whole point of the denormalized bounds.
@@ -298,6 +320,16 @@ const handleRequest = (url, options = {}) => {
             return notFound();
         }
         replaceNoteIdeas(noteId, body.ideaIds);
+        return jsonResponse({ note: hydrate(store.notes.find(item => item.id === noteId)) });
+    }
+
+    const noteTopics = /\/notes\/(\d+)\/topics$/.exec(url);
+    if (noteTopics && method === 'PUT') {
+        const noteId = Number(noteTopics[1]);
+        if (!store.notes.some(item => item.id === noteId)) {
+            return notFound();
+        }
+        replaceNoteTopics(noteId, body.topicIds);
         return jsonResponse({ note: hydrate(store.notes.find(item => item.id === noteId)) });
     }
 
@@ -1424,6 +1456,27 @@ describe('Note editor', () => {
         await waitFor(() => expect(noteRows().length).toBe(0));
         expect(versesTinted('Passage')).toBe(0);
         expect(within(panel('Notes')).getByRole('button', { name: '+ New idea' })).toBeInTheDocument();
+    });
+});
+
+describe('The notes API harness', () => {
+    test('a note carries its direct topics, kept apart from its ideas', async () => {
+        // Arrange — one note under both an idea and a topic directly. The two
+        // are different tables, and a harness that conflated them would let a
+        // component that conflates them pass.
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert — the two memberships stay apart.
+        expect(store.noteTopics).toEqual([{ noteId: note.id, topicId: faith.id, sortOrder: 0 }]);
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
     });
 });
 
