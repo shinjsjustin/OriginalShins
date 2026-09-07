@@ -2,6 +2,10 @@ import React from 'react';
 import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import Analyze from './Analyze';
+// The real wrapper production code sends every write through, so a test that
+// calls it hits the same request-building path a component would — no
+// hand-rolled fetch call to drift out of step with the real one.
+import { fetchJson } from '../../config/api';
 
 // A miniature canon standing in for /api/books. Ids and canonical order match
 // the real ones for the books used here.
@@ -1477,6 +1481,47 @@ describe('The notes API harness', () => {
         // Assert — the two memberships stay apart.
         expect(store.noteTopics).toEqual([{ noteId: note.id, topicId: faith.id, sortOrder: 0 }]);
         expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+    });
+
+    // The test above seeds note_topics by calling the store helper directly,
+    // so the PUT route itself — its regex, its method guard, its reading of
+    // topicIds — never runs. This sends the request NoteFiling will send, the
+    // same way useNotes' idea write already does, and checks the idea
+    // membership survives it: that separation is the whole feature.
+    test('PUT /notes/:id/topics writes the link table and leaves the note\'s ideas alone', async () => {
+        // Arrange — a note already carrying an idea, so a topics write that
+        // reached into noteIdeas would be caught immediately.
+        const faith = addTopic('Faith');
+        const grace = addTopic('Grace');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+
+        // Act
+        const { note: hydrated } = await fetchJson(`/notes/${note.id}/topics`, {
+            method: 'PUT',
+            body: { topicIds: [faith.id, grace.id] },
+        });
+
+        // Assert — the response hydrates topicsOf's id/name/sortOrder shape...
+        expect(hydrated.topics).toEqual([
+            { noteId: note.id, id: faith.id, name: 'Faith', sortOrder: 0 },
+            { noteId: note.id, id: grace.id, name: 'Grace', sortOrder: 1 },
+        ]);
+        // ...the store holds what the body carried under topicIds...
+        expect(store.noteTopics).toEqual([
+            { noteId: note.id, topicId: faith.id, sortOrder: 0 },
+            { noteId: note.id, topicId: grace.id, sortOrder: 1 },
+        ]);
+        // ...and the idea link, a separate table, was never touched.
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+    });
+
+    test('PUT /notes/:id/topics 404s for a note that does not exist', async () => {
+        await expect(fetchJson('/notes/999/topics', {
+            method: 'PUT',
+            body: { topicIds: [] },
+        })).rejects.toThrow('We could not find that.');
     });
 });
 
