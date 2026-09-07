@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJson } from '../../config/api';
 import { LINK_HINTS } from './linkRules';
 
@@ -41,35 +41,42 @@ import { LINK_HINTS } from './linkRules';
 const TOPICS_PATH = '/topics';
 const IDEAS_PATH = '/ideas';
 
-// Where each link lives, keyed by the tier that OWNS the set.
+// Where each link lives, keyed by "<parent tier>:<child tier>".
 //
-// linkRules calls that side the child — `PUT /api/notes/:id/ideas` replaces a
-// note's whole set of ideas — and it is the side that appears in the URL. Its
-// partner tier is therefore the one above it, and this map is the only place
-// the two API shapes are spelled out: everything below iterates it.
+// The child is the side that OWNS the set — `PUT /api/notes/:id/ideas` replaces
+// a note's whole set of ideas — and it is the side that appears in the URL.
+//
+// Keyed by the pair rather than by the child alone, which is what it used to be.
+// That worked while a child owned exactly one set; a note now owns two (its
+// ideas and its topics), and keying by `note` would send both of them to
+// whichever endpoint the map happened to name — a full-set replace against the
+// wrong membership, which silently empties the other one.
 const LINK_TARGETS = Object.freeze({
-    note: Object.freeze({
-        partnerType: 'idea',
+    'idea:note': Object.freeze({
         detailPath: (id) => `/notes/${id}`,
         detailKey: 'note',
         setKey: 'ideas',
         linkPath: (id) => `/notes/${id}/ideas`,
         idsKey: 'ideaIds',
     }),
-    idea: Object.freeze({
-        partnerType: 'topic',
+    'topic:idea': Object.freeze({
         detailPath: (id) => `/ideas/${id}`,
         detailKey: 'idea',
         setKey: 'topics',
         linkPath: (id) => `/ideas/${id}/topics`,
         idsKey: 'topicIds',
     }),
+    'topic:note': Object.freeze({
+        detailPath: (id) => `/notes/${id}`,
+        detailKey: 'note',
+        setKey: 'topics',
+        linkPath: (id) => `/notes/${id}/topics`,
+        idsKey: 'topicIds',
+    }),
 });
 
 const isItem = (item) =>
     Boolean(item) && typeof item.itemType === 'string' && Number.isInteger(item.itemId);
-
-const keyOf = (item) => `${item.itemType}:${item.itemId}`;
 
 /**
  * evaluateLink's pairs -> one write per set-owning item.
@@ -85,7 +92,7 @@ const keyOf = (item) => `${item.itemType}:${item.itemId}`;
  *
  * @returns { error } or { groups: [{ target, itemType, itemId, partnerIds }] }
  */
-const groupPairs = (pairs) => {
+export const groupPairs = (pairs) => {
     if (!Array.isArray(pairs) || pairs.length === 0) return { error: LINK_HINTS.empty };
 
     const groups = new Map();
@@ -96,11 +103,16 @@ const groupPairs = (pairs) => {
         const [partner, owner] = pair;
         if (!isItem(partner) || !isItem(owner)) return { error: LINK_HINTS.unknownType };
 
-        const target = LINK_TARGETS[owner.itemType];
+        // An unknown key is any pair that is not a real downward edge —
+        // including an upward one, which is why there is no separate check for
+        // that direction.
+        const targetKey = `${partner.itemType}:${owner.itemType}`;
+        const target = LINK_TARGETS[targetKey];
         if (!target) return { error: LINK_HINTS.unknownType };
-        if (target.partnerType !== partner.itemType) return { error: LINK_HINTS.nonAdjacent };
 
-        const key = keyOf(owner);
+        // The set, not just the item: one note has an idea set and a topic set,
+        // and they are two writes to two endpoints.
+        const key = `${targetKey}#${owner.itemId}`;
         const group = groups.get(key);
 
         groups.set(key, group
@@ -204,6 +216,46 @@ const loadThoughts = async (ideaId, signal) => {
 
 const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [] });
 
+// A topic's passages, fetched when its fan first opens rather than for every
+// topic when the view does.
+//
+// The idea view fetches all of its passages up front because there is one idea.
+// The topics field has a card per topic, and asking for every one on entry
+// would be a request per card for blooms most readers never open. So this is
+// lazy, cached per topic id, and dropped whenever the corpus reloads — a write
+// may have changed which notes a topic holds.
+const useTopicPassages = (revision) => {
+    const [passagesByTopicId, setPassagesByTopicId] = useState({});
+    const requested = useRef(new Set());
+
+    useEffect(() => {
+        setPassagesByTopicId({});
+        requested.current = new Set();
+    }, [revision]);
+
+    const loadPassagesFor = useCallback(async (topicId) => {
+        // The unfiled bubble's id is the string 'unfiled', and it has no notes
+        // of its own. Rejecting anything that is not a real row id here is what
+        // lets the field call this on every open without knowing the difference.
+        if (!Number.isInteger(topicId) || requested.current.has(topicId)) return;
+        requested.current.add(topicId);
+
+        try {
+            const payload = await fetchJson(`/topics/${topicId}/passages`);
+            setPassagesByTopicId(previous => ({ ...previous, [topicId]: payload.passages || [] }));
+        } catch (err) {
+            // Deliberately quiet, and the one place on this page that is.
+            // The fan is correct without its passages — the bloom is simply
+            // empty, exactly as it is for a note anchored to nothing — so an
+            // error banner over a page that is still right would be the louder
+            // wrong answer. Forgetting the request lets the next open retry.
+            requested.current.delete(topicId);
+        }
+    }, []);
+
+    return { passagesByTopicId, loadPassagesFor };
+};
+
 /**
  * @param ideaId the idea whose notes to load, or null in the topics view
  */
@@ -213,6 +265,7 @@ const useThoughtsData = (ideaId = null) => {
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
     const [revision, setRevision] = useState(0);
+    const { passagesByTopicId, loadPassagesFor } = useTopicPassages(revision);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -359,6 +412,8 @@ const useThoughtsData = (ideaId = null) => {
         removeIdea,
         removeNote,
         linkPairs,
+        passagesByTopicId,
+        loadPassagesFor,
     };
 };
 

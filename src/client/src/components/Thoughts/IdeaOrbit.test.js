@@ -4,9 +4,12 @@ import IdeaOrbit, {
     IDEA_CARD,
     NO_NOTES_MESSAGE,
     ORBIT_EXIT_MS,
+    PASSAGE_CARD,
+    PASSAGE_FAN,
     UNTITLED_NOTE_LABEL,
 } from './IdeaOrbit';
 import { NOTE_CARD, ORBIT_CENTRE_CLEARANCE } from './orbitLayout';
+import buildFan from '../Bubbles/fanLayout';
 
 // ─── What the idea view has to get right ────────────────────────────────────
 //
@@ -307,5 +310,92 @@ describe('the centre card and the clearance the ring keeps for it', () => {
     test('is still much the largest card on the canvas', () => {
         expect(IDEA_CARD.width * IDEA_CARD.height)
             .toBeGreaterThan(2 * NOTE_CARD.width * NOTE_CARD.height);
+    });
+});
+
+// ─── The passage fan's arc has to hold cards, not points ────────────────────
+//
+// PASSAGE_FAN's radius was chosen against the CHORD between two neighbouring
+// cards — 2·r·sin(step/2) — compared to the card's WIDTH. That comparison is
+// the right shape and the wrong number, and the gap between them is a real
+// overlap rather than a rounding error.
+//
+// A chord is the distance between two card CENTRES, in whatever direction the
+// arc happens to run. Two axis-aligned boxes clear each other when their
+// centres are apart by a full width in x OR a full height in y — either one
+// suffices. So a chord that runs nearly horizontally needs only the width, and
+// one that runs nearly vertically needs only the height; but a chord running
+// DIAGONALLY is short of the width in x and short of the height in y at the
+// same time, and the cards overlap while the chord test says they do not. The
+// chord that clears every direction is therefore the card's DIAGONAL.
+//
+// Two further things set the number, and both push it up:
+//
+//   • The step to measure is not `spread.perCard`. Once an arc reaches
+//     `spread.max` the opening stops widening and the STEP is what gives, so
+//     the tightest the cards are ever packed is max/(rowCapacity-1) — narrower
+//     than perCard, and it is the case the radius has to survive.
+//   • The diagonal to clear is the TIGHT one. Past `tightenThreshold` the
+//     cards drop a size, which shrinks the diagonal, but the step tightens
+//     faster than the card shrinks.
+//
+// The test below is on the geometry rather than on a rendered card, because
+// this is a fact about four constants and nothing on the canvas can report it:
+// the whole suite passed while the cards were drawn on top of each other.
+describe("the passage fan's arc and the cards standing on it", () => {
+    // Every direction an anchor can face, because the fan turns to face the
+    // middle of the canvas — so the arc's own bearing is not a free choice and
+    // a radius that works pointing right can fail pointing down-left.
+    const CANVAS = Object.freeze({ width: 5000, height: 5000 });
+    const CENTRE = Object.freeze({ x: 2500, y: 2500 });
+    const ANCHOR_RING = 700;
+    const BEARING_STEP_DEG = 2;
+
+    const anchorsAllRound = () => Array.from(
+        { length: 360 / BEARING_STEP_DEG },
+        (unused, index) => {
+            const angle = (index * BEARING_STEP_DEG * Math.PI) / 180;
+            return {
+                x: CENTRE.x + ANCHOR_RING * Math.cos(angle),
+                y: CENTRE.y + ANCHOR_RING * Math.sin(angle),
+            };
+        }
+    );
+
+    const doOverlap = (left, right) =>
+        Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x) > 0
+        && Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y) > 0;
+
+    const overlappingPairs = (cards) => cards.flatMap(
+        (card, index) => cards.slice(index + 1)
+            .filter(other => card.row === other.row && doOverlap(card, other))
+            .map(other => [card, other])
+    );
+
+    test('never draws two passages of one arc on top of each other', () => {
+        // Arrange: every count that fits a single arc, fanned every direction.
+        const counts = Array.from({ length: PASSAGE_FAN.rowCapacity }, (u, i) => i + 1);
+
+        // Act
+        const collisions = anchorsAllRound().flatMap(origin => counts.flatMap(
+            count => overlappingPairs(buildFan(count, origin, CANVAS, PASSAGE_FAN).cards)
+        ));
+
+        // Assert
+        expect(collisions).toHaveLength(0);
+    });
+
+    test('keeps a chord as long as the tight card is across the corners', () => {
+        // Arrange: the tightest step the arc ever uses, and the smallest the
+        // card ever gets — the two worst cases, which happen together.
+        const tightestStep = PASSAGE_FAN.spread.max / (PASSAGE_FAN.rowCapacity - 1);
+        const tightDiagonal = Math.hypot(PASSAGE_CARD.width, PASSAGE_CARD.height)
+            * PASSAGE_FAN.scales.tight;
+
+        // Act
+        const chord = 2 * PASSAGE_FAN.radius.first * Math.sin(tightestStep / 2);
+
+        // Assert
+        expect(chord).toBeGreaterThanOrEqual(tightDiagonal);
     });
 });

@@ -8,6 +8,7 @@ const {
     parseReference,
     parseNoteIdeas,
     parseNoteMove,
+    parseNoteTopics,
 } = require('../lib/noteInput');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { findChapter } = require('../lib/chapters');
@@ -340,6 +341,68 @@ router.put('/:id/ideas', async (req, res) => {
             });
         }
         console.error(`PUT /api/notes/${req.params.id}/ideas error:`, err);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+});
+
+// PUT /api/notes/:id/topics — { topicIds: [...] }
+//
+// Replaces the note's ENTIRE direct topic set, exactly as PUT /:id/ideas above
+// replaces its idea set. The two are separate memberships and this endpoint
+// leaves the idea set alone: a note may sit under a topic directly, under an
+// idea that sits under that same topic, or both, and nothing here collapses
+// those into one another.
+//
+// An empty array unlinks the note from every topic. That is a legal state, so
+// it is a normal 200.
+router.put('/:id/topics', async (req, res) => {
+    const noteId = parseRowId(req.params.id);
+    if (noteId === null) {
+        return res.status(400).json({ error: 'id must be a positive integer' });
+    }
+
+    const parsed = parseNoteTopics(req.body);
+    if (parsed.error) {
+        return res.status(400).json({ error: parsed.error });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // Ownership of the note and of every topic id is checked inside the
+        // transaction, so nothing can change between the check and the write.
+        const result = await replaceLinks(
+            connection,
+            LINK_SPECS.noteTopics,
+            req.user.id,
+            noteId,
+            parsed.value
+        );
+
+        if (result.error) {
+            await connection.rollback();
+            return result.error === MISSING_PARENT
+                ? res.status(404).json({ error: 'Note not found' })
+                : res.status(400).json({ error: 'topicIds names a topic that does not exist' });
+        }
+
+        await connection.commit();
+
+        const note = await findNoteById(req.user.id, noteId);
+        res.status(200).json({ note });
+    } catch (err) {
+        if (connection) {
+            await connection.rollback().catch(rollbackErr => {
+                console.error(`PUT /api/notes/${req.params.id}/topics rollback failed:`, rollbackErr);
+            });
+        }
+        console.error(`PUT /api/notes/${req.params.id}/topics error:`, err);
         res.status(500).json({ error: 'Internal server error' });
     } finally {
         if (connection) {

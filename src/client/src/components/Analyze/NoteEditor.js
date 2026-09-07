@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { describeReference } from './navigation';
 import { renderMarkdown } from './markdown';
-import MultiSelect from './MultiSelect';
+import NoteFiling from './NoteFiling';
 
 // One note, opened from the notes panel.
 //
@@ -17,12 +17,14 @@ import MultiSelect from './MultiSelect';
 const NoteEditor = ({
     note,
     books,
-    ideaGroups,
+    topics,
+    ideas,
     onSave,
     onDelete,
     onAddPassage,
     onRemoveReference,
     onSaveIdeas,
+    onSaveTopics,
     onClose,
 }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -166,25 +168,13 @@ const NoteEditor = ({
                 </button>
             </section>
 
-            <section className="analyze-editor-ideas">
-                {/* Ideas save on the click, not on a Save button: the checkbox
-                    list already holds the complete membership, and PUT
-                    /notes/:id/ideas replaces the complete membership, so there
-                    is nothing left over to commit. Unchecking the last one is a
-                    normal save — a note filed under no idea is legal. */}
-                {/* Grouped rather than one flat list: the ideas this
-                    chapter holds come first, because a note written here is
-                    usually filed under one of them. Every other idea is still
-                    below and still checkable — an idea is not confined to the
-                    chapters it was imported into. */}
-                <MultiSelect
-                    legend="Ideas"
-                    groups={ideaGroups}
-                    selectedIds={note.ideas.map(idea => idea.id)}
-                    onChange={ideaIds => onSaveIdeas(note.id, ideaIds)}
-                    emptyMessage="No ideas yet — create one on the Ideas page to file this note under."
-                />
-            </section>
+            <NoteFiling
+                note={note}
+                topics={topics}
+                ideas={ideas}
+                onSaveIdeas={onSaveIdeas}
+                onSaveTopics={onSaveTopics}
+            />
         </div>
     );
 };

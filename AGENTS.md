@@ -22,15 +22,18 @@ BibleApp/
     │       ├── 002_notes.sql       # notes, note_references
     │       ├── 003_ideas_topics.sql# topics, ideas, idea_topics, note_ideas
     │       ├── 004_search.sql      # the FULLTEXT index /api/search reads
-    │       └── 005_pins.sql        # pins: the Thoughts page's editable set
+    │       ├── 005_pins.sql        # pins: the Thoughts page's editable set
+    │       ├── 006_reading_location.sql # where each reader left off
+    │       ├── 007_chapter_ideas.sql# ideas filed against a chapter
+    │       └── 008_note_topics.sql # notes filed directly under a topic
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
     │   ├── references.js           # note_references reads/writes; index resolution
     │   ├── notes.js                # notes reads/writes, all scoped by user_id
     │   ├── ideas.js                # ideas reads/writes + the cross-tier lookups
-    │   ├── topics.js               # topics reads/writes + list counts
-    │   ├── links.js                # note_ideas / idea_topics: full-set replace
+    │   ├── topics.js               # topics reads/writes, list counts, both note_topics reads
+    │   ├── links.js                # note_ideas / idea_topics / note_topics: full-set replace
     │   ├── ordering.js             # sort_order + re-parenting (server-side only)
     │   ├── slug.js                 # Topic slug derivation + validation
     │   ├── textInput.js            # Shared body-validation primitives
@@ -62,10 +65,10 @@ BibleApp/
         ├── user.js                 # GET  /api/user/me  (protected)
         ├── books.js                # GET  /api/books    (protected, cached)
         ├── chapter.js              # GET  /api/chapter/:bookId/:chapter
-        ├── notes.js                # GET/POST/PATCH/DELETE /api/notes (+ one note, references, ideas)
+        ├── notes.js                # GET/POST/PATCH/DELETE /api/notes (+ one note, references, ideas, topics)
         ├── references.js           # DELETE /api/references/:id
         ├── ideas.js                # CRUD /api/ideas + PUT /api/ideas/:id/topics
-        ├── topics.js               # CRUD /api/topics (list carries counts)
+        ├── topics.js               # CRUD /api/topics (list carries counts + direct notes; + passages)
         ├── search.js               # GET /api/search?q= (four groups)
         ├── overview.js             # GET /api/overview?tiers=&topicId= (cached per scope)
         ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
@@ -284,6 +287,9 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/002_notes.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/003_ideas_topics.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/004_search.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/005_pins.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/006_reading_location.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/007_chapter_ideas.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/008_note_topics.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
@@ -701,6 +707,44 @@ to face the middle of the canvas before drawing, clamps each box into the canvas
 as a backstop, and caps the arc rather than letting a well-filled topic walk its
 cards past a full turn and back onto the first.
 
+`buildFan` is shared: the same arc draws a topic's ideas and, with `PASSAGE_FAN`
+as a style override, a note's passages in both canvases. Two things about that
+override are worth knowing before touching it.
+
+**Its radius is derived, not chosen.** Cards on an arc are separated by the
+CHORD between their centres, and the test that chord has to pass is the card's
+**diagonal** — not its width. Two axis-aligned boxes clear each other when their
+centres are a width apart in x OR a height apart in y, so a chord running
+diagonally can be short of both at once and the cards overlap while a
+width-based test still passes. Comparing the chord to the width is what
+`PASSAGE_FAN` used to do, and at the old 260px radius it drew passages on top of
+each other at roughly one anchor direction in nine — invisible to the whole test
+suite, because nothing in it measured a layout. `radiusClearing` in
+`IdeaOrbit.js` now derives the radius from the card, the spread and the row
+capacity, taking the longest that any count on one arc demands. Change the card
+size or the spread and the radius follows; do not put a literal back.
+
+**Its second arc is still a known shortcoming.** A note with more than
+`PASSAGE_FAN.rowCapacity` (5) passages opens a second arc only 144px beyond the
+first, which is less than a passage card's own height — so a card on that arc
+can overlap one on the first.
+
+The `+N more` chip now holds those cards back, so nothing overlaps until a
+reader presses it: `TopicIdeaField` stows every row-1 passage and reveals them
+on the chip, the way `BloomCluster` already does for a topic's ideas. It has to
+do that itself rather than borrow BloomCluster, for the same offset reason the
+passage fan is drawn outside the cluster at all, and it needs its own CSS
+because `.thoughts-fan-item`/`.thoughts-fan-chip` are revealed by
+`.thoughts-cluster.is-active`, which this layer is deliberately not inside.
+
+What the chip does not fix is the arc behind it — press it and those cards are
+still drawn over the first arc. Two things that look like cheap fixes are not:
+offsetting the second arc by half a step only takes the overlapping pairs from
+734 to 596 of 10440 across counts 6–10, and giving the arc enough radial gap to
+clear a card from every angle needs ~280px, putting row two ~560px from the note
+and off most canvases. A real fix means capping the fan or shrinking the card,
+which is a product decision rather than another tuning pass.
+
 ### Linking: one authority, two adjacent tiers
 
 `linkRules.evaluateLink` answers three questions from one call — whether Link is
@@ -710,16 +754,24 @@ module exists to prevent: they drift, and the failure is a button enabled for a
 selection the builder then reads differently, against the reader's real corpus,
 with no undo on this page.
 
-The rule is that a link joins a tier to the tier immediately under it, because
-those are the only two link tables that exist:
+The rule is that a link joins a tier to any tier BELOW it. It used to be "the
+tier immediately under it", because `note_ideas` and `idea_topics` were the only
+link tables there were; `note_topics` ended that, so the corpus is a DAG rather
+than a chain and descent rather than adjacency is what makes a pair linkable:
 
 | Selection | Result |
 |-----------|--------|
 | Notes + ideas | Links, `PUT /api/notes/:id/ideas` |
 | Ideas + topics | Links, `PUT /api/ideas/:id/topics` |
-| Notes + topics | Refused — there is no topic-to-note edge to write |
+| Notes + topics | Links, `PUT /api/notes/:id/topics` — no idea in between |
 | One tier | Refused — that is half a link |
-| All three | Refused — genuinely ambiguous, and picking a reading writes edges nobody asked for |
+| All three | Links all three downward edges: note→idea, idea→topic and note→topic |
+
+A note therefore owns TWO link sets, its ideas and its topics, and they are
+written by two separate full-set replaces. `useThoughtsData`'s `LINK_TARGETS` is
+keyed by `parent:child` for exactly that reason — keyed by the child alone, a
+three-tier selection would send both sets to one endpoint and silently empty the
+other.
 
 Pairs come out `[parent, child]`, child-major, so the caller can collapse one
 child's pairs into the single full-set PUT the endpoint wants instead of
@@ -1519,8 +1571,9 @@ Analyze page's notes panel renders.
 ## Testing
 
 ```bash
-npm run test:client              # watch mode, from the repo root
-CI=true npm run test:client      # single run (CI, pre-commit)
+npm run test:client                 # whole suite, one run, exits
+npm run test:client -- -t "name"    # only tests whose name matches
+npm run test:client:watch           # interactive watch, for a human
 ```
 
 Run it through the root script (or `npm test --prefix src/client`) rather than
@@ -1528,6 +1581,18 @@ invoking `react-scripts` from the repo root: CRA derives `rootDir` from the
 working directory, and from the root it fails to find `src/setupTests.js` — the
 jest-dom matchers then silently go missing and assertions fail for the wrong
 reason.
+
+**Do not "simplify" `test:client` back to `npm test --prefix src/client`.** The
+`CI=true` and the trailing `--` are both load-bearing, and dropping either fails
+in a way that looks like something else:
+
+  * Without the `--`, npm appends `-t "name"` inside its own argument list
+    instead of after the separator, and the nested `npm` eats the `-t` as one of
+    its flags. Jest then receives the bare word and reads it as a FILENAME
+    pattern — so the command reports passes from whatever files happen to match
+    and silently ignores the name you asked for. It does not error.
+  * Without `CI=true`, `react-scripts test` opens interactive watch mode, and a
+    non-interactive caller hangs with no output until it is killed.
 
 Client tests live beside the code they cover (`components/Analyze/*.test.js`,
 `components/Thoughts/*.test.js`). The pure modules are tested directly —

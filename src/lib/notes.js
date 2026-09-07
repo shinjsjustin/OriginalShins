@@ -7,10 +7,11 @@
 const db = require('../db/db');
 const { findReferencesForNotes, withFirstReferences } = require('./references');
 const { findIdeasForNotes } = require('./ideas');
+const { findTopicsForNotes } = require('./topics');
 
 const NOTE_COLUMNS = 'id, title, body, sort_order, created_at, updated_at';
 
-const toNote = (row, references = [], ideas = []) => ({
+const toNote = (row, references = [], ideas = [], topics = []) => ({
     id: row.id,
     title: row.title,
     body: row.body,
@@ -19,6 +20,10 @@ const toNote = (row, references = [], ideas = []) => ({
     updatedAt: row.updated_at,
     references,
     ideas,
+    // The topics this note is filed under DIRECTLY. A topic it reaches through
+    // one of its ideas is not in here — that is the idea's membership, not the
+    // note's, and this is the set PUT /api/notes/:id/topics replaces.
+    topics,
 });
 
 // Groups a flat list of note children by note id in one pass. Reference rows
@@ -31,23 +36,26 @@ const groupByNoteId = (children) => children.reduce((acc, child) => ({
 // Hydrates rows with every anchor each note carries — not just the ones that
 // overlapped the chapter being viewed — and with the ideas it is filed under.
 // The editor shows both sets in full, so fetching a partial one would mean a
-// second round trip the moment it opens. Two queries for the whole page, not
-// two per note.
+// second round trip the moment it opens. Three queries for the whole page, not
+// three per note.
 const hydrate = async (userId, rows) => {
     const noteIds = rows.map(row => row.id);
 
-    const [references, ideas] = await Promise.all([
+    const [references, ideas, topics] = await Promise.all([
         findReferencesForNotes(userId, noteIds),
         findIdeasForNotes(userId, noteIds),
+        findTopicsForNotes(userId, noteIds),
     ]);
 
     const referencesByNoteId = groupByNoteId(references);
     const ideasByNoteId = groupByNoteId(ideas);
+    const topicsByNoteId = groupByNoteId(topics);
 
     return rows.map(row => toNote(
         row,
         referencesByNoteId[row.id] || [],
-        ideasByNoteId[row.id] || []
+        ideasByNoteId[row.id] || [],
+        topicsByNoteId[row.id] || []
     ));
 };
 

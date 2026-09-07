@@ -14,7 +14,7 @@ import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
 import useTopics from './useTopics';
 import useChapterIdeas from './useChapterIdeas';
-import { collectChapterIdeas, groupIdeaOptions } from './chapterIdeas';
+import { collectChapterIdeas } from './chapterIdeas';
 import { describePosition } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';
@@ -134,10 +134,9 @@ const Analyze = () => {
     );
 
     // What this chapter holds: what was imported into it, plus what the notes
-    // anchored here are already filed under. One derivation, read twice — the
-    // panel lists it and the editor's picker is ordered by it.
+    // anchored here are already filed under. The panel's "Ideas in this
+    // chapter" section is the one place that reads it.
     const chapterIdeaList = collectChapterIdeas(importedIdeas, notes.notes, ideas);
-    const ideaGroups = groupIdeaOptions(ideas, chapterIdeaList);
 
     // The open note comes from the current lists whenever they hold it, so the
     // editor always shows the latest fetch. It survives navigating to a chapter
@@ -226,6 +225,16 @@ const Analyze = () => {
         }
     }, [notes, retain]);
 
+    // The topic tier's copy of handleSaveIdeas, retained for the same reason:
+    // the response is the freshest copy of the note and the list refetch that
+    // follows has not landed yet.
+    const handleSaveTopics = useCallback(async (noteId, topicIds) => {
+        const note = await notes.setNoteTopics(noteId, topicIds);
+        if (note) {
+            retain(note);
+        }
+    }, [notes, retain]);
+
     // A new idea starts in the chapter it was started in. "+ New idea" sits in
     // this panel, beside this passage, which says the idea belongs here as
     // plainly as importing one does — and without the second call the button's
@@ -293,7 +302,9 @@ const Analyze = () => {
                     {/* Above the panel row, because a selection spanning two
                         chapters is not either panel's business. It also stays
                         put while a panel scrolls, which is what the old corner
-                        widget was pinned for. */}
+                        widget was pinned for. It hangs out of the flow in the
+                        navbar clearance (see Analyze.css), so appearing does
+                        not push the panels down. */}
                     <PendingSelectionTray
                         books={books}
                         places={selectedPlaces}
@@ -373,7 +384,6 @@ const Analyze = () => {
                             hoveredNoteId={hoveredNoteId}
                             scrollRequest={scrollRequest}
                             isComposingIdea={isComposingIdea}
-                            ideaGroups={ideaGroups}
                             onHoverNote={setHoveredNoteId}
                             onOpenNote={setActiveNoteId}
                             onCloseNote={handleCloseNote}
@@ -387,6 +397,7 @@ const Analyze = () => {
                             onAddPassage={setAddingToNoteId}
                             onRemoveReference={notes.removeReference}
                             onSaveIdeas={handleSaveIdeas}
+                            onSaveTopics={handleSaveTopics}
                         />
                     )}
                     </main>

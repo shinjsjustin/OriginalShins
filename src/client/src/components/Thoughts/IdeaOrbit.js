@@ -135,21 +135,90 @@ export const PASSAGE_CARD = Object.freeze({ width: 232, height: 156 });
 // wider angular step so that neighbours do not lie on top of each other, and
 // it fills one arc after five rather than fifteen.
 //
-// The step and the radius are one decision made twice, because what a reader
-// sees is the CHORD between two cards: 2·r·sin(step/2), which has to clear the
-// card's own width or the passages are drawn over each other. At 60° and 260px
-// that chord is 260 against a 232px card, so three passages — the common case,
-// a note being anchored to one or two places and occasionally a handful — are
-// readable side by side without either number having to grow. Past four the
-// arc hits its ceiling and the cards drop a size instead, which keeps the
-// chord ahead of the width the whole way to a full row.
+// These four are named apart from PASSAGE_FAN because the RADIUS is derived
+// from them rather than chosen beside them — see radiusClearing below.
+const PASSAGE_SCALES = Object.freeze({ full: 1, tight: 0.86 });
+const PASSAGE_TIGHTEN_THRESHOLD = 3;
+const PASSAGE_ROW_CAPACITY = 5;
+const PASSAGE_SPREAD = Object.freeze({ perCard: Math.PI / 3, max: Math.PI * 1.15 });
+
+/**
+ * The shortest first-arc radius on which `count` passage cards clear each other.
+ *
+ * ── Why the diagonal, and not the width ────────────────────────────────────
+ *
+ * What separates two cards on the arc is the CHORD between their centres:
+ * 2·r·sin(step/2). The tempting test is to ask that the chord clear the card's
+ * WIDTH, and it is wrong in a way that looks right — it was the reasoning here
+ * until an overlap sweep contradicted it.
+ *
+ * Two axis-aligned boxes miss each other when their centres are apart by a
+ * full width in x OR a full height in y; either alone is enough. A chord that
+ * runs nearly horizontally therefore only needs the width, and a nearly
+ * vertical one only the height — but a chord running DIAGONALLY is short of
+ * the width in x and short of the height in y at once, and the two cards
+ * overlap while the width test still passes. Since the fan turns to face the
+ * middle of the canvas, its chords run in every direction and that diagonal
+ * case is not hypothetical: at the old 260 it drew passages over each other at
+ * about one anchor position in nine.
+ *
+ * The one length that clears a box from every direction is its DIAGONAL, so
+ * that is what the chord is asked to beat.
+ *
+ * ── Why it is a maximum over the counts, and not one sum ───────────────────
+ *
+ * Neither of the arc's two "worst cases" contains the other:
+ *
+ *   • Two or three passages sit at the full `perCard` step, but the card is at
+ *     FULL size, so the diagonal to clear is the long one.
+ *   • Five sit at a card that has dropped to `tight`, but the opening has hit
+ *     `spread.max` and the STEP is what gave — so they are packed closer than
+ *     `perCard` ever asks for.
+ *
+ * The step tightens faster than the card shrinks, and the two land within a
+ * few pixels of each other, so the radius is the larger of what each demands
+ * rather than either one alone.
+ */
+const radiusClearing = (count) => {
+    if (count < 2) return 0;
+
+    const opening = Math.min(PASSAGE_SPREAD.max, (count - 1) * PASSAGE_SPREAD.perCard);
+    const step = opening / (count - 1);
+    const scale = count > PASSAGE_TIGHTEN_THRESHOLD
+        ? PASSAGE_SCALES.tight
+        : PASSAGE_SCALES.full;
+    const diagonal = Math.hypot(PASSAGE_CARD.width, PASSAGE_CARD.height) * scale;
+
+    return diagonal / (2 * Math.sin(step / 2));
+};
+
+// Long enough for every count the arc holds, which is what makes this a
+// derivation rather than a number to re-tune by eye each time the card, the
+// spread or the capacity above is touched.
+const PASSAGE_RADIUS_FIRST = Math.max(
+    ...Array.from({ length: PASSAGE_ROW_CAPACITY }, (unused, index) => radiusClearing(index + 1))
+);
+
+// How much further out the second arc sits. Carried over unchanged from when
+// both radii were literals, so widening the first does not quietly close the
+// gap between them.
+//
+// NOTE: this gap is smaller than a passage card, so a note with more than
+// PASSAGE_ROW_CAPACITY passages draws a second arc that overlaps the first.
+// That is a pre-existing shortcoming of a second arc for cards this large, not
+// something the derivation above addresses — see AGENTS.md.
+const PASSAGE_ROW_GAP = 144;
+
 export const PASSAGE_FAN = Object.freeze({
     card: PASSAGE_CARD,
-    scales: Object.freeze({ full: 1, tight: 0.86 }),
-    tightenThreshold: 3,
-    rowCapacity: 5,
-    radius: Object.freeze({ first: 260, second: 404 }),
-    spread: Object.freeze({ perCard: Math.PI / 3, max: Math.PI * 1.15 }),
+    scales: PASSAGE_SCALES,
+    tightenThreshold: PASSAGE_TIGHTEN_THRESHOLD,
+    rowCapacity: PASSAGE_ROW_CAPACITY,
+    radius: Object.freeze({
+        first: PASSAGE_RADIUS_FIRST,
+        second: PASSAGE_RADIUS_FIRST + PASSAGE_ROW_GAP,
+    }),
+    spread: PASSAGE_SPREAD,
 });
 
 export const UNTITLED_NOTE_LABEL = 'Untitled note';
@@ -173,7 +242,7 @@ export const passageLabel = (passage) =>
  * the `verses` table, it is plain text, and it is the one body on this page
  * that was not written by the reader.
  */
-const PassageText = ({ verses }) => (
+export const PassageText = ({ verses }) => (
     <div className="thoughts-passage-text">
         {verses.map(verse => (
             <p key={verse.verseIndex} className="thoughts-passage-verse">

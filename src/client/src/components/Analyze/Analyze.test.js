@@ -2,6 +2,10 @@ import React from 'react';
 import { act, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import Analyze from './Analyze';
+// The real wrapper production code sends every write through, so a test that
+// calls it hits the same request-building path a component would — no
+// hand-rolled fetch call to drift out of step with the real one.
+import { fetchJson } from '../../config/api';
 
 // A miniature canon standing in for /api/books. Ids and canonical order match
 // the real ones for the books used here.
@@ -54,6 +58,10 @@ const resetStore = () => {
         // server replaces it.
         ideas: [],
         noteIdeas: [],
+        // The note tier's DIRECT edge to topics — note_topics, not the topics
+        // a note reaches through an idea. Replaced whole, exactly as the
+        // server replaces it.
+        noteTopics: [],
         // The topics the importer's field of bubbles is built from, and the
         // per-chapter shortlist it writes into. Both are seeded by the tests
         // that need them; an idea under no topic still reaches the field
@@ -133,6 +141,23 @@ const ideasOf = (noteId) => store.noteIdeas
         return { noteId, id: idea.id, title: idea.title, sortOrder: link.sortOrder };
     });
 
+// The full-set replace for the note's direct topics, the mirror of
+// replaceNoteIdeas. A separate membership: writing one leaves the other alone.
+const replaceNoteTopics = (noteId, topicIds) => {
+    store.noteTopics = [
+        ...store.noteTopics.filter(link => link.noteId !== noteId),
+        ...topicIds.map((topicId, index) => ({ noteId, topicId, sortOrder: index })),
+    ];
+};
+
+const topicsOf = (noteId) => store.noteTopics
+    .filter(link => link.noteId === noteId)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(link => {
+        const topic = store.topics.find(item => item.id === link.topicId);
+        return { noteId, id: topic.id, name: topic.name, sortOrder: link.sortOrder };
+    });
+
 // The server computes index bounds from the verse table; the fake computes them
 // from the same formula. A client-supplied index is ignored here too.
 const resolveRange = ({ bookId, chapter, startVerse, endVerse }) => ({
@@ -180,6 +205,7 @@ const hydrate = (note) => ({
     ...note,
     references: referencesOf(note.id),
     ideas: ideasOf(note.id),
+    topics: topicsOf(note.id),
 });
 
 // The plan's overlap rule, which is the whole point of the denormalized bounds.
@@ -298,6 +324,16 @@ const handleRequest = (url, options = {}) => {
             return notFound();
         }
         replaceNoteIdeas(noteId, body.ideaIds);
+        return jsonResponse({ note: hydrate(store.notes.find(item => item.id === noteId)) });
+    }
+
+    const noteTopics = /\/notes\/(\d+)\/topics$/.exec(url);
+    if (noteTopics && method === 'PUT') {
+        const noteId = Number(noteTopics[1]);
+        if (!store.notes.some(item => item.id === noteId)) {
+            return notFound();
+        }
+        replaceNoteTopics(noteId, body.topicIds);
         return jsonResponse({ note: hydrate(store.notes.find(item => item.id === noteId)) });
     }
 
@@ -502,6 +538,12 @@ const importerOverlay = () => screen.queryByRole('dialog');
 const bubble = (name) => within(importerOverlay())
     .getByText(name, { selector: '.thoughts-bubble-title' })
     .closest('button');
+
+// The confirm step. The overlay holds the pick and writes nothing until this
+// is pressed — see ImportPicker.
+const confirmImport = () => clickAndSettle(
+    within(importerOverlay()).getByRole('button', { name: 'Import' })
+);
 
 // The panel's per-chapter shortlist, by the titles it lists.
 const chapterIdeaTitles = () => Array.from(ideaRows()).map(
@@ -1421,12 +1463,79 @@ describe('Note editor', () => {
     });
 });
 
-// ─── Linking a note to ideas ────────────────────────────────────────────────
-//
-// The multi-select is the reason PUT /notes/:id/ideas replaces the whole set
-// rather than adding one link at a time, so what these tests watch is the body
-// of that request: it must always be the complete membership the checkboxes
-// show, including the empty one.
+describe('The notes API harness', () => {
+    test('a note carries its direct topics, kept apart from its ideas', async () => {
+        // Arrange — one note under both an idea and a topic directly. The two
+        // are different tables, and a harness that conflated them would let a
+        // component that conflates them pass.
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        // Act
+        await renderAnalyze();
+        await waitForPanels();
+
+        // Assert — read the note back the way the panel does, through GET
+        // /notes and hydrate, rather than the store this Arrange block just
+        // wrote by hand. topics carry Faith under `name`; ideas carry Abiding
+        // under `title` — a hydrate that swapped or merged the two fields
+        // would fail one of these, where reading back store.noteTopics /
+        // store.noteIdeas directly could not have caught it.
+        const { unreferenced } = await fetchJson('/notes?bookId=1&chapter=1');
+        const hydrated = unreferenced.find(item => item.id === note.id);
+        expect(hydrated.topics).toEqual([
+            { noteId: note.id, id: faith.id, name: 'Faith', sortOrder: 0 },
+        ]);
+        expect(hydrated.ideas).toEqual([
+            { noteId: note.id, id: abiding.id, title: 'Abiding', sortOrder: 0 },
+        ]);
+    });
+
+    // The test above seeds note_topics by calling the store helper directly,
+    // so the PUT route itself — its regex, its method guard, its reading of
+    // topicIds — never runs. This sends the request NoteFiling will send, the
+    // same way useNotes' idea write already does, and checks the idea
+    // membership survives it: that separation is the whole feature.
+    test('PUT /notes/:id/topics writes the link table and leaves the note\'s ideas alone', async () => {
+        // Arrange — a note already carrying an idea, so a topics write that
+        // reached into noteIdeas would be caught immediately.
+        const faith = addTopic('Faith');
+        const grace = addTopic('Grace');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+
+        // Act
+        const { note: hydrated } = await fetchJson(`/notes/${note.id}/topics`, {
+            method: 'PUT',
+            body: { topicIds: [faith.id, grace.id] },
+        });
+
+        // Assert — the response hydrates topicsOf's id/name/sortOrder shape...
+        expect(hydrated.topics).toEqual([
+            { noteId: note.id, id: faith.id, name: 'Faith', sortOrder: 0 },
+            { noteId: note.id, id: grace.id, name: 'Grace', sortOrder: 1 },
+        ]);
+        // ...the store holds what the body carried under topicIds...
+        expect(store.noteTopics).toEqual([
+            { noteId: note.id, topicId: faith.id, sortOrder: 0 },
+            { noteId: note.id, topicId: grace.id, sortOrder: 1 },
+        ]);
+        // ...and the idea link, a separate table, was never touched.
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+    });
+
+    test('PUT /notes/:id/topics 404s for a note that does not exist', async () => {
+        await expect(fetchJson('/notes/999/topics', {
+            method: 'PUT',
+            body: { topicIds: [] },
+        })).rejects.toThrow('We could not find that.');
+    });
+});
+
 describe('Adding passages to an open note', () => {
     const openFirstNote = async () => {
         await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
@@ -1549,34 +1658,74 @@ describe('Adding passages to an open note', () => {
     });
 });
 
-describe('Linking a note to ideas', () => {
+// ─── Filing an open note ────────────────────────────────────────────────────
+//
+// The editor files a note through the same field of bubbles the chapter
+// importer uses, and it can file under a TOPIC as well as an idea. The two are
+// separate memberships written to separate endpoints, so the assertions that
+// matter are the ones proving a write to one leaves the other alone.
+describe('Filing a note under ideas and topics', () => {
     const openFirstNote = async () => {
         await waitFor(() => expect(noteRows().length).toBeGreaterThan(0));
         await clickAndSettle(noteRows()[0]);
     };
 
-    const ideaCheckbox = (name) => within(panel('Notes')).getByRole('checkbox', { name });
+    const ideaLinkRequests = () =>
+        requestsMatching(r => r.method === 'PUT' && /\/notes\/\d+\/ideas$/.test(r.url));
 
-    const ideaLinkRequests = () => requestsMatching(r => r.method === 'PUT' && r.url.endsWith('/ideas'));
+    const topicLinkRequests = () =>
+        requestsMatching(r => r.method === 'PUT' && /\/notes\/\d+\/topics$/.test(r.url));
 
-    test('offers every idea, with the note\'s current ones already checked', async () => {
+    // The rows the editor lists, by the titles they print.
+    const filedTitles = () => Array.from(
+        panel('Notes').querySelectorAll('.analyze-filing-title')
+    ).map(row => row.textContent);
+
+    const openFiler = () => clickAndSettle(
+        within(panel('Notes')).getByRole('button', { name: 'Import' })
+    );
+
+    const unfile = (name) => clickAndSettle(
+        within(panel('Notes')).getByRole('button', { name: `Unfile ${name} from this note` })
+    );
+
+    test('lists the ideas and the topics the note is filed under', async () => {
         // Arrange
+        const faith = addTopic('Faith');
         const abiding = addIdea('Abiding');
         addIdea('Pruning');
-        const note = addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+        const note = addNote({ title: 'The vine',
+                               reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
         replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
 
         // Act
         await renderAnalyze();
         await waitForPanels();
         await openFirstNote();
 
-        // Assert
-        expect(ideaCheckbox('Abiding')).toBeChecked();
-        expect(ideaCheckbox('Pruning')).not.toBeChecked();
+        // Assert — what it holds, and nothing it does not. "Pruning" exists
+        // and is not listed, because this is the note's filing, not a picker.
+        expect(filedTitles()).toEqual(['Abiding', 'Faith']);
+        expect(panel('Notes')).not.toHaveTextContent('Pruning');
     });
 
-    test('checking an idea PUTs the complete set, not just the one clicked', async () => {
+    test('marks which rows are topics', async () => {
+        // The × means different things on the two and goes to different
+        // endpoints, so a flat list that hid the difference would be a list
+        // whose buttons cannot be told apart.
+        const faith = addTopic('Faith');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        expect(within(panel('Notes')).getByText('topic')).toBeInTheDocument();
+    });
+
+    test('importing an idea PUTs the note\'s ideas plus that one', async () => {
         // Arrange
         const abiding = addIdea('Abiding');
         const pruning = addIdea('Pruning');
@@ -1588,17 +1737,20 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Act
-        await clickAndSettle(ideaCheckbox('Pruning'));
+        await openFiler();
+        await clickAndSettle(bubble('Pruning'));
+        await confirmImport();
 
-        // Assert — both ids, in the order the widget holds them.
+        // Assert — the complete set, in the order the note holds it.
         expect(ideaLinkRequests()).toHaveLength(1);
         expect(ideaLinkRequests()[0].body).toEqual({ ideaIds: [abiding.id, pruning.id] });
-        await waitFor(() => expect(ideaCheckbox('Pruning')).toBeChecked());
-        expect(ideaCheckbox('Abiding')).toBeChecked();
+        expect(topicLinkRequests()).toHaveLength(0);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding', 'Pruning']));
     });
 
-    test('unchecking the last idea sends an empty set and leaves the note behind', async () => {
+    test('importing a topic PUTs the note\'s topics and leaves its ideas alone', async () => {
         // Arrange
+        const faith = addTopic('Faith');
         const abiding = addIdea('Abiding');
         const note = addNote({ title: 'The vine' });
         replaceNoteIdeas(note.id, [abiding.id]);
@@ -1608,12 +1760,106 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Act
-        await clickAndSettle(ideaCheckbox('Abiding'));
+        await openFiler();
+        await clickAndSettle(bubble('Faith'));
+        await confirmImport();
 
-        // Assert — an orphan note is a legal state, so this is a normal save.
+        // Assert — the topic set was written, the idea set was not touched.
+        expect(topicLinkRequests()).toHaveLength(1);
+        expect(topicLinkRequests()[0].body).toEqual({ topicIds: [faith.id] });
+        expect(ideaLinkRequests()).toHaveLength(0);
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding', 'Faith']));
+    });
+
+    test('unfiling an idea sends the set without it and leaves the topics', async () => {
+        // Arrange
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await unfile('Abiding');
+
+        // Assert — a note under no idea is a legal state, so this is a normal
+        // save, and the topic membership is untouched.
         expect(ideaLinkRequests()[0].body).toEqual({ ideaIds: [] });
-        await waitFor(() => expect(ideaCheckbox('Abiding')).not.toBeChecked());
-        expect(within(panel('Notes')).getByRole('heading', { level: 3 })).toHaveTextContent('The vine');
+        expect(store.noteTopics).toEqual([{ noteId: note.id, topicId: faith.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Faith']));
+    });
+
+    test('unfiling a topic sends the set without it and leaves the ideas', async () => {
+        // Arrange
+        const faith = addTopic('Faith');
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+        replaceNoteTopics(note.id, [faith.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await unfile('Faith');
+
+        // Assert
+        expect(topicLinkRequests()[0].body).toEqual({ topicIds: [] });
+        expect(store.noteIdeas).toEqual([{ noteId: note.id, ideaId: abiding.id, sortOrder: 0 }]);
+        await waitFor(() => expect(filedTitles()).toEqual(['Abiding']));
+    });
+
+    test('a second unfile is blocked while an earlier write is still in flight, so a removal cannot be resurrected', async () => {
+        // Arrange — two ideas, and a fetch whose ideas PUT hangs until this
+        // test releases it by hand — standing in for the real race, where the
+        // first PUT is simply slower than the click that starts the second.
+        const abiding = addIdea('Abiding');
+        const pruning = addIdea('Pruning');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id, pruning.id]);
+
+        let releaseIdeasPut;
+        const answer = global.fetch.getMockImplementation();
+        global.fetch = jest.fn((url, options = {}) => {
+            const method = options.method || 'GET';
+            if (/\/notes\/\d+\/ideas$/.test(url) && method === 'PUT') {
+                requests.push({ url, method, body: options.body ? JSON.parse(options.body) : undefined });
+                return new Promise(resolve => { releaseIdeasPut = resolve; });
+            }
+            return answer(url, options);
+        });
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act — unfile Abiding. The PUT is sent and stays in flight.
+        await unfile('Abiding');
+        expect(ideaLinkRequests()).toHaveLength(1);
+
+        // Assert — Pruning's × is disabled while that write is out, so a
+        // click on it cannot start a second, racing whole-set write.
+        const pruningUnfile = within(panel('Notes')).getByRole('button', {
+            name: 'Unfile Pruning from this note',
+        });
+        expect(pruningUnfile).toBeDisabled();
+
+        await act(async () => {
+            fireEvent.click(pruningUnfile);
+        });
+        expect(ideaLinkRequests()).toHaveLength(1);
+
+        // Cleanup — release the held write so nothing is left in flight.
+        await act(async () => {
+            releaseIdeasPut(await jsonResponse({ note: hydrate(store.notes.find(item => item.id === note.id)) }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+        });
     });
 
     test('the link survives a round trip to the server, not just the click', async () => {
@@ -1625,18 +1871,41 @@ describe('Linking a note to ideas', () => {
         await waitForPanels();
         await openFirstNote();
 
-        // Act — link it, close the editor, and open it again from the list.
-        await clickAndSettle(ideaCheckbox('Abiding'));
+        // Act — file it, close the editor, open it again from the list.
+        await openFiler();
+        await clickAndSettle(bubble('Abiding'));
+        await confirmImport();
         await clickAndSettle(within(panel('Notes')).getByRole('button', { name: '← All notes' }));
         await openFirstNote();
 
-        // Assert — the checkbox is checked because the server said so.
+        // Assert — it is listed because the server said so.
         expect(store.noteIdeas).toEqual([{ noteId: 1, ideaId: abiding.id, sortOrder: 0 }]);
-        expect(ideaCheckbox('Abiding')).toBeChecked();
+        expect(filedTitles()).toEqual(['Abiding']);
     });
 
-    test('says so when there are no ideas to file the note under', async () => {
-        // Arrange — no ideas at all, which is the state a new user is in.
+    test('importing something the note already holds writes nothing', async () => {
+        // Arrange
+        const abiding = addIdea('Abiding');
+        const note = addNote({ title: 'The vine' });
+        replaceNoteIdeas(note.id, [abiding.id]);
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openFirstNote();
+
+        // Act
+        await openFiler();
+        await clickAndSettle(bubble('Abiding'));
+        await confirmImport();
+
+        // Assert — a PUT storing what is already stored is a round trip spent
+        // redrawing the same list.
+        expect(ideaLinkRequests()).toHaveLength(0);
+        expect(filedTitles()).toEqual(['Abiding']);
+    });
+
+    test('says so when the note is filed under nothing, and still offers Import', async () => {
+        // Arrange
         addNote({ title: 'The vine' });
 
         // Act
@@ -1645,8 +1914,9 @@ describe('Linking a note to ideas', () => {
         await openFirstNote();
 
         // Assert
-        expect(panel('Notes')).toHaveTextContent('No ideas yet');
-        expect(within(panel('Notes')).queryAllByRole('checkbox')).toHaveLength(0);
+        expect(filedTitles()).toEqual([]);
+        expect(panel('Notes')).toHaveTextContent('Not filed under anything yet');
+        expect(within(panel('Notes')).getByRole('button', { name: 'Import' })).toBeInTheDocument();
     });
 });
 
@@ -1680,7 +1950,7 @@ describe('Importing an idea into the chapter', () => {
         expect(bubble('Unfiled ideas')).toBeInTheDocument();
     });
 
-    test('clicking an idea imports it into the chapter and closes the overlay', async () => {
+    test('picking an idea and confirming imports it into the chapter', async () => {
         // Arrange
         const abiding = addIdea('Abiding');
 
@@ -1688,8 +1958,11 @@ describe('Importing an idea into the chapter', () => {
         await waitForPanels();
         await openImporter();
 
-        // Act
+        // Act — the pick alone must write nothing.
         await clickAndSettle(bubble('Abiding'));
+        expect(chapterIdeaRequests()).toHaveLength(0);
+
+        await confirmImport();
 
         // Assert — the whole set, against the chapter the primary panel shows.
         expect(chapterIdeaRequests()).toHaveLength(1);
@@ -1698,6 +1971,24 @@ describe('Importing an idea into the chapter', () => {
         expect(importerOverlay()).toBeNull();
         await waitFor(() => expect(panel('Notes')).toHaveTextContent('Ideas in this chapter'));
         expect(chapterIdeaTitles()).toEqual(['Abiding']);
+    });
+
+    test('cancelling the importer writes nothing', async () => {
+        // Arrange
+        addIdea('Abiding');
+
+        await renderAnalyze();
+        await waitForPanels();
+        await openImporter();
+
+        // Act
+        await clickAndSettle(bubble('Abiding'));
+        await clickAndSettle(within(importerOverlay()).getByRole('button', { name: 'Cancel' }));
+
+        // Assert
+        expect(chapterIdeaRequests()).toHaveLength(0);
+        expect(importerOverlay()).toBeNull();
+        expect(store.chapterIdeas).toEqual([]);
     });
 
     test('moving the primary panel shows that chapter\'s shortlist instead', async () => {
@@ -1763,33 +2054,8 @@ describe('Importing an idea into the chapter', () => {
         expect(requestsMatching(r => r.method === 'DELETE')).toHaveLength(0);
 
         await clickAndSettle(noteRows()[0]);
-        expect(within(panel('Notes')).getByRole('checkbox', { name: 'Abiding' })).toBeInTheDocument();
-    });
-
-    test('the editor offers this chapter\'s ideas first, with the rest below', async () => {
-        // Arrange — two ideas, one of them in this chapter. The corpus order
-        // puts the other one first, so a picker that ignored the chapter would
-        // list them the other way round.
-        addIdea('Pruning');
-        const abiding = addIdea('Abiding');
-        replaceChapterIdeas(1, 1, [abiding.id]);
-        addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
-
-        await renderAnalyze();
-        await waitForPanels();
-        await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
-
-        // Act
-        await clickAndSettle(noteRows()[0]);
-
-        // Assert — grouped, chapter first, and every other idea still there to
-        // be filed under.
-        expect(within(panel('Notes')).getByText('In this chapter')).toBeInTheDocument();
-        expect(within(panel('Notes')).getByText('Other ideas')).toBeInTheDocument();
-
-        const offered = Array.from(panel('Notes').querySelectorAll('.analyze-multiselect-option'))
-            .map(option => option.textContent);
-        expect(offered).toEqual(['Abiding', 'Pruning']);
+        await clickAndSettle(within(panel('Notes')).getByRole('button', { name: 'Import' }));
+        expect(bubble('Abiding')).toBeInTheDocument();
     });
 });
 

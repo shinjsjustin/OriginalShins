@@ -93,6 +93,15 @@ const useNotes = (position) => {
             .then(data => data.note)
     ), [run]);
 
+    // The note's complete DIRECT topic set, replaced in one call — the mirror
+    // of setNoteIdeas above, and a separate membership from it. A note may sit
+    // under a topic directly, under an idea that sits under that topic, or
+    // both; writing this one leaves the idea set alone.
+    const setNoteTopics = useCallback((noteId, topicIds) => run(
+        () => fetchJson(`/notes/${noteId}/topics`, { method: 'PUT', body: { topicIds } })
+            .then(data => data.note)
+    ), [run]);
+
     const dismissActionError = useCallback(() => setActionError(''), []);
 
     return {
@@ -109,6 +118,7 @@ const useNotes = (position) => {
         addReference,
         removeReference,
         setNoteIdeas,
+        setNoteTopics,
     };
 };
 

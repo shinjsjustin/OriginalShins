@@ -1,9 +1,4 @@
-import {
-    collectChapterIdeas,
-    groupIdeaOptions,
-    IN_CHAPTER_HEADING,
-    OTHER_IDEAS_HEADING,
-} from './chapterIdeas';
+import { collectChapterIdeas } from './chapterIdeas';
 
 const idea = (id, title, body = '') => ({ id, title, body });
 const noteFiledUnder = (...ideas) => ({ id: 1, ideas: ideas.map(({ id, title }) => ({ id, title })) });
@@ -74,50 +69,5 @@ describe('collectChapterIdeas', () => {
 
         expect(imported).toHaveLength(1);
         expect(notes[0].ideas).toHaveLength(1);
-    });
-});
-
-describe('groupIdeaOptions', () => {
-    test('puts this chapter\'s ideas first, under a heading, and the rest below', () => {
-        // Arrange — corpus order has the other idea first.
-        const pruning = idea(2, 'Pruning');
-        const abiding = idea(1, 'Abiding');
-
-        // Act
-        const groups = groupIdeaOptions([pruning, abiding], [abiding]);
-
-        // Assert
-        expect(groups).toEqual([
-            { heading: IN_CHAPTER_HEADING, options: [{ id: 1, label: 'Abiding' }] },
-            { heading: OTHER_IDEAS_HEADING, options: [{ id: 2, label: 'Pruning' }] },
-        ]);
-    });
-
-    test('offers one ungrouped list when the chapter holds nothing', () => {
-        const groups = groupIdeaOptions([idea(1, 'Abiding')], []);
-
-        expect(groups).toEqual([{ options: [{ id: 1, label: 'Abiding' }] }]);
-    });
-
-    test('drops the second group when every idea is in this chapter', () => {
-        const abiding = idea(1, 'Abiding');
-
-        const groups = groupIdeaOptions([abiding], [abiding]);
-
-        expect(groups).toHaveLength(1);
-        expect(groups[0].heading).toBe(IN_CHAPTER_HEADING);
-    });
-
-    test('offers an idea in the chapter that the corpus has not listed yet', () => {
-        // A chapter idea that is not in `ideas` must still be checkable —
-        // otherwise a note could not be filed under the idea it was imported
-        // beside while the corpus request is still in flight.
-        const groups = groupIdeaOptions([], [idea(1, 'Abiding')]);
-
-        expect(groups[0].options).toEqual([{ id: 1, label: 'Abiding' }]);
-    });
-
-    test('offers nothing at all for a reader with no ideas', () => {
-        expect(groupIdeaOptions([], [])).toEqual([{ options: [] }]);
     });
 });

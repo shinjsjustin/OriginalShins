@@ -69,6 +69,10 @@ export const pinLabelFor = (title, isPinned) =>
  *                    what its text sizes itself from — the box comes from
  *                    `position`, already scaled, so this must not resize it
  * @param isSelected  the card the reader is on: the spotlight's centre
+ * @param isPicked    the card the reader has CHOSEN, which is not the same as
+ *                    the card the spotlight is on: on the importer the picked
+ *                    topic is usually also the open one, so the two states are
+ *                    drawn together and must not look alike
  * @param isFaded     a card the spotlight has left behind
  * @param isPinned    whether the item is in the pinned set
  * @param onActivate  what clicking the card's face does; without it the face
@@ -86,6 +90,7 @@ const BubbleCard = ({
     position,
     scale = 1,
     isSelected = false,
+    isPicked = false,
     isFaded = false,
     isPinned = false,
     onActivate = null,
@@ -103,6 +108,7 @@ const BubbleCard = ({
         'thoughts-bubble',
         `thoughts-bubble--${kind}`,
         isSelected ? 'is-selected' : '',
+        isPicked ? 'is-picked' : '',
         isFaded ? 'is-faded' : '',
         isPinned ? 'is-pinned' : '',
         className,

@@ -5,8 +5,7 @@ import IdeaListItem from './IdeaListItem';
 import IdeaComposer from './IdeaComposer';
 import NoteEditor from './NoteEditor';
 import PanelHeader from './PanelHeader';
-import BubbleOverlay from '../Bubbles/BubbleOverlay';
-import TopicIdeaField from '../Bubbles/TopicIdeaField';
+import ImportPicker from '../Bubbles/ImportPicker';
 import { describePosition } from './navigation';
 
 // The notes panel: what has been written around the passage in the centre.
@@ -27,7 +26,8 @@ import { describePosition } from './navigation';
 //
 // The one thing it does own is whether the importer overlay is open. That is
 // not data and it does not leave this panel: nothing else on the page changes
-// while it is up, and it closes the moment an idea is picked.
+// while it is up, and it closes when the picker's Import is confirmed or the
+// reader backs out.
 const NotesPanel = ({
     books,
     position,
@@ -46,7 +46,6 @@ const NotesPanel = ({
     hoveredNoteId,
     scrollRequest,
     isComposingIdea,
-    ideaGroups,
     onHoverNote,
     onOpenNote,
     onCloseNote,
@@ -60,6 +59,7 @@ const NotesPanel = ({
     onAddPassage,
     onRemoveReference,
     onSaveIdeas,
+    onSaveTopics,
 }) => {
     const heading = describePosition(books, position);
     const bodyRef = useRef(null);
@@ -77,13 +77,13 @@ const NotesPanel = ({
         }
     }, [scrollRequest]);
 
-    // Closed before the write rather than after it: the pick IS the whole
-    // interaction, and an overlay that lingered through a round trip would
-    // leave the reader looking at a field of bubbles wondering whether the
-    // click landed. The shortlist behind it fills in when the request returns.
-    const handleImport = useCallback((ideaId) => {
+    // Closed before the write rather than after it: the picker's Import button
+    // IS the decision, and an overlay that lingered through a round trip would
+    // leave the reader looking at a field of bubbles wondering whether it
+    // landed. The shortlist behind it fills in when the request returns.
+    const handleImport = useCallback((pick) => {
         setIsImporting(false);
-        onImportIdea(ideaId);
+        onImportIdea(pick.id);
     }, [onImportIdea]);
 
     const renderNotes = (items) => items.map(note => (
@@ -132,12 +132,14 @@ const NotesPanel = ({
                     <NoteEditor
                         note={activeNote}
                         books={books}
-                        ideaGroups={ideaGroups}
+                        topics={topics}
+                        ideas={ideas}
                         onSave={onSaveNote}
                         onDelete={onDeleteNote}
                         onAddPassage={onAddPassage}
                         onRemoveReference={onRemoveReference}
                         onSaveIdeas={onSaveIdeas}
+                        onSaveTopics={onSaveTopics}
                         onClose={onCloseNote}
                     />
                 )}
@@ -220,18 +222,21 @@ const NotesPanel = ({
 
             {/* Outside the panel body on purpose: the overlay is fixed to the
                 viewport and lays its bubbles across the whole of it, so it is
-                no more the body's child than a dialog is. */}
+                no more the body's child than a dialog is.
+
+                Ideas only. PUT /api/chapter-ideas takes ideaIds, and a chapter
+                has no topic membership for a picked topic to go into — so a
+                topic card here stays what it is on Thoughts, a way to open a
+                fan. */}
             {isImporting && (
-                <BubbleOverlay
+                <ImportPicker
                     label={`Import an idea into ${heading}`}
+                    topics={topics}
+                    ideas={ideas}
+                    selectableKinds={['idea']}
+                    onImport={handleImport}
                     onClose={() => setIsImporting(false)}
-                >
-                    <TopicIdeaField
-                        topics={topics}
-                        ideas={ideas}
-                        onSelectIdea={handleImport}
-                    />
-                </BubbleOverlay>
+                />
             )}
         </section>
     );

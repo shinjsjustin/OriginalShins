@@ -126,6 +126,18 @@ const parseNoteIdeas = (payload) => {
     return parseIdList('ideaIds', payload.ideaIds);
 };
 
+// PUT /api/notes/:id/topics — { topicIds: [...] }
+//
+// The note tier's direct edge to topics, validated exactly as its idea set is:
+// the whole membership, or a refusal naming the field. An empty array is valid
+// and means "filed under no topic".
+const parseNoteTopics = (payload) => {
+    if (!isPlainObject(payload)) {
+        return fail('request body must be a JSON object');
+    }
+    return parseIdList('topicIds', payload.topicIds);
+};
+
 // PUT /api/notes/:id/idea — { fromIdeaId, toIdeaId, position? }
 //
 // The note tier's half of the drag-between-parents move, shaped exactly like
@@ -160,5 +172,6 @@ module.exports = {
     parseCreateNote,
     parseUpdateNote,
     parseNoteIdeas,
+    parseNoteTopics,
     parseNoteMove,
 };
