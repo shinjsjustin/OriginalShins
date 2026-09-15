@@ -42,6 +42,16 @@ const parsePositiveIntField = (value, max) => {
 
 const parseRowId = (value) => parsePositiveInt(value, MAX_ROW_ID);
 
+// The `?book=` scope the two list endpoints take.
+//
+// This is a DIFFERENT rule from the client's `?book=` on /thoughts, and
+// deliberately so — the two params share a name and nothing else. That one is
+// a URL: bookmarked, shared, hand-edited, and a bad one falls through to the
+// next source rather than erroring. This one is a request a program composed,
+// and a program that composed a nonsense scope has a bug worth reporting. So
+// anything out of canon is null here, and the route turns that into a 400.
+const parseBookScope = (value) => parsePositiveInt(value, MAX_BOOK_ID);
+
 module.exports = {
     MAX_BOOK_ID,
     MAX_CHAPTER_NUMBER,
@@ -50,4 +60,5 @@ module.exports = {
     parsePositiveInt,
     parsePositiveIntField,
     parseRowId,
+    parseBookScope,
 };

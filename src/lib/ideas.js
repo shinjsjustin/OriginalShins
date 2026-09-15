@@ -13,6 +13,7 @@ const { withFirstReferences } = require('./references');
 
 const toIdea = (row, extras = {}) => ({
     id: row.id,
+    bookId: row.book_id,
     title: row.title,
     body: row.body,
     sortOrder: row.sort_order,
@@ -27,17 +28,20 @@ const toIdea = (row, extras = {}) => ({
 // table cannot hold a cross-user row today, but the count is what the
 // management UI shows and a wrong one would be invisible — so it is proven by
 // the query rather than by an argument about who could have written the link.
-const findIdeas = async (userId) => {
+const findIdeas = async (userId, bookId = null) => {
+    const scope = bookId === null ? '' : ' AND i.book_id = ?';
+    const params = bookId === null ? [userId] : [userId, bookId];
+
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 COUNT(DISTINCT ni.note_id) AS note_count
          FROM ideas i
          LEFT JOIN note_ideas ni ON ni.idea_id = i.id
          LEFT JOIN notes n ON n.id = ni.note_id AND n.user_id = i.user_id
-         WHERE i.user_id = ?
-         GROUP BY i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at
+         WHERE i.user_id = ?${scope}
+         GROUP BY i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at
          ORDER BY i.sort_order, i.id`,
-        [userId]
+        params
     );
 
     return rows.map(row => toIdea(row, { noteCount: Number(row.note_count) }));
@@ -49,7 +53,7 @@ const findIdeas = async (userId) => {
 // a property of the list endpoint.
 const findIdeaById = async (userId, ideaId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 (SELECT COUNT(*)
                  FROM note_ideas ni
                  JOIN notes n ON n.id = ni.note_id

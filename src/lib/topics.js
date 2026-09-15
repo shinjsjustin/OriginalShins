@@ -8,6 +8,7 @@ const { withFirstReferences } = require('./references');
 
 const toTopic = (row, extras = {}) => ({
     id: row.id,
+    bookId: row.book_id,
     name: row.name,
     slug: row.slug,
     description: row.description,
@@ -26,9 +27,17 @@ const toTopic = (row, extras = {}) => ({
 // (it.idea_id, ni.note_id): a link row whose target failed the user_id check
 // leaves the joined row NULL and is therefore not counted, instead of inflating
 // a number nobody would think to question.
-const findTopics = async (userId) => {
+// `bookId` is the optional scope: null reads every book, which is what the
+// endpoint answers when no `?book=` is given. The predicate is built rather
+// than always present because a constant-true clause would defeat the
+// (user_id, book_id, sort_order, id) index for the unscoped read.
+const findTopics = async (userId, bookId = null) => {
+    const scope = bookId === null ? '' : ' AND t.book_id = ?';
+    const params = bookId === null ? [userId] : [userId, bookId];
+
     const [rows] = await db.execute(
-        `SELECT t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
+        `SELECT t.id, t.book_id, t.name, t.slug, t.description, t.sort_order,
+                t.created_at, t.updated_at,
                 COUNT(DISTINCT i.id) AS idea_count,
                 COUNT(DISTINCT n.id) AS note_count
          FROM topics t
@@ -36,10 +45,11 @@ const findTopics = async (userId) => {
          LEFT JOIN ideas i        ON i.id = it.idea_id AND i.user_id = t.user_id
          LEFT JOIN note_ideas ni  ON ni.idea_id = i.id
          LEFT JOIN notes n        ON n.id = ni.note_id AND n.user_id = t.user_id
-         WHERE t.user_id = ?
-         GROUP BY t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at
+         WHERE t.user_id = ?${scope}
+         GROUP BY t.id, t.book_id, t.name, t.slug, t.description, t.sort_order,
+                  t.created_at, t.updated_at
          ORDER BY t.sort_order, t.id`,
-        [userId]
+        params
     );
 
     return rows.map(row => toTopic(row, {
@@ -55,7 +65,7 @@ const findTopics = async (userId) => {
 // chain, because for a single row there is no fan-out to collapse.
 const findTopicById = async (userId, topicId) => {
     const [rows] = await db.execute(
-        `SELECT t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
+        `SELECT t.id, t.book_id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
                 (SELECT COUNT(*)
                  FROM idea_topics it
                  JOIN ideas i ON i.id = it.idea_id AND i.user_id = t.user_id

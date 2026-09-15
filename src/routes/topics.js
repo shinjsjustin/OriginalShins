@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { parseRowId } = require('../lib/params');
+const { parseRowId, parseBookScope } = require('../lib/params');
 const {
     parseCreateTopic,
     parseUpdateTopic,
@@ -48,8 +48,15 @@ const respondToWriteError = (res, err, context) => {
 // topics view draws every fan at once, so a per-topic endpoint would be one
 // round trip per card on a view that opens cold. Two queries either way.
 router.get('/', async (req, res) => {
+    // Absent is legal and means every book. Present-but-nonsense is a 400
+    // rather than a silent whole-corpus read — see parseBookScope.
+    const bookId = req.query.book === undefined ? null : parseBookScope(req.query.book);
+    if (req.query.book !== undefined && bookId === null) {
+        return res.status(400).json({ error: 'book must be a book id between 1 and 66' });
+    }
+
     try {
-        const topics = await findTopics(req.user.id);
+        const topics = await findTopics(req.user.id, bookId);
         const notes = await findNotesForTopics(req.user.id, topics.map(topic => topic.id));
 
         const notesByTopicId = notes.reduce((byTopicId, note) => ({

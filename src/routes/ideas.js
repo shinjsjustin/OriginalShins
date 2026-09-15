@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 
-const { parseRowId } = require('../lib/params');
+const { parseRowId, parseBookScope } = require('../lib/params');
 const {
     parseCreateIdea,
     parseUpdateIdea,
@@ -39,8 +39,15 @@ const router = express.Router();
 // This is what the note editor's multi-select and the management list both
 // read, so it carries enough to render either without a second request.
 router.get('/', async (req, res) => {
+    // Absent is legal and means every book. Present-but-nonsense is a 400
+    // rather than a silent whole-corpus read — see parseBookScope.
+    const bookId = req.query.book === undefined ? null : parseBookScope(req.query.book);
+    if (req.query.book !== undefined && bookId === null) {
+        return res.status(400).json({ error: 'book must be a book id between 1 and 66' });
+    }
+
     try {
-        const ideas = await withTopics(req.user.id, await findIdeas(req.user.id));
+        const ideas = await withTopics(req.user.id, await findIdeas(req.user.id, bookId));
         res.status(200).json({ ideas });
     } catch (err) {
         console.error('GET /api/ideas error:', err);
