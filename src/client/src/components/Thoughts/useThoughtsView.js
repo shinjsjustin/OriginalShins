@@ -32,8 +32,9 @@ export { IDEA_PARAM };
  * Defensive because the value is a URL: it survives bookmarks, shared links and
  * hand-editing, and the page it lands on has to be a page. So anything that is
  * not a positive integer — absent, empty, `abc`, `-1`, `0`, `1.5`, `2e3` — is
- * the topics view rather than an error, by the same rule the Analyze panels
- * follow for a stale `?l=` or `?r=` (see panelParams.js).
+ * the topics view rather than an error, by the same rule `parsePosition` in
+ * Analyze/navigation.js follows for a stale `?l=` or `?r=`: fall back to a
+ * known-good value instead of treating a bad URL as a reason to blank the page.
  *
  * A well-formed id naming an idea that no longer exists is deliberately NOT
  * handled here. That is a question about the corpus, only the server can answer
