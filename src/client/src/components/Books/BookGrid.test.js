@@ -42,3 +42,11 @@ test('orders books canonically whatever order they arrive in', () => {
     const names = screen.getAllByRole('button').map(button => button.textContent);
     expect(names).toEqual(['Genesis', 'Matthew', 'Mark']);
 });
+
+test('renders both testaments with no book buttons while the canon is still loading', () => {
+    render(<BookGrid books={[]} selectedBookId={null} onSelect={() => {}} />);
+
+    expect(screen.getByRole('group', { name: 'Old Testament' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'New Testament' })).toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+});
