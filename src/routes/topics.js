@@ -33,7 +33,7 @@ const router = express.Router();
 // funnels through here so the 409 reads the same wherever it comes from.
 const respondToWriteError = (res, err, context) => {
     if (isDuplicateSlugError(err)) {
-        return res.status(409).json({ error: 'You already have a topic with that slug' });
+        return res.status(409).json({ error: 'You already have a topic with that slug in this book' });
     }
 
     console.error(`${context} error:`, err);
@@ -76,6 +76,12 @@ router.get('/', async (req, res) => {
     }
 });
 
+// NOTE: unreachable from the client — nothing in src/client calls this, nor
+// PUT /:id/ideas/order below. This one predates book scoping and is still
+// per-account across books, so it would need a book scope before it could be
+// wired up. Left as it is rather than churned, since there is no caller to
+// keep working.
+//
 // PUT /api/topics/order — { topicIds: [...] }
 //
 // The root level of the Topic page's tree, reordered by dragging. Topics have

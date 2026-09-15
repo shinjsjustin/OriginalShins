@@ -187,15 +187,18 @@ const findNotesForTopics = async (userId, topicIds) => {
     })));
 };
 
-const insertTopic = async (userId, { name, slug, description }) => {
+const insertTopic = async (userId, { bookId, name, slug, description }) => {
+    // Scoped to (user, book), not to the user. Otherwise every new book would
+    // start its cards numbered after Matthew's, and a book's first topic would
+    // sort below topics it can never be shown beside.
     const [orderRows] = await db.execute(
-        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ?',
-        [userId]
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
     );
 
     const [result] = await db.execute(
-        'INSERT INTO topics (user_id, name, slug, description, sort_order) VALUES (?, ?, ?, ?, ?)',
-        [userId, name, slug, description, Number(orderRows[0].next_order)]
+        'INSERT INTO topics (user_id, book_id, name, slug, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [userId, bookId, name, slug, description, Number(orderRows[0].next_order)]
     );
 
     return result.insertId;

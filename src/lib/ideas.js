@@ -172,15 +172,18 @@ const findNotesForIdea = async (userId, ideaId) => {
 
 // Appends to the end of the user's list. sort_order is server-derived so two
 // clients creating ideas concurrently cannot collide on a value either picked.
-const insertIdea = async (userId, { title, body }) => {
+const insertIdea = async (userId, { bookId, title, body }) => {
+    // Scoped to (user, book), not to the user. Otherwise every new book would
+    // start its cards numbered after Matthew's, and a book's first topic would
+    // sort below topics it can never be shown beside.
     const [orderRows] = await db.execute(
-        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM ideas WHERE user_id = ?',
-        [userId]
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM ideas WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
     );
 
     const [result] = await db.execute(
-        'INSERT INTO ideas (user_id, title, body, sort_order) VALUES (?, ?, ?, ?)',
-        [userId, title, body, Number(orderRows[0].next_order)]
+        'INSERT INTO ideas (user_id, book_id, title, body, sort_order) VALUES (?, ?, ?, ?, ?)',
+        [userId, bookId, title, body, Number(orderRows[0].next_order)]
     );
 
     return result.insertId;
