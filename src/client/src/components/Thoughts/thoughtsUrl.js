@@ -18,13 +18,23 @@ export const THOUGHTS_PATH = '/thoughts';
 
 export const IDEA_PARAM = 'idea';
 
-// The topics view — the whole field of topic cards, nothing opened.
+// Which book's topics the field is showing.
 //
-// A topic has no param of its own because it has no view of its own: the field
-// IS every topic, and a card fans its ideas out under the pointer. So a link to
-// one topic can only be a link to the field it is on, and adding a param that
-// merely scrolled would be a second contract for a hover's worth of state.
-export const thoughtsUrl = () => THOUGHTS_PATH;
+// It is a param rather than a path segment for the same reason `idea` is: the
+// back button leaves a scope, a reload stays in it, and "look at Mark's
+// topics" is a link. It is also why a link INTO the page can name a book at
+// all, which is what stops a search result for a Mark topic landing the reader
+// on Matthew's field.
+export const BOOK_PARAM = 'book';
+
+// The topics view — the whole field of topic cards for one book.
+//
+// The book is optional because two callers want different things. Search names
+// one, so a Mark topic's result lands on the field that actually holds it. The
+// page's own Reset View names none, because leaving an idea should not also
+// re-assert a scope the reader may have just changed.
+export const thoughtsUrl = (bookId = null) =>
+    bookId === null ? THOUGHTS_PATH : `${THOUGHTS_PATH}?${BOOK_PARAM}=${bookId}`;
 
 // One idea, centred, with its notes around it.
 //

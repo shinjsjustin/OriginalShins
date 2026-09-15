@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { IDEA_PARAM } from './thoughtsUrl';
+import { IDEA_PARAM, BOOK_PARAM } from './thoughtsUrl';
 
 // Which of the page's two views is showing, held in the query string.
 //
@@ -24,7 +24,7 @@ import { IDEA_PARAM } from './thoughtsUrl';
 // Re-exported so the page's own modules and tests can read the param name from
 // the hook that owns the behaviour, while thoughtsUrl.js stays the one place it
 // is spelled.
-export { IDEA_PARAM };
+export { IDEA_PARAM, BOOK_PARAM };
 
 /**
  * The idea a raw `?idea=` value names, or null for the topics view.
@@ -54,6 +54,33 @@ export const parseIdeaId = (raw) => {
 
 /** The same, read off a URL. */
 export const ideaIdFromParams = (searchParams) => parseIdeaId(searchParams.get(IDEA_PARAM));
+
+// Widest legal book id. The canon is fixed at 66 books, and the client knows
+// that as surely as the server does — waiting for /api/books to reject
+// `?book=999` would mean holding the whole page on a request just to learn
+// something already true.
+const MAX_BOOK_ID = 66;
+
+/**
+ * The book a raw `?book=` value names, or null when it names none.
+ *
+ * Defensive for the reason parseIdeaId is: the value is a URL. It survives
+ * bookmarks, shared links and hand-editing, so anything that is not a book id
+ * inside the canon — absent, empty, `abc`, `0`, `-1`, `1.5`, `67` — means "the
+ * URL said nothing usable" and falls through to the next source of scope. It
+ * is never an error, and it is never a 400: that rule belongs to the API's own
+ * `?book=`, which is a different param with a different caller. See
+ * parseBookScope in src/lib/params.js.
+ */
+export const parseBookId = (raw) => {
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return null;
+
+    const bookId = Number(raw);
+    return bookId >= 1 && bookId <= MAX_BOOK_ID ? bookId : null;
+};
+
+/** The same, read off a URL. */
+export const bookIdFromParams = (searchParams) => parseBookId(searchParams.get(BOOK_PARAM));
 
 const useThoughtsView = () => {
     const [searchParams, setSearchParams] = useSearchParams();

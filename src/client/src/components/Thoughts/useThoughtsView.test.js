@@ -1,4 +1,12 @@
-import { IDEA_PARAM, ideaIdFromParams, parseIdeaId } from './useThoughtsView';
+import {
+    IDEA_PARAM,
+    ideaIdFromParams,
+    parseIdeaId,
+    parseBookId,
+    bookIdFromParams,
+    BOOK_PARAM,
+} from './useThoughtsView';
+import { thoughtsUrl } from './thoughtsUrl';
 
 // ─── What the view param has to get right ───────────────────────────────────
 //
@@ -84,5 +92,47 @@ describe('ideaIdFromParams', () => {
         const params = new URLSearchParams('?topicId=3&q=faith');
         expect(ideaIdFromParams(params)).toBeNull();
         expect(params.get(IDEA_PARAM)).toBeNull();
+    });
+});
+
+describe('parseBookId', () => {
+    test('accepts a book id inside the canon', () => {
+        expect(parseBookId('1')).toBe(1);
+        expect(parseBookId('40')).toBe(40);
+        expect(parseBookId('66')).toBe(66);
+    });
+
+    test('returns null for anything that is not a canon book id', () => {
+        // Every one of these is reachable by hand-editing the address bar or
+        // following a link saved before the canon was what it is, so none of
+        // them is an error — they all mean "the URL said nothing usable".
+        ['abc', '', '0', '-1', '1.5', '2e3', '67', '999'].forEach(raw => {
+            expect(parseBookId(raw)).toBeNull();
+        });
+    });
+
+    test('returns null for a value that is not a string', () => {
+        expect(parseBookId(null)).toBeNull();
+        expect(parseBookId(40)).toBeNull();
+    });
+});
+
+describe('bookIdFromParams', () => {
+    test('reads the book off a URL', () => {
+        expect(bookIdFromParams(new URLSearchParams('book=41'))).toBe(41);
+    });
+
+    test('is null when the URL does not name one', () => {
+        expect(bookIdFromParams(new URLSearchParams('idea=7'))).toBeNull();
+    });
+});
+
+describe('thoughtsUrl', () => {
+    test('names a book when given one', () => {
+        expect(thoughtsUrl(41)).toBe(`/thoughts?${BOOK_PARAM}=41`);
+    });
+
+    test('is the bare field when given nothing', () => {
+        expect(thoughtsUrl()).toBe('/thoughts');
     });
 });
