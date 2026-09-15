@@ -96,6 +96,25 @@ test('a nonsense ?book= falls through to the saved location rather than erroring
     await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
 });
 
+test('a dead idea id falls back to the saved location rather than Genesis', async () => {
+    answers.location = { primary: { bookId: 40, chapter: 5 }, compare: null, noteId: null };
+
+    // Only the idea branch rejects here; the location endpoint still answers
+    // normally, which is the whole point of the test.
+    global.fetch = jest.fn((url) => {
+        requests.push(url);
+
+        if (/\/ideas\/\d+$/.test(url)) return Promise.reject(new Error('not found'));
+        if (url.endsWith('/user/location')) return jsonResponse({ location: answers.location });
+
+        throw new Error(`unexpected request: ${url}`);
+    });
+
+    renderScope('/thoughts?idea=7', 7);
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+});
+
 test('the scope is resolving until it is settled, so nothing fetches early', async () => {
     answers.location = { primary: { bookId: 40, chapter: 5 }, compare: null, noteId: null };
     renderScope('/thoughts');

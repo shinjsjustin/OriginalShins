@@ -75,9 +75,19 @@ const useBookScope = (ideaId = null) => {
         // different page.
         const seed = async () => {
             if (seedIdeaId !== null) {
-                const payload = await fetchJson(`/ideas/${seedIdeaId}`, { signal: controller.signal });
-                const bookId = payload && payload.idea && payload.idea.bookId;
-                if (parseBookId(String(bookId)) !== null) return bookId;
+                // A `?idea=` that no longer resolves — deleted, mistyped, a
+                // stale link — is not a reason to give up on the search. It
+                // fails the same way an idea payload with no usable bookId
+                // already falls through below: the reader's saved location is
+                // still a better answer than Genesis, so only this step is
+                // swallowed and the search continues to source 3.
+                try {
+                    const payload = await fetchJson(`/ideas/${seedIdeaId}`, { signal: controller.signal });
+                    const bookId = payload && payload.idea && payload.idea.bookId;
+                    if (parseBookId(String(bookId)) !== null) return bookId;
+                } catch (err) {
+                    if (err.name === 'AbortError') throw err;
+                }
             }
 
             const payload = await fetchJson(LOCATION_PATH, { signal: controller.signal });
