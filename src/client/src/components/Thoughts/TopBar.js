@@ -1,8 +1,12 @@
 import React from 'react';
+import BookTitle from './BookTitle';
 
 // The Thoughts page's one strip of chrome: the way back to the whole field,
 // the two things a reader can create here, and — in the idea view — which idea
-// they are inside.
+// they are inside. It also holds which book is in scope, and that is a
+// different fact from the breadcrumb's: the crumb says which idea is open,
+// the title says which book the field is drawn from, and neither replaces the
+// other.
 //
 // ── Why the crumb names one topic and is not a path ────────────────────────
 //
@@ -40,9 +44,20 @@ export const breadcrumbFor = (idea) => {
 };
 
 /**
- * @param idea the open idea, or null in the topics view
+ * @param books         every book, from /api/books
+ * @param bookId        the book in scope
+ * @param onChangeBook  (bookId) -> void
+ * @param idea          the open idea, or null in the topics view
  */
-const TopBar = ({ idea = null, onResetView, onCreateTopic, onCreateIdea }) => {
+const TopBar = ({
+    books = [],
+    bookId = null,
+    onChangeBook,
+    idea = null,
+    onResetView,
+    onCreateTopic,
+    onCreateIdea,
+}) => {
     const crumb = breadcrumbFor(idea);
 
     return (
@@ -53,6 +68,8 @@ const TopBar = ({ idea = null, onResetView, onCreateTopic, onCreateIdea }) => {
                 <button type="button" className="thoughts-action" onClick={onResetView}>
                     ⟲ Reset View
                 </button>
+
+                <BookTitle books={books} bookId={bookId} onChange={onChangeBook} />
 
                 <div className="thoughts-topbar-creates">
                     <button type="button" className="thoughts-action" onClick={onCreateTopic}>

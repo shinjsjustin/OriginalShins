@@ -67,17 +67,54 @@
   gap: var(--space-sm);
 }
 
+/* Three columns rather than space-between, because the middle element has to
+   be centred against the ROW — space-between would centre it against whatever
+   the two groups beside it happen to measure, so the title would drift left
+   and right as the breadcrumb below it changed the bar's width. */
 .thoughts-topbar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
   gap: var(--space-sm);
 }
 
 .thoughts-topbar-creates {
   display: flex;
   gap: var(--space-sm);
+  justify-self: end;
+}
+
+/* The same palette as `.thoughts-action` beside it — paper tokens, not ground
+   ones. The title is a peer of the two buttons in this row, and a control that
+   took a different palette would read as belonging to something else. It is
+   transparent at rest because it is a title first and a button second. */
+.thoughts-book-title {
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--font-lg);
+  font-weight: 600;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.thoughts-book-title:hover {
+  background-color: var(--bg-card);
+}
+
+/* The overlay's surface is edge-to-edge and transparent by design, so the grid
+   needs a panel of its own to sit on — and a scroll, because 66 cells plus two
+   headings is taller than a short window. Paper, matching the grid's own cells:
+   BookGrid uses --paper-alt and --ink throughout. */
+.thoughts-book-picker {
+  max-width: 720px;
+  max-height: 80vh;
+  margin: 0 auto;
+  padding: var(--space-lg);
+  overflow-y: auto;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
 }
 
 .thoughts-action {
