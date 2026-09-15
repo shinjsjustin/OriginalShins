@@ -22,8 +22,19 @@ let store;
 let requests;
 
 const resetStore = () => {
-    store = { topics: [], ideas: [], notes: [], passages: [], pins: [], nextTopicId: 1 };
+    store = {
+        topics: [], ideas: [], notes: [], passages: [], pins: [], nextTopicId: 1,
+        location: { primary: { bookId: 40, chapter: 1 }, compare: null, noteId: null },
+    };
 };
+
+// The 66-book canon useBooks reads. Only the two books the suite actually
+// scopes to are here — everything else about the canon is BookGrid's own
+// tests' business.
+const BOOKS = [
+    { id: 40, name: 'Matthew', testament: 'NT', canonicalOrder: 40, chapterCount: 28 },
+    { id: 41, name: 'Mark', testament: 'NT', canonicalOrder: 41, chapterCount: 16 },
+];
 
 const jsonResponse = (body, status = 200) => Promise.resolve({
     ok: status >= 200 && status < 300,
@@ -31,18 +42,35 @@ const jsonResponse = (body, status = 200) => Promise.resolve({
     json: () => Promise.resolve(body),
 });
 
-const addTopic = ({ name, slug, description }) => {
+const addTopic = ({ name, slug, description, bookId = 40 }) => {
     const topic = {
         id: store.nextTopicId,
         name,
         slug: slug || name,
         description: description || '',
         ideaCount: 0,
+        bookId,
     };
 
     store.nextTopicId += 1;
     store.topics = [...store.topics, topic];
     return topic;
+};
+
+// Matches with or without the scope, and applies it when it is there — so a
+// test asserting that the page asked for one book is asserting against a
+// server that actually answers differently, rather than one that ignores the
+// param. This is the failure commit 5d39cb8 fixed for note_topics.
+const scopedList = (url, kind) => {
+    const match = new RegExp(`/${kind}(\\?book=(\\d+))?$`).exec(url);
+    if (!match) return null;
+
+    const bookId = match[2] === undefined ? null : Number(match[2]);
+    const rows = bookId === null
+        ? store[kind]
+        : store[kind].filter(row => row.bookId === bookId);
+
+    return jsonResponse({ [kind]: rows });
 };
 
 // The server hydrates a pin by joining the item's own table, so a pinned topic
@@ -57,16 +85,24 @@ const handleRequest = (url, options = {}) => {
     const body = options.body ? JSON.parse(options.body) : undefined;
     requests.push({ url, method, body });
 
-    if (url.endsWith('/topics') && method === 'GET') {
-        return jsonResponse({ topics: store.topics });
+    if (method === 'GET') {
+        const topics = scopedList(url, 'topics');
+        if (topics) return topics;
+
+        const ideas = scopedList(url, 'ideas');
+        if (ideas) return ideas;
     }
 
     if (url.endsWith('/topics') && method === 'POST') {
         return jsonResponse({ topic: addTopic(body) }, 201);
     }
 
-    if (url.endsWith('/ideas') && method === 'GET') {
-        return jsonResponse({ ideas: store.ideas });
+    if (url.endsWith('/books') && method === 'GET') {
+        return jsonResponse({ books: BOOKS });
+    }
+
+    if (url.endsWith('/user/location') && method === 'GET') {
+        return jsonResponse({ location: store.location });
     }
 
     // The idea view's three reads, in the order the page issues them: the idea
@@ -202,7 +238,7 @@ describe('creating a topic from the top bar', () => {
 // still pass its own tests.
 describe('opening an idea', () => {
     const seedIdea = () => {
-        store.ideas = [{ id: 5, title: 'Covenant renewal', body: '', topics: [] }];
+        store.ideas = [{ id: 5, title: 'Covenant renewal', body: '', topics: [], bookId: 40 }];
         store.notes = [
             { id: 9, title: 'Light first', body: 'Order of creation', references: [], ideas: [] },
             { id: 10, title: 'Unanchored', body: 'No verses here', references: [], ideas: [] },
@@ -247,5 +283,35 @@ describe('opening an idea', () => {
         const passageRequests = requests.filter(request => request.url.includes('/passages'));
         expect(passageRequests).toHaveLength(1);
         expect(passageRequests[0].url).toMatch(/\/ideas\/5\/passages$/);
+    });
+});
+
+// ─── Scoping the page to one book ────────────────────────────────────────────
+describe('scoping the page to one book', () => {
+    test('asks for only the book in scope', async () => {
+        await renderThoughts('/thoughts?book=41');
+
+        const listReads = requests.filter(r => r.method === 'GET' && /\/(topics|ideas)/.test(r.url));
+        expect(listReads).not.toHaveLength(0);
+        listReads.forEach(read => expect(read.url).toContain('book=41'));
+    });
+
+    test('a book with nothing in it says so, and is not an error', async () => {
+        addTopic({ name: 'Faith', bookId: 40 });
+        await renderThoughts('/thoughts?book=41');
+
+        expect(await screen.findByText(/No topics in Mark yet/)).toBeInTheDocument();
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    test('nothing is fetched before the scope is settled', async () => {
+        // A bare /thoughts has to read the saved location first. If the corpus
+        // fetch did not wait, it would ask for the wrong book and immediately ask
+        // again — two reads where there should be one.
+        await renderThoughts('/thoughts');
+
+        const topicReads = requests.filter(r => r.method === 'GET' && /\/topics/.test(r.url));
+        expect(topicReads).toHaveLength(1);
+        expect(topicReads[0].url).toContain('book=40');
     });
 });

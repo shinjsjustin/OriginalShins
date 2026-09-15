@@ -8,6 +8,8 @@ import CreateModal from './CreateModal';
 import useThoughtsData from './useThoughtsData';
 import usePins from './usePins';
 import useThoughtsView from './useThoughtsView';
+import useBooks from '../Analyze/useBooks';
+import useBookScope from './useBookScope';
 import '../Styling/Thoughts.css';
 
 // /thoughts — topics, ideas and notes as one canvas, with the pinned panel
@@ -81,6 +83,8 @@ const TITLE_OF = Object.freeze({
 
 const Thoughts = () => {
     const { ideaId, showIdea, resetView } = useThoughtsView();
+    const { books } = useBooks();
+    const { bookId, isResolving, showBook } = useBookScope(ideaId);
     // Which create form is open: 'topic', 'idea', or nothing.
     const [creatingKind, setCreatingKind] = useState(null);
     const {
@@ -101,7 +105,7 @@ const Thoughts = () => {
         linkPairs,
         passagesByTopicId,
         loadPassagesFor,
-    } = useThoughtsData(ideaId);
+    } = useThoughtsData(bookId, ideaId);
     const {
         pins,
         isLoading: arePinsLoading,
@@ -162,6 +166,7 @@ const Thoughts = () => {
 
     const error = loadError || pinsError;
     const actionError = dataActionError || pinsActionError;
+    const bookName = (books.find(book => book.id === bookId) || {}).name || 'this book';
 
     return (
         <div className="thoughts-page">
@@ -169,6 +174,9 @@ const Thoughts = () => {
 
             <main className="thoughts-main">
                 <TopBar
+                    books={books}
+                    bookId={bookId}
+                    onChangeBook={showBook}
                     idea={openIdea}
                     onResetView={resetView}
                     onCreateTopic={() => setCreatingKind('topic')}
@@ -197,8 +205,8 @@ const Thoughts = () => {
                         so the cards animate between the two rather than the
                         page resizing under them. */}
                     <section className="thoughts-canvas" aria-label="Thoughts canvas">
-                        {isLoading && <p className="thoughts-message">Loading your thoughts…</p>}
-                        {!isLoading && !error && ideaId === null && (
+                        {(isResolving || isLoading) && <p className="thoughts-message">Loading your thoughts…</p>}
+                        {!isResolving && !isLoading && !error && ideaId === null && (
                             <TopicIdeaField
                                 topics={topics}
                                 ideas={ideas}
@@ -208,6 +216,13 @@ const Thoughts = () => {
                                 passagesByTopicId={passagesByTopicId}
                                 onTopicOpen={loadPassagesFor}
                             />
+                        )}
+
+                        {!isResolving && !isLoading && !error && ideaId === null
+                            && topics.length === 0 && ideas.length === 0 && (
+                            <p className="thoughts-message">
+                                No topics in {bookName} yet. Press + Topic to start one.
+                            </p>
                         )}
 
                         {/* Outside the guards above on purpose: an orbit that

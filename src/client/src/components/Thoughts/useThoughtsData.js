@@ -200,10 +200,12 @@ const loadNotesForIdea = async (ideaId, signal) => {
     }));
 };
 
-const loadThoughts = async (ideaId, signal) => {
+const loadThoughts = async (bookId, ideaId, signal) => {
+    const scope = `?book=${bookId}`;
+
     const [topicsPayload, ideasPayload, notes] = await Promise.all([
-        fetchJson(TOPICS_PATH, { signal }),
-        fetchJson(IDEAS_PATH, { signal }),
+        fetchJson(`${TOPICS_PATH}${scope}`, { signal }),
+        fetchJson(`${IDEAS_PATH}${scope}`, { signal }),
         loadNotesForIdea(ideaId, signal),
     ]);
 
@@ -257,9 +259,10 @@ const useTopicPassages = (revision) => {
 };
 
 /**
+ * @param bookId the book in scope, or null while it is still being resolved
  * @param ideaId the idea whose notes to load, or null in the topics view
  */
-const useThoughtsData = (ideaId = null) => {
+const useThoughtsData = (bookId = null, ideaId = null) => {
     const [data, setData] = useState(EMPTY);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
@@ -268,10 +271,15 @@ const useThoughtsData = (ideaId = null) => {
     const { passagesByTopicId, loadPassagesFor } = useTopicPassages(revision);
 
     useEffect(() => {
+        // Nothing to ask for until the scope is known — see useBookScope's
+        // `isResolving`. Staying in the loading state rather than fetching an
+        // unscoped list is what stops the page asking twice on every entry.
+        if (bookId === null) return undefined;
+
         const controller = new AbortController();
         setIsLoading(true);
 
-        loadThoughts(ideaId, controller.signal)
+        loadThoughts(bookId, ideaId, controller.signal)
             .then(loaded => {
                 setData(loaded);
                 setError('');
@@ -288,7 +296,7 @@ const useThoughtsData = (ideaId = null) => {
             });
 
         return () => controller.abort();
-    }, [ideaId, revision]);
+    }, [bookId, ideaId, revision]);
 
     // Every single-request mutation is the same shape: run it, surface any
     // failure as a message the page can show, and on success bump the revision
