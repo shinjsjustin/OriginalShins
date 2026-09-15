@@ -174,8 +174,8 @@ const findNotesForIdea = async (userId, ideaId) => {
 // clients creating ideas concurrently cannot collide on a value either picked.
 const insertIdea = async (userId, { bookId, title, body }) => {
     // Scoped to (user, book), not to the user. Otherwise every new book would
-    // start its cards numbered after Matthew's, and a book's first topic would
-    // sort below topics it can never be shown beside.
+    // start its ideas numbered after Matthew's, and a book's first idea would
+    // sort below ideas it can never be shown beside.
     const [orderRows] = await db.execute(
         'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM ideas WHERE user_id = ? AND book_id = ?',
         [userId, bookId]

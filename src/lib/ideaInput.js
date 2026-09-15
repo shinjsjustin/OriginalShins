@@ -28,7 +28,7 @@ const parseBody = (value, fallback) =>
 
 // Required, not defaulted. A default here would be a guess about which book
 // the reader meant, and the only caller that cannot say which book it is in is
-// a caller that should not be creating a topic.
+// a caller that should not be creating an idea.
 const parseBookId = (value) => {
     const bookId = parsePositiveIntField(value, MAX_BOOK_ID);
     return bookId === null
