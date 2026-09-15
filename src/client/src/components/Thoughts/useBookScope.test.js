@@ -65,6 +65,13 @@ beforeEach(() => {
     global.fetch = jest.fn(handleRequest);
 });
 
+// Every test gets a clean `console.error` regardless of how it exited — a
+// spy left standing past an assertion failure is a trap for whatever runs
+// next, in this file or a report of this file's own output.
+afterEach(() => {
+    jest.restoreAllMocks();
+});
+
 test('1. the URL wins, and costs no request', async () => {
     renderScope('/thoughts?book=41');
 
@@ -77,8 +84,11 @@ test('2. an idea with no book in the URL contributes its own', async () => {
     renderScope('/thoughts?idea=7', 7);
 
     await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('41'));
-    // Written into the URL so a reload, and Reset View, stay in Mark.
-    expect(screen.getByTestId('search')).toHaveTextContent('book=41');
+    // Written into the URL so a reload, and Reset View, stay in Mark. That
+    // write is a second effect, not the same commit that resolved `bookId` —
+    // wait for it too rather than assuming it has already landed the instant
+    // 'book' settles.
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('book=41'));
 });
 
 test('3. a bare /thoughts falls back to where Analyze was left', async () => {
@@ -86,7 +96,9 @@ test('3. a bare /thoughts falls back to where Analyze was left', async () => {
     renderScope('/thoughts');
 
     await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
-    expect(screen.getByTestId('search')).toHaveTextContent('book=40');
+    // Same second-effect race as test 2 above: wait for the URL write rather
+    // than assuming it is already done.
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('book=40'));
 });
 
 test('4. with no saved place at all, Genesis', async () => {
@@ -206,6 +218,6 @@ test('unmounting while the seed fetch is in flight aborts it instead of warning'
     await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(consoleError).not.toHaveBeenCalled();
-
-    consoleError.mockRestore();
+    // Restoring is afterEach's job now — see above — so a failed assertion
+    // here still leaves console.error clean for whatever runs next.
 });
