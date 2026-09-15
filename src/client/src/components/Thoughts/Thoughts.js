@@ -166,7 +166,19 @@ const Thoughts = () => {
 
     const error = loadError || pinsError;
     const actionError = dataActionError || pinsActionError;
-    const bookName = (books.find(book => book.id === bookId) || {}).name || 'this book';
+
+    // The same check BookTitle makes before it will print a name: a `null`
+    // here means the canon has not arrived yet (or named a book that is not
+    // in it), and 'this book' below is a belt-and-braces default for the
+    // string, never something the empty-book message is allowed to show —
+    // see `showEmptyMessage`.
+    const book = books.find(candidate => candidate.id === bookId) || null;
+    const bookName = book ? book.name : 'this book';
+
+    const isReady = !isResolving && !isLoading && !error;
+    const showTopicsView = isReady && ideaId === null;
+    const showEmptyMessage = showTopicsView && book !== null
+        && topics.length === 0 && ideas.length === 0;
 
     return (
         <div className="thoughts-page">
@@ -206,7 +218,7 @@ const Thoughts = () => {
                         page resizing under them. */}
                     <section className="thoughts-canvas" aria-label="Thoughts canvas">
                         {(isResolving || isLoading) && <p className="thoughts-message">Loading your thoughts…</p>}
-                        {!isResolving && !isLoading && !error && ideaId === null && (
+                        {showTopicsView && (
                             <TopicIdeaField
                                 topics={topics}
                                 ideas={ideas}
@@ -218,8 +230,7 @@ const Thoughts = () => {
                             />
                         )}
 
-                        {!isResolving && !isLoading && !error && ideaId === null
-                            && topics.length === 0 && ideas.length === 0 && (
+                        {showEmptyMessage && (
                             <p className="thoughts-message">
                                 No topics in {bookName} yet. Press + Topic to start one.
                             </p>
