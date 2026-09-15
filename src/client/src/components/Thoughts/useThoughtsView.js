@@ -58,7 +58,8 @@ export const ideaIdFromParams = (searchParams) => parseIdeaId(searchParams.get(I
 // Widest legal book id. The canon is fixed at 66 books, and the client knows
 // that as surely as the server does — waiting for /api/books to reject
 // `?book=999` would mean holding the whole page on a request just to learn
-// something already true.
+// something already true. Kept in sync by hand with the MAX_BOOK_ID in
+// src/lib/params.js; the canon is not going to gain a 67th book.
 const MAX_BOOK_ID = 66;
 
 /**
