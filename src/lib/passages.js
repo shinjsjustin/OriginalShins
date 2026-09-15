@@ -8,12 +8,11 @@
 // ── Why the text is not simply part of the reference shape ─────────────────
 //
 // Every payload that carries references carries a lot of them — a chapter's
-// notes, the editor's anchor list, the Overview drawer — and not one of those
-// prints scripture. They print "John 3:16–18". Hanging the verses off
-// references.js's mapper would put chapters of prose into payloads that show a
-// label, for every reader on every navigation. The Thoughts page is the one
-// place a note's passage is actually READ, so it is the one caller that asks,
-// and it asks by itself.
+// notes, the editor's anchor list — and not one of those prints scripture. They
+// print "John 3:16–18". Hanging the verses off references.js's mapper would
+// put chapters of prose into payloads that show a label, for every reader on
+// every navigation. The Thoughts page is the one place a note's passage is
+// actually READ, so it is the one caller that asks, and it asks by itself.
 //
 // ── The range is the index range, never the verse numbers ─────────────────
 //

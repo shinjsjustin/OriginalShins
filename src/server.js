@@ -15,13 +15,11 @@ const ideaRoutes = require('./routes/ideas');
 const topicRoutes = require('./routes/topics');
 const chapterIdeaRoutes = require('./routes/chapterIdeas');
 const searchRoutes = require('./routes/search');
-const overviewRoutes = require('./routes/overview');
 const pinRoutes = require('./routes/pins');
 // TODO: Import additional route files here as you build out the app:
 //   const itemRoutes = require('./routes/item');
 
 const isAuth = require('./middleware/isAuth');
-const invalidatesOverview = require('./middleware/invalidateOverview');
 
 dotenv.config();
 
@@ -71,28 +69,16 @@ app.use('/api/chapter', isAuth, chapterRoutes);
 // Notes and their scripture anchors. A reference is addressed by its own id at
 // the top level (DELETE /api/references/:id), so it gets its own mount rather
 // than nesting under /api/notes.
-//
-// `invalidatesOverview` sits between isAuth and the router on all four of the
-// content mounts below. Those four routers are the only place the six tables
-// the Overview payload is built from are written, so mounting it here — rather
-// than calling it from each of their ~15 write handlers — is what makes it
-// impossible for a handler added in a later phase to leave the cache stale.
-// See src/middleware/invalidateOverview.js.
-app.use('/api/notes', isAuth, invalidatesOverview, noteRoutes);
-app.use('/api/references', isAuth, invalidatesOverview, referenceRoutes);
+app.use('/api/notes', isAuth, noteRoutes);
+app.use('/api/references', isAuth, referenceRoutes);
 
 // The two tiers above notes. Each owns its own link table endpoint —
 // PUT /api/notes/:id/ideas and PUT /api/ideas/:id/topics — because a link set
 // is always replaced whole, from the tier that holds the multi-select.
-app.use('/api/ideas', isAuth, invalidatesOverview, ideaRoutes);
-app.use('/api/topics', isAuth, invalidatesOverview, topicRoutes);
+app.use('/api/ideas', isAuth, ideaRoutes);
+app.use('/api/topics', isAuth, topicRoutes);
 
-// The ideas the Analyze panel has imported into a chapter. Deliberately WITHOUT
-// `invalidatesOverview`, on the same reasoning as the pins mount below:
-// `chapter_ideas` is not one of the six tables the Overview payload is built
-// from, so importing an idea into a chapter cannot make that cache wrong, and
-// throwing a valid payload away here would buy nothing. If a later phase puts
-// imported ideas into the Overview payload, this mount joins the three above.
+// The ideas the Analyze panel has imported into a chapter.
 app.use('/api/chapter-ideas', isAuth, chapterIdeaRoutes);
 
 // One search across all four tiers. Its own mount rather than a query on any of
@@ -100,19 +86,7 @@ app.use('/api/chapter-ideas', isAuth, chapterIdeaRoutes);
 // "where does this word appear at all?" is a question about the whole app.
 app.use('/api/search', isAuth, searchRoutes);
 
-// The Overview page's whole dataset in one request: every anchor point, tier
-// by tier, precomputed and cached. It is invalidated by the middleware above
-// rather than expiring, because the only thing that can make it wrong is a
-// write the same server just handled.
-app.use('/api/overview', isAuth, overviewRoutes);
-
-// The Thoughts page's pinned set. Deliberately WITHOUT `invalidatesOverview`,
-// unlike the four content mounts above: `pins` is not one of the six tables the
-// Overview payload is built from, so a pin can never make that cache wrong.
-// Running the middleware here would throw away a fully valid cached payload on
-// every pin click — the pin toggle is the most-clicked control on the page —
-// and buy nothing. If a later phase puts pinned state into the Overview
-// payload, this mount joins the list above; until then it must not.
+// The Thoughts page's pinned set.
 app.use('/api/pins', isAuth, pinRoutes);
 // TODO: Add more protected route groups here:
 //   app.use('/api/items', isAuth, itemRoutes);

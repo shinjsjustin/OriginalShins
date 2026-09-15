@@ -74,8 +74,8 @@ const findPins = async (userId) => {
 //
 // The pins table cannot answer this — it has no foreign key to the item — so
 // the route asks here before writing, and treats "not owned" as "not found".
-// This is the same cheapest-possible-form query as ownsTopic in
-// src/lib/topics.js, generalized over the three tiers.
+// The query asks nothing but ownership: no counts, no joins beyond the one
+// table item_type names, because that is the only fact a pin write needs.
 const ownsItem = async (userId, itemType, itemId) => {
     const source = ITEM_SOURCES[itemType];
     if (!source) {

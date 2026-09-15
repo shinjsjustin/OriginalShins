@@ -264,22 +264,6 @@ const reorderTopics = async (connection, userId, topicIds) => {
     return { ordered: topicIds.length };
 };
 
-// Whether the user owns a topic, and nothing else about it.
-//
-// findTopicById answers this too, but it pays for two correlated count
-// subqueries to do it, and the caller here — the Overview page's ?topicId=
-// filter — needs no counts and asks on every request including the ones its
-// cache answers. So the cheapest possible form of the question gets its own
-// query rather than a count being computed and thrown away.
-const ownsTopic = async (userId, topicId) => {
-    const [rows] = await db.execute(
-        'SELECT id FROM topics WHERE id = ? AND user_id = ?',
-        [topicId, userId]
-    );
-
-    return rows.length > 0;
-};
-
 // UNIQUE (user_id, slug) is enforced by the database rather than by a read
 // followed by a write, which two concurrent requests could both pass. The
 // driver's error code is translated here so routes never match on a string.
@@ -289,7 +273,6 @@ module.exports = {
     toTopic,
     findTopics,
     findTopicById,
-    ownsTopic,
     findTopicsForIdeas,
     findTopicsForNotes,
     findNotesForTopics,
