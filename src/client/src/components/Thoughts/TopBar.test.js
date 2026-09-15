@@ -96,3 +96,13 @@ test('says nothing about a book until the canon is in', () => {
     renderBar({ books: [] });
     expect(screen.queryByRole('button', { name: /Topics$/ })).not.toBeInTheDocument();
 });
+
+test('picking the book already in scope reports nothing', () => {
+    const onChangeBook = jest.fn();
+    renderBar({ onChangeBook });
+
+    fireEvent.click(screen.getByRole('button', { name: /Matthew Topics/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Matthew' }));
+
+    expect(onChangeBook).not.toHaveBeenCalled();
+});
