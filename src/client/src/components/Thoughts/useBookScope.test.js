@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import useBookScope, { GENESIS_BOOK_ID } from './useBookScope';
 
 let requests;
@@ -28,21 +28,34 @@ const handleRequest = (url) => {
 
 // A probe rather than renderHook, so the hook is exercised inside a real
 // router — the thing it actually writes to is the query string.
-const Probe = ({ ideaId }) => {
-    const { bookId, isResolving } = useBookScope(ideaId);
+//
+// `showBookTargets` renders one button per id a test wants to call `showBook`
+// with, named by that id so a test can reach for exactly the one it needs.
+// `back` exercises the router's own history rather than a mock of it, since
+// what showBook must get right is what it does to a *real* history stack.
+const Probe = ({ ideaId, showBookTargets = [] }) => {
+    const { bookId, isResolving, showBook } = useBookScope(ideaId);
     const location = useLocation();
+    const navigate = useNavigate();
 
     return (
         <>
             <span data-testid="book">{isResolving ? 'resolving' : String(bookId)}</span>
             <span data-testid="search">{location.search}</span>
+            <span data-testid="path">{location.pathname}</span>
+            {showBookTargets.map(target => (
+                <button key={target} data-testid={`show-${target}`} onClick={() => showBook(target)}>
+                    {`show ${target}`}
+                </button>
+            ))}
+            <button data-testid="back" onClick={() => navigate(-1)}>back</button>
         </>
     );
 };
 
-const renderScope = (entry, ideaId = null) => render(
+const renderScope = (entry, ideaId = null, showBookTargets = []) => render(
     <MemoryRouter initialEntries={[entry]}>
-        <Probe ideaId={ideaId} />
+        <Probe ideaId={ideaId} showBookTargets={showBookTargets} />
     </MemoryRouter>
 );
 
@@ -121,4 +134,78 @@ test('the scope is resolving until it is settled, so nothing fetches early', asy
 
     expect(screen.getByTestId('book')).toHaveTextContent('resolving');
     await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+});
+
+test('showBook replaces the current entry rather than pushing a new one', async () => {
+    render(
+        <MemoryRouter initialEntries={['/elsewhere?marker=1', '/thoughts?book=40']} initialIndex={1}>
+            <Probe showBookTargets={[41]} />
+        </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+
+    fireEvent.click(screen.getByTestId('show-41'));
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('41'));
+
+    fireEvent.click(screen.getByTestId('back'));
+
+    // A pushed entry would land back on ?book=40, still inside Thoughts. A
+    // replaced one leaves no trace of the visit to 40, so back lands wherever
+    // Thoughts was entered from.
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('marker=1'));
+});
+
+test('showBook clears the idea from the URL when the book changes', async () => {
+    renderScope('/thoughts?book=40&idea=5', null, [41]);
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+    expect(screen.getByTestId('search')).toHaveTextContent('idea=5');
+
+    fireEvent.click(screen.getByTestId('show-41'));
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('41'));
+    expect(screen.getByTestId('search')).not.toHaveTextContent('idea=5');
+});
+
+test('showBook ignores an id parseBookId rejects', async () => {
+    renderScope('/thoughts?book=40', null, [999]);
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+    const searchBefore = screen.getByTestId('search').textContent;
+
+    fireEvent.click(screen.getByTestId('show-999'));
+
+    expect(screen.getByTestId('book')).toHaveTextContent('40');
+    expect(screen.getByTestId('search')).toHaveTextContent(searchBefore);
+});
+
+test('unmounting while the seed fetch is in flight aborts it instead of warning', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    // A fetch that only ever settles if its own signal is aborted — the shape
+    // of a request that is still in flight when the component goes away.
+    global.fetch = jest.fn((url, options = {}) => new Promise((resolve, reject) => {
+        const { signal } = options;
+        if (!signal) return;
+        signal.addEventListener('abort', () => {
+            const abortError = new Error('The operation was aborted.');
+            abortError.name = 'AbortError';
+            reject(abortError);
+        });
+    }));
+
+    const { unmount } = renderScope('/thoughts');
+
+    expect(screen.getByTestId('book')).toHaveTextContent('resolving');
+
+    unmount();
+
+    // Let the aborted fetch's rejection actually settle before asserting on
+    // it — asserting immediately would prove nothing.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(consoleError).not.toHaveBeenCalled();
+
+    consoleError.mockRestore();
 });
