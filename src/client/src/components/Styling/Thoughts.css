@@ -20,7 +20,7 @@
 
 .thoughts-page {
   /* The Navbar's profile icon is fixed at the top right; this is the room the
-     page leaves for it, as on /overview. */
+     page leaves for it. */
   --thoughts-navbar-clearance: 64px;
   --thoughts-panel-width: 320px;
   --thoughts-spine-width: 46px;

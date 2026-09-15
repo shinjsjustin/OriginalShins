@@ -2,9 +2,9 @@
 //
 // The page's state is its query string — `?idea=<id>` centres one idea with its
 // notes orbiting, and its absence is the field of topic cards — so any other
-// page that wants to send a reader there has to know that format. Two now do
-// (search results, and the Overview drawer), which is exactly when the format
-// stops being one page's private business.
+// page that wants to send a reader there has to know that format. One does
+// (search results), which is exactly when the format stops being one page's
+// private business.
 //
 // Split from useThoughtsView for the reason panelParams.js is split from
 // usePanelPositions: a pure link builder should not have to pull in a hook, and

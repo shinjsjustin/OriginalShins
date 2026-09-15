@@ -12,11 +12,10 @@ import { IDEA_PARAM } from './thoughtsUrl';
 // which topic is hovered, which fan is locked, what is selected in the panel —
 // is a pointer's business and belongs nowhere near a URL.
 //
-// It lives in the query string for the reasons the Analyze panels and the
-// Overview rails do (see panelParams.js and useOverviewParams.js): the back
-// button leaves an idea, a reload stays in it, and "look at this one" is a
-// link. Reset View is then a navigation rather than a state reset, which is why
-// this hook has no state of its own at all.
+// It lives in the query string for the reasons the Analyze panels do (see
+// panelParams.js): the back button leaves an idea, a reload stays in it, and
+// "look at this one" is a link. Reset View is then a navigation rather than a
+// state reset, which is why this hook has no state of its own at all.
 //
 // Opening an idea PUSHES a history entry. It is the reader's decision and the
 // biggest one this page offers — the whole canvas changes — so back must undo
@@ -33,8 +32,8 @@ export { IDEA_PARAM };
  * Defensive because the value is a URL: it survives bookmarks, shared links and
  * hand-editing, and the page it lands on has to be a page. So anything that is
  * not a positive integer — absent, empty, `abc`, `-1`, `0`, `1.5`, `2e3` — is
- * the topics view rather than an error, by the same rule
- * overviewParams.topicIdFromParams follows for a stale `?topicId=`.
+ * the topics view rather than an error, by the same rule the Analyze panels
+ * follow for a stale `?l=` or `?r=` (see panelParams.js).
  *
  * A well-formed id naming an idea that no longer exists is deliberately NOT
  * handled here. That is a question about the corpus, only the server can answer

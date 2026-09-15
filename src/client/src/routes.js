@@ -7,7 +7,6 @@ import AccessDenied from './components/Authentication/AccessDenied';
 import PostRegisterPage from './components/Authentication/PostRegisterPage';
 import Analyze from './components/Analyze/Analyze';
 import SearchPage from './components/Search/SearchPage';
-import Overview from './components/Overview/Overview';
 import Thoughts from './components/Thoughts/Thoughts';
 
 import ProtectedRoute from './config/ProtectedRoute';
@@ -46,12 +45,6 @@ const routes = [
     // the results are four groups of links wanting a page's width, and the
     // Navbar is shown on /analyze too, where the room is spoken for.
     { path: '/search', element: <ProtectedRoute><SearchPage /></ProtectedRoute> },
-
-    // The whole canon on one axis: book and chapter ticks, pan and zoom, and
-    // three rails carrying the same references grouped by note, by idea and by
-    // topic. Which rails are drawn and which topic the diagram is restricted to
-    // live in the query string, e.g. /overview?tiers=notes,topics&topicId=3
-    { path: '/overview', element: <ProtectedRoute><Overview /></ProtectedRoute> },
 
     // The topic -> idea -> note hierarchy as one canvas: topic cards that fan
     // their ideas out on hover, an idea centred with its notes orbiting it, and
