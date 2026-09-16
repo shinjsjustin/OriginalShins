@@ -49,6 +49,11 @@ const Probe = ({ ideaId, showBookTargets = [] }) => {
                 </button>
             ))}
             <button data-testid="back" onClick={() => navigate(-1)}>back</button>
+            {/* The Navbar's Thoughts button, which navigates to the page it is
+                already on. Probe is not inside a Route, so this re-renders it
+                without remounting — exactly what React Router does when the
+                same route element matches again. */}
+            <button data-testid="nav-thoughts" onClick={() => navigate('/thoughts')}>thoughts</button>
         </>
     );
 };
@@ -146,6 +151,26 @@ test('the scope is resolving until it is settled, so nothing fetches early', asy
 
     expect(screen.getByTestId('book')).toHaveTextContent('resolving');
     await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+});
+
+test('leaving ?book= without a remount seeds again rather than resolving forever', async () => {
+    answers.location = { primary: { bookId: 40, chapter: 5 }, compare: null, noteId: null };
+
+    render(
+        <MemoryRouter initialEntries={['/thoughts?book=41']}>
+            <Probe />
+        </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('41'));
+
+    fireEvent.click(screen.getByTestId('nav-thoughts'));
+
+    // The URL has stopped naming a book, so the search starts over from the
+    // saved location. A seed guard settled at mount would leave this stuck on
+    // 'resolving' with no book, no title and no way out but a reload.
+    await waitFor(() => expect(screen.getByTestId('book')).toHaveTextContent('40'));
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent('book=40'));
 });
 
 test('showBook replaces the current entry rather than pushing a new one', async () => {

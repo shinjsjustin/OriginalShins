@@ -264,7 +264,7 @@ const reorderTopics = async (connection, userId, topicIds) => {
     return { ordered: topicIds.length };
 };
 
-// UNIQUE (user_id, slug) is enforced by the database rather than by a read
+// UNIQUE (user_id, book_id, slug) is enforced by the database rather than by a read
 // followed by a write, which two concurrent requests could both pass. The
 // driver's error code is translated here so routes never match on a string.
 const isDuplicateSlugError = (err) => err && err.code === 'ER_DUP_ENTRY';

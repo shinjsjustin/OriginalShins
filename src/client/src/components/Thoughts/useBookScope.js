@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchJson } from '../../config/api';
 import { BOOK_PARAM, IDEA_PARAM, bookIdFromParams, parseBookId } from './useThoughtsView';
@@ -58,15 +58,20 @@ const useBookScope = (ideaId = null) => {
     // The seed, once it has been worked out. Null while that is in flight.
     const [seeded, setSeeded] = useState(null);
 
-    // Read once, at mount. The effect below writes the query string itself, so
-    // re-reading it afterwards would be reading our own handwriting and
-    // concluding the URL had named a book all along — the bug
-    // useRestoreLocation avoids the same way.
-    const urlNamedBook = useRef(fromUrl !== null).current;
-    const seedIdeaId = useRef(ideaId).current;
-
     useEffect(() => {
-        if (urlNamedBook) return undefined;
+        // Both halves of this guard are read live, never frozen at mount. A
+        // reader can leave `?book=` without leaving the page — the Navbar's
+        // Thoughts button, pressed from /thoughts?book=41, re-renders this
+        // component rather than remounting it — and a mount-time answer would
+        // hold the page on a seed that can never run again.
+        //
+        // The effect below writes the query string itself, which is the reason
+        // a naive re-read is a hazard: our own handwriting would come back as
+        // the reader's choice. Reading `seeded` is what settles that. Once a
+        // book has been seeded there is nothing left to search for, so the
+        // early return is correct whether the `?book=` in hand was written by
+        // this hook, a link or the reader.
+        if (fromUrl !== null || seeded !== null) return undefined;
 
         const controller = new AbortController();
 
@@ -74,7 +79,7 @@ const useBookScope = (ideaId = null) => {
         // better answer about which book they mean than where they last left a
         // different page.
         const seed = async () => {
-            if (seedIdeaId !== null) {
+            if (ideaId !== null) {
                 // A `?idea=` that no longer resolves — deleted, mistyped, a
                 // stale link — is not a reason to give up on the search. It
                 // fails the same way an idea payload with no usable bookId
@@ -82,7 +87,7 @@ const useBookScope = (ideaId = null) => {
                 // still a better answer than Genesis, so only this step is
                 // swallowed and the search continues to source 3.
                 try {
-                    const payload = await fetchJson(`/ideas/${seedIdeaId}`, { signal: controller.signal });
+                    const payload = await fetchJson(`/ideas/${ideaId}`, { signal: controller.signal });
                     const bookId = payload && payload.idea && payload.idea.bookId;
                     if (parseBookId(String(bookId)) !== null) return bookId;
                 } catch (err) {
@@ -108,7 +113,7 @@ const useBookScope = (ideaId = null) => {
             });
 
         return () => controller.abort();
-    }, [urlNamedBook, seedIdeaId]);
+    }, [fromUrl, seeded, ideaId]);
 
     // Written to the URL so a reload, a shared link and Reset View all stay in
     // the book that was seeded. Replaced, never pushed — see the header.

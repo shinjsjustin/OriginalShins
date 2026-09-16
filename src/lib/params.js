@@ -42,15 +42,30 @@ const parsePositiveIntField = (value, max) => {
 
 const parseRowId = (value) => parsePositiveInt(value, MAX_ROW_ID);
 
-// The `?book=` scope the two list endpoints take.
+// The `?book=` scope the two list endpoints take, decided once here rather
+// than at each of them: absent means every book, out of canon is a 400, and a
+// second copy of that rule is a second chance for the two to disagree.
 //
 // This is a DIFFERENT rule from the client's `?book=` on /thoughts, and
 // deliberately so — the two params share a name and nothing else. That one is
 // a URL: bookmarked, shared, hand-edited, and a bad one falls through to the
 // next source rather than erroring. This one is a request a program composed,
-// and a program that composed a nonsense scope has a bug worth reporting. So
-// anything out of canon is null here, and the route turns that into a 400.
-const parseBookScope = (value) => parsePositiveInt(value, MAX_BOOK_ID);
+// and a program that composed a nonsense scope has a bug worth reporting.
+//
+// Returns `{ bookId }` — null for every book — or `{ error }` with the message
+// the route sends.
+const parseBookScope = (value) => {
+    if (value === undefined) {
+        return { bookId: null };
+    }
+
+    const bookId = parsePositiveInt(value, MAX_BOOK_ID);
+    if (bookId === null) {
+        return { error: `book must be a book id between 1 and ${MAX_BOOK_ID}` };
+    }
+
+    return { bookId };
+};
 
 module.exports = {
     MAX_BOOK_ID,

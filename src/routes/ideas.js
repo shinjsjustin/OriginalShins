@@ -41,9 +41,9 @@ const router = express.Router();
 router.get('/', async (req, res) => {
     // Absent is legal and means every book. Present-but-nonsense is a 400
     // rather than a silent whole-corpus read — see parseBookScope.
-    const bookId = req.query.book === undefined ? null : parseBookScope(req.query.book);
-    if (req.query.book !== undefined && bookId === null) {
-        return res.status(400).json({ error: 'book must be a book id between 1 and 66' });
+    const { bookId, error } = parseBookScope(req.query.book);
+    if (error) {
+        return res.status(400).json({ error });
     }
 
     try {
