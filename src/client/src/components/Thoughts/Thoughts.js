@@ -133,14 +133,17 @@ const Thoughts = () => {
     // minted cannot already be in the pinned list.
     const createAndPin = useCallback(async (fields) => {
         const create = creatingKind === 'topic' ? createTopic : createIdea;
-        const created = await create(fields);
+        // The scope, not a field on the form. The title block above the modal
+        // already says which book this is, and a second control saying the
+        // same thing is a second control that can disagree with it.
+        const created = await create({ ...fields, bookId });
 
         if (!created) return null;
 
         await togglePin(creatingKind, created.id, TITLE_OF[creatingKind](created));
 
         return created;
-    }, [creatingKind, createTopic, createIdea, togglePin]);
+    }, [creatingKind, createTopic, createIdea, togglePin, bookId]);
 
     const saveItem = useCallback((pin, changes) => {
         if (pin.itemType === 'topic') return updateTopic(pin.itemId, changes);

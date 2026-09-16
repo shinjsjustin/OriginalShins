@@ -23,7 +23,7 @@ let requests;
 
 const resetStore = () => {
     store = {
-        topics: [], ideas: [], notes: [], passages: [], pins: [], nextTopicId: 1,
+        topics: [], ideas: [], notes: [], passages: [], pins: [], nextTopicId: 1, nextIdeaId: 1,
         location: { primary: { bookId: 40, chapter: 1 }, compare: null, noteId: null },
     };
 };
@@ -55,6 +55,20 @@ const addTopic = ({ name, slug, description, bookId = 40 }) => {
     store.nextTopicId += 1;
     store.topics = [...store.topics, topic];
     return topic;
+};
+
+const addIdea = ({ title, body, bookId = 40 }) => {
+    const idea = {
+        id: store.nextIdeaId,
+        title,
+        body: body || '',
+        topics: [],
+        bookId,
+    };
+
+    store.nextIdeaId += 1;
+    store.ideas = [...store.ideas, idea];
+    return idea;
 };
 
 // Matches with or without the scope, and applies it when it is there — so a
@@ -95,6 +109,10 @@ const handleRequest = (url, options = {}) => {
 
     if (url.endsWith('/topics') && method === 'POST') {
         return jsonResponse({ topic: addTopic(body) }, 201);
+    }
+
+    if (url.endsWith('/ideas') && method === 'POST') {
+        return jsonResponse({ idea: addIdea(body) }, 201);
     }
 
     if (url.endsWith('/books') && method === 'GET') {
@@ -371,5 +389,34 @@ describe('scoping the page to one book', () => {
         // this asserts on that user-facing copy rather than on the raw server
         // error above — the raw cause is never meant to reach the UI.
         expect(await screen.findByRole('alert')).toHaveTextContent(/server ran into a problem/i);
+    });
+
+    test('a topic created here belongs to the book in scope', async () => {
+        await renderThoughts('/thoughts?book=41');
+
+        fireEvent.click(await screen.findByRole('button', { name: '+ Topic' }));
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Discipleship' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create topic' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'POST' && r.url.endsWith('/topics') && r.body.bookId === 41)
+        ).toBe(true));
+    });
+
+    // The server requires bookId on POST /ideas exactly as it does on
+    // POST /topics (see Thoughts.js's createAndPin), and the two creates
+    // share that one line — but a passing topic test does not prove the idea
+    // path also names its book, since the two forms post to different
+    // endpoints. This mirrors the topic test above for the idea form.
+    test('an idea created here belongs to the book in scope', async () => {
+        await renderThoughts('/thoughts?book=41');
+
+        fireEvent.click(await screen.findByRole('button', { name: '+ Idea' }));
+        fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Grace and law' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Create idea' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'POST' && r.url.endsWith('/ideas') && r.body.bookId === 41)
+        ).toBe(true));
     });
 });
