@@ -197,28 +197,6 @@ const Thoughts = () => {
         return removed;
     }, [removeTopic, removeIdea, removeNote, unpinMany]);
 
-    // Changing book clears the pinned set. Pins are temporary by design and
-    // are cleared constantly by hand already, so there is no confirmation —
-    // and a pinned panel carried across a book change would be an editing
-    // surface for items no longer on the canvas behind it.
-    //
-    // Wired here rather than inside either hook, so useBookScope and usePins
-    // go on knowing nothing about each other. Joining them is this component's
-    // job, as it already is for the two write dispatchers above.
-    //
-    // The navigation is not conditional on the clear succeeding, and does not
-    // wait on it either — more literally so than an awaited call would be.
-    // clearPins' own optimistic update empties the list synchronously, before
-    // its request is even sent, so firing both here lets React batch them into
-    // one render: the new book and the cleared panel land together, with no
-    // beat where the reader sees the old pins against the new book. If the
-    // request itself fails, usePins' own action error says so over a page
-    // that is otherwise correct.
-    const changeBook = useCallback((nextBookId) => {
-        showBook(nextBookId);
-        clearPins();
-    }, [clearPins, showBook]);
-
     const error = loadError || pinsError;
     const actionError = dataActionError || pinsActionError || scopeError;
 
@@ -241,18 +219,18 @@ const Thoughts = () => {
 
     // ── The panel may only ever hold what the canvas is showing ────────────
     //
-    // changeBook clears the pinned set, but that only covers a book changed
-    // ON this page. Pins are per-user and carry no book of their own — see
-    // findPins in src/lib/pins.js, which returns every pin across every book —
-    // so a topic pinned in Matthew is still on the server when the reader next
-    // ENTERS Thoughts in Mark, whether by a `?book=` link, an `?idea=` that
-    // adopts its own book, or the seed from the saved location. Left in the
-    // panel it is selectable beside a Mark idea, and Link would file that idea
-    // under a topic Mark's field does not draw: the idea then hangs off a topic
-    // on no canvas at all, and this page can no longer undo it.
+    // Pins are per-user and carry no book of their own — see findPins in
+    // src/lib/pins.js, which returns every pin across every book — so a topic
+    // pinned in Matthew is still on the server when the reader next ENTERS
+    // Thoughts in Mark, whether by a `?book=` link, an `?idea=` that adopts its
+    // own book, the seed from the saved location, or the title block above.
+    // Left in the panel it is selectable beside a Mark idea, and Link would
+    // file that idea under a topic Mark's field does not draw: the idea then
+    // hangs off a topic on no canvas at all, and this page can no longer undo
+    // it.
     //
-    // Filtered rather than cleared on entry, and one rule rather than a second
-    // clearing path beside changeBook's. Clearing would need to know which book
+    // Filtered, and nothing is cleared anywhere — one rule, covering every way
+    // a reader can arrive in a book. Clearing would need to know which book
     // yesterday's pins were placed in, which nothing records, and clearing
     // unconditionally would throw a pinned set away on a plain reload. The
     // page's own scoped lists already say which items are in this book, so the
@@ -273,26 +251,41 @@ const Thoughts = () => {
         return inBook.some(item => item.id === pin.itemId);
     });
 
-    // What the panel holds is `pins` read through the corpus, so until the
-    // corpus is in hand the panel cannot tell what it holds — and "Nothing
-    // pinned yet" over a pinned set it simply has not placed yet is the page
-    // stating something false. A bare /thoughts guarantees that window: the
-    // scope has to be seeded before `/topics` and `/ideas` are even asked for,
-    // and `/pins` has answered long before then. A corpus that failed to load
-    // is the same ignorance by another route — the lists are emptied, and the
-    // banner above already says why.
-    const arePinsUnknown = arePinsLoading || isLoading || Boolean(error);
+    // What the panel holds is `pins` read through the corpus, so while the
+    // corpus is still coming the panel cannot tell what it holds — and
+    // "Nothing pinned yet" over a pinned set it simply has not placed yet is
+    // the page stating something false. A bare /thoughts guarantees that
+    // window: the scope has to be seeded before `/topics` and `/ideas` are even
+    // asked for, and `/pins` has answered long before then.
+    const arePinsUnknown = arePinsLoading || isLoading;
+
+    // A corpus that FAILED to load is a different case, and waiting is the
+    // wrong answer to it: nothing further is coming, so a panel held on
+    // "Loading pins…" would sit there for good, with the page's only editing
+    // surface gone until a reload. There is also nothing left to read the
+    // scope off — the lists are empty, so every topic and idea pin would be
+    // filtered out and the reader told they have none. So the filter is
+    // dropped rather than trusted, the pins that did load are shown whole, and
+    // the panel says why the list is not book-scoped right now.
+    const isBookScoped = !error;
+    const shownPins = isBookScoped ? pinsInBook : pins;
 
     return (
         <div className="thoughts-page">
             <Navbar />
 
             <main className="thoughts-main">
+                {/* The title block changes the scope and nothing else — the
+                    pinned set is deliberately left as it is. The panel below
+                    shows only pins whose item is in the book on screen, so the
+                    cross-book pair that clearing on book change once prevented
+                    cannot be selected anyway, and the only clear the API has
+                    reaches every book the reader owns. See `pinsInBook`. */}
                 <TopBar
                     books={books}
                     bookId={bookId}
                     isResolving={isResolving}
-                    onChangeBook={changeBook}
+                    onChangeBook={showBook}
                     idea={openIdea}
                     onResetView={resetView}
                     onCreateTopic={() => setCreatingKind('topic')}
@@ -351,8 +344,9 @@ const Thoughts = () => {
                     {/* Slot two: the pinned panel — the page's editing surface,
                         and the only place an item can be changed. */}
                     <PinnedPanel
-                        pins={pinsInBook}
-                        pinnedElsewhere={pins.length - pinsInBook.length}
+                        pins={shownPins}
+                        pinnedElsewhere={pins.length - shownPins.length}
+                        isBookScoped={isBookScoped}
                         isLoading={arePinsUnknown}
                         onUnpin={unpinMany}
                         onClear={clearPins}

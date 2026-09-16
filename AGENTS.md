@@ -662,22 +662,30 @@ The last two are a request, so the page holds every fetch until
 then immediately refetching a different book's is the failure this exists to
 avoid.
 
-Changing book clears the pinned panel, which is the one side effect on this
-page a reader cannot undo — so unlike `useThoughtsView`'s `showIdea`,
-`useBookScope`'s `showBook` **replaces** the history entry rather than
-pushing one. A back button that restored `?book=` over a pinned panel that is
-now empty would be lying about what it undid.
+Unlike `useThoughtsView`'s `showIdea`, `useBookScope`'s `showBook`
+**replaces** the history entry rather than pushing one. The scope is not
+somewhere the reader navigated to — every entry to the page writes a `?book=`
+of its own — so pushing would leave back stepping through book picks instead
+of leaving the page, with the picker itself one press away the whole time.
 
-That clear only covers a book changed **on** this page, and pins carry no book
-of their own — `findPins` returns every pin the reader has, across every book —
-so the page also filters: **the panel may only hold pins whose item is in the
-book the canvas is drawing.** Without it a topic pinned in Matthew would still
-be in the panel when the reader next *entered* Thoughts in Mark, selectable
-beside a Mark idea, and Link would file that idea under a topic Mark's field
-does not draw — an idea on no canvas at all. Notes pass the filter whatever the
-scope is: a note has no book by design, and filing one under another book's
-topic is a thing the import picker deliberately offers. Nothing is deleted by
-the filter; return to that book and the pins are still there.
+Changing book deletes nothing. Pins carry no book of their own — `findPins`
+returns every pin the reader has, across every book — so the page filters
+instead: **the panel may only hold pins whose item is in the book the canvas is
+drawing.** Without it a topic pinned in Matthew would still be in the panel
+when the reader next *entered* Thoughts in Mark, selectable beside a Mark idea,
+and Link would file that idea under a topic Mark's field does not draw — an
+idea on no canvas at all. One rule covers every way into a book, the title
+block included, which is why nothing is cleared on a book change. Notes pass
+the filter whatever the scope is: a note has no book by design, and filing one
+under another book's topic is a thing the import picker deliberately offers.
+Nothing is deleted by the filter; return to that book and the pins are still
+there.
+
+If the corpus itself fails to load there is nothing to read the scope off, so
+the panel drops the filter, shows every pin the reader has, and says so in a
+line above the list. Hiding them behind a filter that can no longer answer
+would take away the page's only editing surface at the moment it is least
+recoverable.
 
 The panel's **Clear** is deliberately wider than that. It is
 `DELETE /api/pins/all` and unpins every book at once, because a book-scoped

@@ -8,6 +8,7 @@ import {
     CLEAR_LABEL,
     CLEAR_QUESTION,
     EMPTY_MESSAGE,
+    UNSCOPED_MESSAGE,
 } from './PinnedPanel';
 
 // ─── Creating on this page means pinning ────────────────────────────────────
@@ -344,65 +345,46 @@ describe('scoping the page to one book', () => {
         expect(topicReads[0].url).toContain('book=40');
     });
 
-    test('changing book clears the pinned set, with no confirmation', async () => {
+    // Changing book used to clear the pinned set. It no longer does: the panel
+    // is filtered to the book on screen, which is what keeps a cross-book pair
+    // out of a Link, and the only clear the API has reaches every book the
+    // reader owns — including books they never opened on this page.
+    test('changing book leaves the pinned set alone, in this book and every other', async () => {
+        // Arrange - one pin in Matthew, which is where the page opens.
         const topic = addTopic({ name: 'Faith', bookId: 40 });
         store.pins = [{ itemType: 'topic', itemId: topic.id }];
 
         await renderThoughts('/thoughts?book=40');
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
 
+        // Act - away to Mark, where the pin is out of scope.
         fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
-        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+        });
 
-        await waitFor(() => expect(
-            requests.some(r => r.method === 'DELETE' && r.url.endsWith('/pins/all'))
-        ).toBe(true));
-        // No dialog stood between the press and the clear — pins are temporary by
-        // design, and the reader clears them constantly by hand already.
-        expect(screen.queryByRole('dialog', { name: /sure/i })).not.toBeInTheDocument();
+        // Assert - hidden, not deleted, and nothing was asked of the server.
+        expect(await screen.findByRole('heading', { name: 'Pinned (0)' })).toBeInTheDocument();
+        expect(within(panel()).queryByText('Faith')).not.toBeInTheDocument();
+        expect(requests.some(r => r.method === 'DELETE' && r.url.includes('/pins'))).toBe(false);
+        expect(store.pins).toHaveLength(1);
 
-        // The set is actually empty afterwards — on the server the fake stands
-        // in for, not only that a DELETE happened to go out — which is what
-        // this test's name claims.
-        await waitFor(() => expect(store.pins).toHaveLength(0));
-        expect(screen.getByRole('heading', { name: 'Pinned (0)' })).toBeInTheDocument();
-    });
+        // Act - and back again, the return trip the filter's promise rests on.
+        fireEvent.click(await screen.findByRole('button', { name: /Mark Topics/ }));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Matthew' }));
+        });
 
-    test('a failed clear still changes the book, and says what happened', async () => {
-        addTopic({ name: 'Faith', bookId: 40 });
-        await renderThoughts('/thoughts?book=40');
-
-        const answer = global.fetch.getMockImplementation();
-        global.fetch = jest.fn((url, options = {}) => (
-            // A 500, not a rejected fetch: the server is reachable and simply
-            // fails the write, which is the more realistic shape of "pins are
-            // down" than a network-level failure would be, and it exercises
-            // fetchJson's non-ok path rather than its connection-error path.
-            (options.method === 'DELETE' && url.endsWith('/pins/all'))
-                ? jsonResponse({ error: 'pins are down' }, 500)
-                : answer(url, options)
-        ));
-
-        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
-        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
-
-        // The reader asked for the book change; a pin left behind is visible and
-        // recoverable, and refusing the navigation over it would be the louder
-        // wrong answer.
-        expect(await screen.findByRole('button', { name: /Mark Topics/ })).toBeInTheDocument();
-        // fetchJson deliberately substitutes a displayable message for a non-ok
-        // response rather than passing along whatever the server actually said
-        // (see its header comment and MESSAGE_BY_STATUS in config/api.js), so
-        // this asserts on that user-facing copy rather than on the raw server
-        // error above — the raw cause is never meant to reach the UI.
-        expect(await screen.findByRole('alert')).toHaveTextContent(/server ran into a problem/i);
+        // Assert
+        expect(await screen.findByRole('heading', { name: 'Pinned (1)' })).toBeInTheDocument();
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
     });
 
     // ─── The panel holds this book's pins, and only this book's ────────────
     //
-    // changeBook clears the set, but only for a book changed on the page.
     // Pins are per-user and carry no book, so a topic pinned while reading
     // Matthew is still on the server when the reader next ENTERS Thoughts in
-    // Mark. Left in the panel it is selectable beside a Mark idea, and Link
+    // Mark, and nothing on this page deletes it. Left in the panel it is selectable beside a Mark idea, and Link
     // would file that idea under a topic Mark's field does not draw — the idea
     // would then hang off a topic on no canvas at all, with no way to undo it
     // from this page.
@@ -511,6 +493,33 @@ describe('scoping the page to one book', () => {
 
         // …and once it lands, the pin the panel was quiet about is there.
         expect(within(panel()).getByText('Faith')).toBeInTheDocument();
+    });
+
+    // A corpus that never arrives is the opposite case to the one above, and
+    // waiting is the wrong answer to it: nothing further is coming, so a panel
+    // left on "Loading pins…" would stay there, and filtering against lists
+    // that are now empty would hide every topic and idea the reader pinned —
+    // taking away the page's only editing surface exactly when a reload is the
+    // only way back.
+    test('a failed corpus load shows the pins whole, and says they are not book-scoped', async () => {
+        // Arrange — a pin the reader can see, and a topics read that 500s.
+        const topic = addTopic({ name: 'Faith', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: topic.id }];
+
+        global.fetch = jest.fn((url, options = {}) => (
+            (/\/topics(\?|$)/.test(url) && (options.method || 'GET') === 'GET')
+                ? jsonResponse({ error: 'topics are down' }, 500)
+                : handleRequest(url, options)
+        ));
+
+        // Act
+        await renderThoughts('/thoughts?book=40');
+
+        // Assert — the pin is in hand, the panel is not still claiming to be
+        // working on it, and the widened scope is stated rather than implied.
+        expect(within(panel()).queryByText(/Loading pins/)).not.toBeInTheDocument();
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
+        expect(within(panel()).getByText(UNSCOPED_MESSAGE)).toBeInTheDocument();
     });
 
     test('a topic created here belongs to the book in scope', async () => {

@@ -29,7 +29,7 @@ Matthew can be filed under a Mark topic without leaving the chapter.
 | Deep links | **The result wins.** `?idea=123` with no `?book=` adopts the idea's own book; search's topic results carry `?book=`. |
 | Slug uniqueness | **Per book** — `UNIQUE (user_id, book_id, slug)`. "faith" may exist in Matthew and in Mark as two different topics. |
 | Where filtering happens | **Server-side**, via an optional `?book=` on the two list endpoints. |
-| Pins on book change | **Cleared, no warning.** Pins are temporary by design. |
+| Pins on book change | **Left alone.** The panel is filtered to the book on screen, so nothing has to be deleted to keep the pair rule. |
 | Overview | **Deleted**, client and server, including `ownsTopic` which only it called. |
 | Moving a topic between books | **Not supported.** `PATCH` does not accept `bookId`. |
 
@@ -40,8 +40,8 @@ Matthew can be filed under a Mark topic without leaving the chapter.
   queries still search the whole corpus, which is what a search is for.
 - No book column on `notes`. A note's book is its anchor, and an unanchored
   note belongs to no book — adding one would be a second, disagreeing answer.
-- No change to `/api/pins` beyond the existing `DELETE /all` being called at a
-  new moment.
+- No change to `/api/pins` at all. Pins gain no book column and no scoped
+  delete; the panel is scoped on the client, by filtering what it shows.
 - No rework of the two `/order` endpoints. Nothing in the client calls them.
 
 ## 1. Backend
@@ -239,13 +239,23 @@ anything is lazy-loaded.
 
 ### Pins
 
-`Thoughts.js` gains a `handleBookChange` that calls `clearPins()` and then
-`showBook(id)`. No confirmation: pins are temporary by design and are cleared
-constantly by hand already.
+Changing book deletes no pins. The panel shows `pins` filtered to the items
+the page has loaded for the book in scope, so a pin placed in another book is
+hidden rather than destroyed, and returning to that book brings it back.
+
+That filter is the whole of the rule, which is why there is no clear on book
+change. A clear would only have covered a book changed *on* the page — pins
+carry no book, so entering Thoughts in a different book leaves yesterday's
+pins in place regardless — and `DELETE /api/pins/all`, the only clear the API
+has, would have reached books the reader never touched.
 
 It is wired in the page shell rather than inside either hook, preserving the
 property that file's header claims — `useThoughtsView`, `useThoughtsData` and
 `usePins` know nothing about each other, and joining them is the page's job.
+
+The panel's **Clear** button keeps the wide `DELETE /api/pins/all` reach and
+says so in its own words ("Clear all books"), because a book-scoped clear
+would mean widening `/api/pins`, which is a non-goal.
 
 If the clear request fails the navigation still happens, and the existing
 action banner says so. The reader asked for the book change; a pin left behind
@@ -310,8 +320,8 @@ Mark topic, because you switched the picker to Mark to do it. That is the
 point of the feature.
 
 A topic's *ideas*, by contrast, are always same-book — the only way to link an
-idea to a topic is the Thoughts pinned panel, and pins clear on every book
-change, so no cross-book pair can ever be selected together.
+idea to a topic is the Thoughts pinned panel, whose list is filtered to the
+book on screen, so no cross-book pair can ever be selected together.
 
 So a topic's fan may hold notes from any book while its ideas are all its own.
 That is intended, but it is the one place the model is not uniform, and it is
@@ -401,12 +411,15 @@ fetch harness, and that is where the new route behaviour goes too.
 **Thoughts**
 
 - The title block renders `Matthew Topics`.
-- Picking Mark clears the pins, refetches scoped, and replaces rather than
-  pushes the history entry.
+- Picking Mark refetches scoped and replaces rather than pushes the history
+  entry, and leaves the pinned set on the server untouched.
 - `?idea=` with no `?book=` adopts the idea's book, and Reset View lands on
   that book's field.
 - An empty book shows the message, not the error banner.
-- A failed `clearPins` still navigates and shows the action banner.
+- A pin from another book is not in the panel; a pin from this book is, and
+  survives a round trip through another book.
+- A corpus that fails to load shows the pins unfiltered with a notice, rather
+  than an endless "Loading pins…".
 
 **Analyze**
 

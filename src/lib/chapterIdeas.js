@@ -25,7 +25,7 @@ const IDEA_TABLE = 'ideas';
 // the other half of that shape.
 const findChapterIdeas = async (userId, bookId, chapter) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 ${NOTE_COUNT_SUBQUERY} AS note_count
          FROM chapter_ideas ci
          JOIN ideas i ON i.id = ci.idea_id

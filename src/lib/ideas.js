@@ -85,7 +85,7 @@ const NOTE_COUNT_SUBQUERY = `(SELECT COUNT(*)
 // has to say whether expanding it will show anything before it is expanded.
 const findIdeasForTopic = async (userId, topicId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 ${NOTE_COUNT_SUBQUERY} AS note_count
          FROM idea_topics it
          JOIN ideas i ON i.id = it.idea_id
@@ -103,7 +103,7 @@ const findIdeasForTopic = async (userId, topicId) => {
 // appears nowhere in the tree proper.
 const findUnfiledIdeas = async (userId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 ${NOTE_COUNT_SUBQUERY} AS note_count
          FROM ideas i
          LEFT JOIN idea_topics it ON it.idea_id = i.id

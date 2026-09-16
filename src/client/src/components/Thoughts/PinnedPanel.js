@@ -36,6 +36,12 @@ export const PANEL_LABEL = 'Pinned';
 
 export const EMPTY_MESSAGE = 'Nothing pinned yet. Pin a topic, idea or note on the canvas to edit it here.';
 
+// Shown when the page could not load the book it is scoped to. Without that
+// list there is nothing to tell this book's pins from another's, so the panel
+// shows them all — and says so, because a list that is usually one book's and
+// is silently every book's would be the panel misrepresenting itself.
+export const UNSCOPED_MESSAGE = 'This book could not be loaded, so these are your pins from every book.';
+
 // Clear is the one control in this panel that is NOT scoped to the book the
 // page is showing, and its words are where that is said. See the button below.
 export const CLEAR_LABEL = 'Clear all books';
@@ -65,6 +71,8 @@ const succeeded = (result) => result !== false && result !== null;
  * @param pinnedElsewhere  how many pins the reader has that are NOT in `pins`,
  *                   because they belong to another book. Clear reaches them,
  *                   so it is enabled for them — see the button.
+ * @param isBookScoped  whether `pins` is the book's or every book's. False when
+ *                   the page failed to load the book it is scoped to.
  * @param isLoading  what this panel holds is not yet known
  * @param onUnpin    (items) -> usePins.unpinMany
  * @param onClear    () -> usePins.clearPins
@@ -75,6 +83,7 @@ const succeeded = (result) => result !== false && result !== null;
 const PinnedPanel = ({
     pins,
     pinnedElsewhere = 0,
+    isBookScoped = true,
     isLoading = false,
     onUnpin,
     onClear,
@@ -222,6 +231,8 @@ const PinnedPanel = ({
             )}
 
             <div className="thoughts-panel-body">
+                {!isBookScoped && <p className="thoughts-message">{UNSCOPED_MESSAGE}</p>}
+
                 {isLoading && <p className="thoughts-message">Loading pins…</p>}
 
                 {!isLoading && pins.length === 0 && (

@@ -36,11 +36,12 @@ import { LOCATION_PATH } from '../Analyze/savedLocation';
 // ── Why `showBook` ALSO replaces, unlike showIdea ─────────────────────────
 //
 // This is the one place the page diverges from its sibling, and it is on
-// purpose. Opening an idea has no side effect, so back can undo it cleanly.
-// Changing book clears the pinned set — see Thoughts.js — and back cannot
-// un-clear it. A history entry that restores `?book=40` over a pinned panel
-// that is now empty is a back button lying about what it did, so there is no
-// history entry.
+// purpose. The scope is not a place the reader navigated to: every entry to
+// this page writes a `?book=` of its own (see the effect below), so a pushed
+// entry per pick would fill the history with the page's own handwriting and
+// leave back stepping through book picks instead of leaving the page. The
+// picker is the title block, always one press away, so nothing is lost by
+// keeping back for pages.
 
 // Where the Analyze page opens for a reader who has been nowhere, so it is
 // where this page opens for one too. Named rather than spelled `1` at the two
