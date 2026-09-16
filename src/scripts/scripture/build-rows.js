@@ -7,8 +7,8 @@ const { CANONICAL_BOOKS } = require('./canon');
  * verses, assigning `verse_index` as it walks the canon in order.
  *
  * This is the only place `verse_index` is ever computed. Everything downstream
- * — chapter start/end ranges, note references, the Overview axis — reads the
- * value from the database.
+ * — chapter start/end ranges, note references — reads the value from the
+ * database.
  */
 
 // TINYINT UNSIGNED ceilings for `verses.chapter` and `verses.verse`.
