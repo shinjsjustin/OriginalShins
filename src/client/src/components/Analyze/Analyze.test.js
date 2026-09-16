@@ -16,6 +16,8 @@ const books = [
       chapters: [{ number: 1, verseCount: 22 }] },
     { id: 40, name: 'Matthew', abbrev: 'Matt', testament: 'NT', chapterCount: 28, canonicalOrder: 40,
       chapters: [{ number: 1, verseCount: 25 }, { number: 2, verseCount: 23 }] },
+    { id: 41, name: 'Mark', abbrev: 'Mark', testament: 'NT', chapterCount: 16, canonicalOrder: 41,
+      chapters: [{ number: 1, verseCount: 20 }] },
 ];
 
 const findBook = (id) => books.find(book => book.id === id);
@@ -79,15 +81,15 @@ const resetStore = () => {
     };
 };
 
-const addIdea = (title) => {
-    const idea = { id: store.nextIdeaId, title, body: '', sortOrder: store.ideas.length, noteCount: 0, topics: [] };
+const addIdea = (title, bookId = 40) => {
+    const idea = { id: store.nextIdeaId, title, body: '', sortOrder: store.ideas.length, noteCount: 0, topics: [], bookId };
     store.nextIdeaId += 1;
     store.ideas = [...store.ideas, idea];
     return idea;
 };
 
-const addTopic = (name) => {
-    const topic = { id: store.nextTopicId, name, sortOrder: store.topics.length, ideaCount: 0 };
+const addTopic = (name, bookId = 40) => {
+    const topic = { id: store.nextTopicId, name, sortOrder: store.topics.length, ideaCount: 0, bookId };
     store.nextTopicId += 1;
     store.topics = [...store.topics, topic];
     return topic;
@@ -255,6 +257,22 @@ const jsonResponse = (body, status = 200) => Promise.resolve({
 const noContent = () => Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
 const notFound = () => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
 
+// Matches with or without the scope, and applies it when it is there — so a
+// test asserting that the page asked for one book is asserting against a
+// server that actually answers differently, rather than one that ignores the
+// param. This is the failure commit 5d39cb8 fixed for note_topics.
+const scopedList = (url, kind) => {
+    const match = new RegExp(`/${kind}(\\?book=(\\d+))?$`).exec(url);
+    if (!match) return null;
+
+    const bookId = match[2] === undefined ? null : Number(match[2]);
+    const rows = bookId === null
+        ? store[kind]
+        : store[kind].filter(row => row.bookId === bookId);
+
+    return jsonResponse({ [kind]: rows });
+};
+
 // Records every request so the tests can assert on the exact body a click sent.
 let requests;
 
@@ -290,12 +308,12 @@ const handleRequest = (url, options = {}) => {
         return jsonResponse({ note: hydrate(addNote(body)) }, 201);
     }
 
-    if (url.endsWith('/ideas') && method === 'GET') {
-        return jsonResponse({ ideas: store.ideas });
-    }
+    if (method === 'GET') {
+        const scopedIdeas = scopedList(url, 'ideas');
+        if (scopedIdeas) return scopedIdeas;
 
-    if (url.endsWith('/topics') && method === 'GET') {
-        return jsonResponse({ topics: store.topics });
+        const scopedTopics = scopedList(url, 'topics');
+        if (scopedTopics) return scopedTopics;
     }
 
     const chapterIdeasQuery = /\/chapter-ideas\?bookId=(\d+)&chapter=(\d+)$/.exec(url);
@@ -869,7 +887,9 @@ describe('Notes panel', () => {
         // curated per chapter. The full list is still one press away.
         addIdea('The wilderness');
 
-        await renderAnalyze();
+        // The importer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
 
         await waitFor(() => expect(within(panel('Notes'))
@@ -1732,7 +1752,9 @@ describe('Filing a note under ideas and topics', () => {
         const note = addNote({ title: 'The vine' });
         replaceNoteIdeas(note.id, [abiding.id]);
 
-        await renderAnalyze();
+        // The filer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openFirstNote();
 
@@ -1755,7 +1777,9 @@ describe('Filing a note under ideas and topics', () => {
         const note = addNote({ title: 'The vine' });
         replaceNoteIdeas(note.id, [abiding.id]);
 
-        await renderAnalyze();
+        // The filer is scoped to the primary panel's book, and addTopic's
+        // topics default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openFirstNote();
 
@@ -1867,7 +1891,9 @@ describe('Filing a note under ideas and topics', () => {
         const abiding = addIdea('Abiding');
         addNote({ title: 'The vine' });
 
-        await renderAnalyze();
+        // The filer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openFirstNote();
 
@@ -1889,7 +1915,9 @@ describe('Filing a note under ideas and topics', () => {
         const note = addNote({ title: 'The vine' });
         replaceNoteIdeas(note.id, [abiding.id]);
 
-        await renderAnalyze();
+        // The filer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openFirstNote();
 
@@ -1938,8 +1966,9 @@ describe('Importing an idea into the chapter', () => {
         fileIdeaUnder(abiding.id, covenant);
         addIdea('Loose thread');
 
-        // Act
-        await renderAnalyze();
+        // Act — the importer is scoped to the primary panel's book, and
+        // addTopic/addIdea default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openImporter();
 
@@ -1954,7 +1983,9 @@ describe('Importing an idea into the chapter', () => {
         // Arrange
         const abiding = addIdea('Abiding');
 
-        await renderAnalyze();
+        // The importer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openImporter();
 
@@ -1966,7 +1997,7 @@ describe('Importing an idea into the chapter', () => {
 
         // Assert — the whole set, against the chapter the primary panel shows.
         expect(chapterIdeaRequests()).toHaveLength(1);
-        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 1, chapter: 1, ideaIds: [abiding.id] });
+        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 40, chapter: 1, ideaIds: [abiding.id] });
 
         expect(importerOverlay()).toBeNull();
         await waitFor(() => expect(panel('Notes')).toHaveTextContent('Ideas in this chapter'));
@@ -1977,7 +2008,9 @@ describe('Importing an idea into the chapter', () => {
         // Arrange
         addIdea('Abiding');
 
-        await renderAnalyze();
+        // The importer is scoped to the primary panel's book, and addIdea's
+        // ideas default to book 40 — see scopedList.
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await openImporter();
 
@@ -2031,12 +2064,14 @@ describe('Importing an idea into the chapter', () => {
     });
 
     test('removing an import leaves the idea itself, still offerable in the editor', async () => {
-        // Arrange — an imported idea and a note that is not filed under it.
+        // Arrange — an imported idea and a note that is not filed under it. Book
+        // 40, matching addIdea's default — see scopedList — so the editor's own
+        // importer, scoped to the primary panel's book, still offers it below.
         const abiding = addIdea('Abiding');
-        replaceChapterIdeas(1, 1, [abiding.id]);
-        addNote({ title: 'The vine', reference: { bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 } });
+        replaceChapterIdeas(40, 1, [abiding.id]);
+        addNote({ title: 'The vine', reference: { bookId: 40, chapter: 1, startVerse: 1, endVerse: 1 } });
 
-        await renderAnalyze();
+        await renderAnalyze('/analyze?l=40.1');
         await waitForPanels();
         await waitFor(() => expect(chapterIdeaTitles()).toEqual(['Abiding']));
 
@@ -2044,7 +2079,7 @@ describe('Importing an idea into the chapter', () => {
         await clickAndSettle(removeFromChapter('Abiding'));
 
         // Assert — out of this chapter...
-        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 1, chapter: 1, ideaIds: [] });
+        expect(chapterIdeaRequests()[0].body).toEqual({ bookId: 40, chapter: 1, ideaIds: [] });
         await waitFor(() => expect(chapterIdeaTitles()).toEqual([]));
         expect(panel('Notes')).not.toHaveTextContent('Ideas in this chapter');
 
@@ -2312,5 +2347,71 @@ describe('Returning to the analysis page from the analysis page', () => {
 
         // Assert
         expect(store.location.primary).toEqual({ bookId: 1, chapter: 2 });
+    });
+});
+
+describe('The import picker\'s own book scope', () => {
+    test('the importer opens on the book the centre panel is in', async () => {
+        addTopic('Faith', 40);
+        await renderAnalyze('/analyze?l=40.1');
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
+
+        expect(await screen.findByRole('button', { name: /Matthew Topics/ })).toBeInTheDocument();
+        const reads = requests.filter(r => r.method === 'GET' && /\/topics/.test(r.url));
+        expect(reads[reads.length - 1].url).toContain('book=40');
+    });
+
+    test('switching the importer to another book refetches that book', async () => {
+        addTopic('Faith', 40);
+        addTopic('Servanthood', 41);
+        await renderAnalyze('/analyze?l=40.1');
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'GET' && r.url.includes('/topics?book=41'))
+        ).toBe(true));
+        expect(await screen.findByText('Servanthood')).toBeInTheDocument();
+    });
+
+    test('the importer resets to the panel book each time it opens', async () => {
+        addTopic('Faith', 40);
+        await renderAnalyze('/analyze?l=40.1');
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+        await screen.findByRole('button', { name: /Mark Topics/ });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Import idea' }));
+
+        // The common case is filing into the book you are reading. An overlay that
+        // remembered a one-off excursion into Mark would quietly file the next
+        // note wrong.
+        expect(await screen.findByRole('button', { name: /Matthew Topics/ })).toBeInTheDocument();
+    });
+
+    test('a note anchored in Matthew can be filed under a Mark topic', async () => {
+        const mark = addTopic('Servanthood', 41);
+        const note = addNote({ title: 'On serving', body: '' });
+        await renderAnalyze(`/analyze?l=40.1&note=${note.id}`);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Import' }));
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+        fireEvent.click(await screen.findByText('Servanthood'));
+        // Scoped to the overlay: NoteFiling's own trigger button is also
+        // named "Import" and is still on screen behind it — see confirmImport.
+        fireEvent.click(within(importerOverlay()).getByRole('button', { name: 'Import' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'PUT'
+                && r.url.endsWith(`/notes/${note.id}/topics`)
+                && r.body.topicIds.includes(mark.id))
+        ).toBe(true));
     });
 });

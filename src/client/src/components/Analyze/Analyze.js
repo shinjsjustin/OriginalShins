@@ -12,7 +12,6 @@ import useActiveNote from './useActiveNote';
 import useSelectedVerses from './useSelectedVerses';
 import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
-import useTopics from './useTopics';
 import useChapterIdeas from './useChapterIdeas';
 import { collectChapterIdeas } from './chapterIdeas';
 import { describePosition } from './navigation';
@@ -58,10 +57,6 @@ const Analyze = () => {
     // opens on whichever note you click, and a picker that fetched its options
     // on open would show an empty list for a moment every time.
     const { ideas, createIdea } = useIdeas();
-
-    // The topics the importer's field of bubbles is built from. Read-only here
-    // — topics are made and filed on the Thoughts page.
-    const { topics } = useTopics();
 
     // The shortlist for the chapter the primary panel is showing. It takes
     // `primary` and not a position of its own, so moving that panel refetches
@@ -373,7 +368,6 @@ const Analyze = () => {
                             collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
                             notes={notes.notes}
                             unreferenced={notes.unreferenced}
-                            topics={topics}
                             ideas={ideas}
                             chapterIdeas={chapterIdeaList}
                             importedIdeaIds={importedIdeas.map(idea => idea.id)}

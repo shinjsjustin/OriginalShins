@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import ImportPicker from './ImportPicker';
 
@@ -15,6 +15,14 @@ import ImportPicker from './ImportPicker';
 // two — because the endpoint written depends on which kind it is. And a kind
 // the caller did not offer must not become pickable by any route, since the
 // chapter importer has nowhere to store a topic.
+//
+// The picker now loads its own corpus, scoped to a book — see useImportCorpus
+// — so this file stands in for that read the same way Analyze.test.js and
+// Thoughts.test.js stand in for theirs: a small stateful fake over
+// global.fetch, keyed on the book the picker asks for.
+
+const BOOK_ID = 40;
+const BOOKS = [{ id: BOOK_ID, name: 'Matthew', canonicalOrder: 40 }];
 
 const TOPICS = [
     { id: 1, name: 'Faith' },
@@ -26,23 +34,55 @@ const IDEAS = [
     { id: 12, title: 'Sabbath', topics: [{ id: 2, name: 'Law' }] },
 ];
 
-const renderPicker = (props = {}) => {
+// What the fetch fake serves for this book. Reset before each test and
+// overridable per test — see renderPicker's `topics`/`ideas` overrides.
+let topicsFixture;
+let ideasFixture;
+
+const jsonResponse = (body) => Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(body),
+});
+
+const handleRequest = (url) => {
+    if (url.includes('/topics')) return jsonResponse({ topics: topicsFixture });
+    if (url.includes('/ideas')) return jsonResponse({ ideas: ideasFixture });
+    return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+};
+
+beforeEach(() => {
+    topicsFixture = TOPICS;
+    ideasFixture = IDEAS;
+    global.fetch = jest.fn(handleRequest);
+});
+
+// `topics`/`ideas` configure the fetch fake's response for this render; every
+// other override is a prop on ImportPicker itself. Async because the corpus
+// arrives over the fake fetch — see Analyze.test.js's `mount` for why an
+// async act is what lets that first response land before the test proceeds.
+const renderPicker = async ({ topics, ideas, ...props } = {}) => {
+    if (topics) topicsFixture = topics;
+    if (ideas) ideasFixture = ideas;
+
     const onImport = jest.fn();
     const onClose = jest.fn();
 
-    render(
-        <MemoryRouter>
-            <ImportPicker
-                label="Import into this note"
-                topics={TOPICS}
-                ideas={IDEAS}
-                selectableKinds={['idea', 'topic']}
-                onImport={onImport}
-                onClose={onClose}
-                {...props}
-            />
-        </MemoryRouter>
-    );
+    await act(async () => {
+        render(
+            <MemoryRouter>
+                <ImportPicker
+                    label="Import into this note"
+                    books={BOOKS}
+                    bookId={BOOK_ID}
+                    selectableKinds={['idea', 'topic']}
+                    onImport={onImport}
+                    onClose={onClose}
+                    {...props}
+                />
+            </MemoryRouter>
+        );
+    });
 
     return { onImport, onClose };
 };
@@ -58,14 +98,14 @@ const cardBoxOf = (name) => screen.getByText(name, { selector: '.thoughts-bubble
     .closest('.thoughts-bubble');
 
 describe('ImportPicker', () => {
-    test('is a dialog named by its label', () => {
-        renderPicker();
+    test('is a dialog named by its label', async () => {
+        await renderPicker();
 
         expect(screen.getByRole('dialog', { name: 'Import into this note' })).toBeInTheDocument();
     });
 
-    test('Import is disabled until something is picked', () => {
-        renderPicker();
+    test('Import is disabled until something is picked', async () => {
+        await renderPicker();
 
         expect(importButton()).toBeDisabled();
 
@@ -74,11 +114,11 @@ describe('ImportPicker', () => {
         expect(importButton()).toBeEnabled();
     });
 
-    test('says what is picked, and which kind it is', () => {
+    test('says what is picked, and which kind it is', async () => {
         // "Faith" is a topic and "Covenant renewal" is an idea, and the kind
         // decides which endpoint is written — so the bar names it rather than
         // leaving the reader to read it off a card's colour.
-        renderPicker();
+        await renderPicker();
 
         fireEvent.click(cardOf('Covenant renewal'));
 
@@ -86,31 +126,31 @@ describe('ImportPicker', () => {
         expect(screen.getByRole('status')).toHaveTextContent('Covenant renewal');
     });
 
-    test('prompts rather than going blank when nothing is picked', () => {
-        renderPicker();
+    test('prompts rather than going blank when nothing is picked', async () => {
+        await renderPicker();
 
         expect(screen.getByRole('status')).toHaveTextContent(/pick/i);
     });
 
-    test('the empty prompt names both kinds when both are selectable', () => {
-        renderPicker({ selectableKinds: ['idea', 'topic'] });
+    test('the empty prompt names both kinds when both are selectable', async () => {
+        await renderPicker({ selectableKinds: ['idea', 'topic'] });
 
         expect(screen.getByRole('status')).toHaveTextContent('Pick a topic or an idea to import.');
     });
 
-    test('the empty prompt does not invite a topic when only ideas are selectable', () => {
+    test('the empty prompt does not invite a topic when only ideas are selectable', async () => {
         // The chapter importer's case: PUT /api/chapter-ideas takes ideaIds
         // and a chapter has no topic membership to write, so the bar must not
         // tell the reader to pick something the dialog will silently refuse.
-        renderPicker({ selectableKinds: ['idea'] });
+        await renderPicker({ selectableKinds: ['idea'] });
 
         expect(screen.getByRole('status')).toHaveTextContent('Pick an idea to import.');
     });
 
-    test('imports the picked idea, and does not close itself', () => {
+    test('imports the picked idea, and does not close itself', async () => {
         // The caller closes it. Only the caller knows whether the write was
         // attempted, so only the caller can decide the overlay is finished.
-        const { onImport, onClose } = renderPicker();
+        const { onImport, onClose } = await renderPicker();
 
         fireEvent.click(cardOf('Sabbath'));
         fireEvent.click(importButton());
@@ -119,8 +159,8 @@ describe('ImportPicker', () => {
         expect(onClose).not.toHaveBeenCalled();
     });
 
-    test('imports the picked topic', () => {
-        const { onImport } = renderPicker();
+    test('imports the picked topic', async () => {
+        const { onImport } = await renderPicker();
 
         fireEvent.click(cardOf('Faith'));
         fireEvent.click(importButton());
@@ -128,8 +168,8 @@ describe('ImportPicker', () => {
         expect(onImport).toHaveBeenCalledWith({ kind: 'topic', id: 1 });
     });
 
-    test('picking a topic after an idea leaves one pick, not two', () => {
-        const { onImport } = renderPicker();
+    test('picking a topic after an idea leaves one pick, not two', async () => {
+        const { onImport } = await renderPicker();
 
         fireEvent.click(cardOf('Covenant renewal'));
         fireEvent.click(cardOf('Faith'));
@@ -142,10 +182,10 @@ describe('ImportPicker', () => {
         expect(onImport).toHaveBeenCalledWith({ kind: 'topic', id: 1 });
     });
 
-    test('a topic is not pickable when only ideas are on offer', () => {
+    test('a topic is not pickable when only ideas are on offer', async () => {
         // The chapter importer's case: PUT /api/chapter-ideas takes ideaIds
         // and a chapter has no topic membership to write.
-        const { onImport } = renderPicker({ selectableKinds: ['idea'] });
+        const { onImport } = await renderPicker({ selectableKinds: ['idea'] });
 
         fireEvent.click(cardOf('Faith'));
 
@@ -157,8 +197,8 @@ describe('ImportPicker', () => {
         expect(onImport).not.toHaveBeenCalled();
     });
 
-    test('Cancel closes without importing', () => {
-        const { onImport, onClose } = renderPicker();
+    test('Cancel closes without importing', async () => {
+        const { onImport, onClose } = await renderPicker();
 
         fireEvent.click(cardOf('Faith'));
         fireEvent.click(cancelButton());
@@ -167,8 +207,8 @@ describe('ImportPicker', () => {
         expect(onImport).not.toHaveBeenCalled();
     });
 
-    test('Escape closes without importing', () => {
-        const { onImport, onClose } = renderPicker();
+    test('Escape closes without importing', async () => {
+        const { onImport, onClose } = await renderPicker();
 
         fireEvent.click(cardOf('Faith'));
         fireEvent.keyDown(document, { key: 'Escape' });
@@ -177,7 +217,7 @@ describe('ImportPicker', () => {
         expect(onImport).not.toHaveBeenCalled();
     });
 
-    test('a note in a fan is never pickable', () => {
+    test('a note in a fan is never pickable', async () => {
         // Topics carry notes as well as ideas — see buildClusters. A note is
         // not importable into anything, so its card must stay inert.
         //
@@ -187,7 +227,7 @@ describe('ImportPicker', () => {
         // and the picker hands it no `passagesByTopicId` for any note to bloom
         // from. So inertness here is two things, and both are asserted — the
         // face is not a control, and clicking it forms no pick.
-        renderPicker({
+        await renderPicker({
             topics: [{ id: 1, name: 'Faith', notes: [{ id: 99, title: 'A note', body: '' }] }],
         });
 
@@ -199,8 +239,8 @@ describe('ImportPicker', () => {
         expect(cardBoxOf('A note')).not.toHaveClass('is-picked');
     });
 
-    test('the confirm bar is inside the dialog, not floating over the page', () => {
-        renderPicker();
+    test('the confirm bar is inside the dialog, not floating over the page', async () => {
+        await renderPicker();
 
         const dialog = screen.getByRole('dialog', { name: 'Import into this note' });
         expect(within(dialog).getByRole('button', { name: 'Import' })).toBeInTheDocument();

@@ -17,8 +17,7 @@ import NoteFiling from './NoteFiling';
 const NoteEditor = ({
     note,
     books,
-    topics,
-    ideas,
+    bookId,
     onSave,
     onDelete,
     onAddPassage,
@@ -170,8 +169,8 @@ const NoteEditor = ({
 
             <NoteFiling
                 note={note}
-                topics={topics}
-                ideas={ideas}
+                books={books}
+                bookId={bookId}
                 onSaveIdeas={onSaveIdeas}
                 onSaveTopics={onSaveTopics}
             />

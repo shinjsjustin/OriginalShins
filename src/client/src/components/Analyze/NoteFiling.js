@@ -36,12 +36,12 @@ export const unfileLabelFor = (title) => `Unfile ${title} from this note`;
 
 /**
  * @param note          the open note, carrying `ideas` and `topics`
- * @param topics        every topic, for the picker's field
- * @param ideas         every idea, each carrying its topics
+ * @param books         every book, for the picker's title block
+ * @param bookId        the book to open the picker on — the centre panel's
  * @param onSaveIdeas   (noteId, ideaIds) -> void; replaces the whole idea set
  * @param onSaveTopics  (noteId, topicIds) -> void; replaces the whole topic set
  */
-const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
+const NoteFiling = ({ note, books, bookId, onSaveIdeas, onSaveTopics }) => {
     // Whether the overlay is up is this section's business and leaves it —
     // the same rule NotesPanel follows for the chapter importer.
     const [isImporting, setIsImporting] = useState(false);
@@ -153,8 +153,8 @@ const NoteFiling = ({ note, topics, ideas, onSaveIdeas, onSaveTopics }) => {
             {isImporting && (
                 <ImportPicker
                     label={`Import into ${note.title}`}
-                    topics={topics}
-                    ideas={ideas}
+                    books={books}
+                    bookId={bookId}
                     selectableKinds={['idea', 'topic']}
                     onImport={handleImport}
                     onClose={() => setIsImporting(false)}
