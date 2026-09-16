@@ -353,9 +353,9 @@ them as `PRIMARY_PARAM` and `COMPARE_PARAM`.
 A third param, `?note=<id>`, opens the editor on one note. Unlike `l` and `r` it
 is a one-shot instruction rather than state: nothing writes it back, and closing
 the editor does not reopen the note even though the param is still in the URL.
-It exists so another page can hand a note over — the Thoughts canvas and the
-search results both link to `/analyze?l=<book>.<chapter>&note=<id>`, the
-chapter of the note's first anchor.
+It exists so another page can hand a note over — the search results link to
+`/analyze?l=<book>.<chapter>&note=<id>`, the chapter of the note's first
+anchor, built by `Analyze/analyzeUrl.js`'s `analyzeUrlForNote`.
 A note with no anchor still opens, from the notes panel's `unreferenced` list,
 which is the same whatever chapter the panels show.
 
@@ -889,14 +889,18 @@ because they are separate facts and either can be true without the other. Each
 hook reports both, and the page shows whichever spoke — two hooks failing the
 same way at once is one server being down, and one banner says that.
 
-### Opening a note
+### Notes are not edited here
 
-A note card links to `/analyze?l=<book>.<chapter>&note=<id>` — the chapter of its
-first anchor, with the editor opened on it — built by `Analyze/analyzeUrl.js`.
+A note on this canvas is something to pin, not something to open: its card's
+only action is `onTogglePin`, the same as a topic's or an idea's. There is no
+note editor on this page and no link to one.
+
 The alternative, an editor embedded in the canvas, would mean a second home for
 the note editor, its reference list and its ideas multi-select, all of which
 exist on `/analyze` and all of which are only useful beside the scripture they
-point at.
+point at. The one page that does hand a note to that editor is `/search`, whose
+note results link to `/analyze?l=<book>.<chapter>&note=<id>` — see
+`Search/searchModel.js`, the only caller of `analyzeUrlForNote`.
 
 ---
 
