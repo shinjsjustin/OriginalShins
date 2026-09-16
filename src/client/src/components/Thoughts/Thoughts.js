@@ -173,12 +173,17 @@ const Thoughts = () => {
     // go on knowing nothing about each other. Joining them is this component's
     // job, as it already is for the two write dispatchers above.
     //
-    // The navigation is not conditional on the clear succeeding. The reader
-    // asked for the book change; if the clear fails, usePins' own action error
-    // says so over a page that is otherwise correct.
-    const changeBook = useCallback(async (nextBookId) => {
-        await clearPins();
+    // The navigation is not conditional on the clear succeeding, and does not
+    // wait on it either — more literally so than an awaited call would be.
+    // clearPins' own optimistic update empties the list synchronously, before
+    // its request is even sent, so firing both here lets React batch them into
+    // one render: the new book and the cleared panel land together, with no
+    // beat where the reader sees the old pins against the new book. If the
+    // request itself fails, usePins' own action error says so over a page
+    // that is otherwise correct.
+    const changeBook = useCallback((nextBookId) => {
         showBook(nextBookId);
+        clearPins();
     }, [clearPins, showBook]);
 
     const error = loadError || pinsError;

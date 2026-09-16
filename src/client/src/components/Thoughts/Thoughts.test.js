@@ -141,6 +141,11 @@ const handleRequest = (url, options = {}) => {
         return jsonResponse({}, 201);
     }
 
+    if (url.endsWith('/pins/all') && method === 'DELETE') {
+        store.pins = [];
+        return jsonResponse({}, 204);
+    }
+
     return jsonResponse({ error: 'not found' }, 404);
 };
 
@@ -330,6 +335,12 @@ describe('scoping the page to one book', () => {
         // No dialog stood between the press and the clear — pins are temporary by
         // design, and the reader clears them constantly by hand already.
         expect(screen.queryByRole('dialog', { name: /sure/i })).not.toBeInTheDocument();
+
+        // The set is actually empty afterwards — on the server the fake stands
+        // in for, not only that a DELETE happened to go out — which is what
+        // this test's name claims.
+        await waitFor(() => expect(store.pins).toHaveLength(0));
+        expect(screen.getByRole('heading', { name: 'Pinned (0)' })).toBeInTheDocument();
     });
 
     test('a failed clear still changes the book, and says what happened', async () => {
