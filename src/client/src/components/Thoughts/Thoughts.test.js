@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Thoughts from './Thoughts';
 import { CREATE_FORMS } from './CreateModal';
@@ -313,5 +313,52 @@ describe('scoping the page to one book', () => {
         const topicReads = requests.filter(r => r.method === 'GET' && /\/topics/.test(r.url));
         expect(topicReads).toHaveLength(1);
         expect(topicReads[0].url).toContain('book=40');
+    });
+
+    test('changing book clears the pinned set, with no confirmation', async () => {
+        const topic = addTopic({ name: 'Faith', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: topic.id }];
+
+        await renderThoughts('/thoughts?book=40');
+
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'DELETE' && r.url.endsWith('/pins/all'))
+        ).toBe(true));
+        // No dialog stood between the press and the clear — pins are temporary by
+        // design, and the reader clears them constantly by hand already.
+        expect(screen.queryByRole('dialog', { name: /sure/i })).not.toBeInTheDocument();
+    });
+
+    test('a failed clear still changes the book, and says what happened', async () => {
+        addTopic({ name: 'Faith', bookId: 40 });
+        await renderThoughts('/thoughts?book=40');
+
+        const answer = global.fetch.getMockImplementation();
+        global.fetch = jest.fn((url, options = {}) => (
+            // A 500, not a rejected fetch: the server is reachable and simply
+            // fails the write, which is the more realistic shape of "pins are
+            // down" than a network-level failure would be, and it exercises
+            // fetchJson's non-ok path rather than its connection-error path.
+            (options.method === 'DELETE' && url.endsWith('/pins/all'))
+                ? jsonResponse({ error: 'pins are down' }, 500)
+                : answer(url, options)
+        ));
+
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+
+        // The reader asked for the book change; a pin left behind is visible and
+        // recoverable, and refusing the navigation over it would be the louder
+        // wrong answer.
+        expect(await screen.findByRole('button', { name: /Mark Topics/ })).toBeInTheDocument();
+        // fetchJson deliberately substitutes a displayable message for a non-ok
+        // response rather than passing along whatever the server actually said
+        // (see its header comment and MESSAGE_BY_STATUS in config/api.js), so
+        // this asserts on that user-facing copy rather than on the raw server
+        // error above — the raw cause is never meant to reach the UI.
+        expect(await screen.findByRole('alert')).toHaveTextContent(/server ran into a problem/i);
     });
 });

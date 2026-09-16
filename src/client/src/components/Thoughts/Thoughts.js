@@ -164,6 +164,23 @@ const Thoughts = () => {
         return removed;
     }, [removeTopic, removeIdea, removeNote, unpinMany]);
 
+    // Changing book clears the pinned set. Pins are temporary by design and
+    // are cleared constantly by hand already, so there is no confirmation —
+    // and a pinned panel carried across a book change would be an editing
+    // surface for items no longer on the canvas behind it.
+    //
+    // Wired here rather than inside either hook, so useBookScope and usePins
+    // go on knowing nothing about each other. Joining them is this component's
+    // job, as it already is for the two write dispatchers above.
+    //
+    // The navigation is not conditional on the clear succeeding. The reader
+    // asked for the book change; if the clear fails, usePins' own action error
+    // says so over a page that is otherwise correct.
+    const changeBook = useCallback(async (nextBookId) => {
+        await clearPins();
+        showBook(nextBookId);
+    }, [clearPins, showBook]);
+
     const error = loadError || pinsError;
     const actionError = dataActionError || pinsActionError;
 
@@ -188,7 +205,7 @@ const Thoughts = () => {
                 <TopBar
                     books={books}
                     bookId={bookId}
-                    onChangeBook={showBook}
+                    onChangeBook={changeBook}
                     idea={openIdea}
                     onResetView={resetView}
                     onCreateTopic={() => setCreatingKind('topic')}
