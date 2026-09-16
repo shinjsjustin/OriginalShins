@@ -39,9 +39,11 @@ const BookTitle = ({ books, bookId, onChange, noun = 'Topics' }) => {
 
     const pick = (picked) => {
         setIsPicking(false);
-        // A press on the book already in scope is not a change. Letting it
-        // through would clear the pinned set for nothing, which is the one
-        // side effect on this page a reader cannot undo.
+        // A press on the book already in scope is not a change, and is not
+        // reported as one. Every caller does something on the way through:
+        // Thoughts rewrites `?book=`, and ImportPicker throws away the pick
+        // the reader has made — neither of which anybody asked for by
+        // choosing the book they are already in.
         if (picked !== bookId) onChange(picked);
     };
 

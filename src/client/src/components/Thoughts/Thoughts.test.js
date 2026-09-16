@@ -95,11 +95,14 @@ const scopedList = (url, kind) => {
 };
 
 // The server hydrates a pin by joining the item's own table, so a pinned topic
-// is listed by its CURRENT name — the fake does the same join.
-const hydratePin = (pin) => ({
-    ...pin,
-    title: (store.topics.find(topic => topic.id === pin.itemId) || {}).name || '',
-});
+// is listed by its CURRENT name — the fake does the same join, for either tier.
+const hydratePin = (pin) => {
+    const item = pin.itemType === 'topic'
+        ? store.topics.find(topic => topic.id === pin.itemId)
+        : store.ideas.find(idea => idea.id === pin.itemId);
+
+    return { ...pin, title: (item || {}).name || (item || {}).title || '' };
+};
 
 const handleRequest = (url, options = {}) => {
     const method = options.method || 'GET';
@@ -155,6 +158,31 @@ const handleRequest = (url, options = {}) => {
         if (!found) return jsonResponse({ error: 'not found' }, 404);
 
         return jsonResponse({ note: found });
+    }
+
+    // PUT /api/ideas/:id/topics, refusing a cross-book pair exactly as the
+    // server does — the rule lives in hasTopicOutsideIdeaBook and is answered
+    // 422 before anything is written. Stateful like the rest of this fake, so
+    // a link that IS allowed is visible on the next read.
+    const ideaTopics = /\/ideas\/(\d+)\/topics$/.exec(url);
+    if (ideaTopics && method === 'PUT') {
+        const idea = store.ideas.find(row => row.id === Number(ideaTopics[1]));
+        if (!idea) return jsonResponse({ error: 'Idea not found' }, 404);
+
+        const picked = body.topicIds.map(id => store.topics.find(topic => topic.id === id));
+        if (picked.some(topic => !topic)) {
+            return jsonResponse({ error: 'topicIds names a topic that does not exist' }, 400);
+        }
+
+        if (picked.some(topic => topic.bookId !== idea.bookId)) {
+            return jsonResponse({
+                error: 'A topic and an idea can only be linked when they are in the same book.',
+            }, 422);
+        }
+
+        const linked = { ...idea, topics: picked.map(({ id, name, slug }) => ({ id, name, slug })) };
+        store.ideas = store.ideas.map(row => (row.id === idea.id ? linked : row));
+        return jsonResponse({ idea: linked });
     }
 
     if (url.endsWith('/pins') && method === 'GET') {
@@ -520,6 +548,87 @@ describe('scoping the page to one book', () => {
         expect(within(panel()).queryByText(/Loading pins/)).not.toBeInTheDocument();
         expect(within(panel()).getByText('Faith')).toBeInTheDocument();
         expect(within(panel()).getByText(UNSCOPED_MESSAGE)).toBeInTheDocument();
+    });
+
+    // The notice above names the BOOK as the thing that failed, so it may only
+    // appear when the book is what failed. A pins read that 500s is the other
+    // failure this page can have, and it has its own banner — saying the book
+    // could not be loaded over a book that loaded perfectly well would send the
+    // reader looking for a problem that is not there.
+    test('a failed pins load is not blamed on the book', async () => {
+        // Arrange — the corpus answers normally; /pins does not.
+        addTopic({ name: 'Faith', bookId: 40 });
+
+        global.fetch = jest.fn((url, options = {}) => (
+            (url.endsWith('/pins') && (options.method || 'GET') === 'GET')
+                ? jsonResponse({ error: 'pins are down' }, 500)
+                : handleRequest(url, options)
+        ));
+
+        // Act
+        await renderThoughts('/thoughts?book=40');
+
+        // Assert — the failure is reported, and not as the book's.
+        expect(await screen.findByRole('alert')).toHaveTextContent(/server ran into a problem/i);
+        expect(within(panel()).queryByText(UNSCOPED_MESSAGE)).not.toBeInTheDocument();
+    });
+
+    // The one window in which the panel can offer a cross-book pair: with no
+    // corpus it cannot tell which book anything is in, so it shows every pin
+    // and Link is pressable over two books. The rule is the server's — it
+    // refuses the write — and what this page owes the reader is the reason,
+    // not a silent failure or a generic "that request was not valid".
+    test('a cross-book link is refused, and the panel says why', async () => {
+        // Arrange — a Matthew topic and a Mark idea, both pinned, with the
+        // corpus down so both are listed together.
+        const matthewTopic = addTopic({ name: 'Faith', bookId: 40 });
+        const markIdea = addIdea({ title: 'Mustard seed', bookId: 41 });
+        store.pins = [
+            { itemType: 'topic', itemId: matthewTopic.id },
+            { itemType: 'idea', itemId: markIdea.id },
+        ];
+
+        global.fetch = jest.fn((url, options = {}) => (
+            (/\/topics(\?|$)/.test(url) && (options.method || 'GET') === 'GET')
+                ? jsonResponse({ error: 'topics are down' }, 500)
+                : handleRequest(url, options)
+        ));
+
+        await renderThoughts('/thoughts?book=41');
+
+        // Act — select both tiers and press the panel's Link.
+        fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Select Faith' }));
+        fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Select Mustard seed' }));
+        await clickButton('Link');
+
+        // Assert — the refusal reaches the reader in words that name the rule,
+        // and nothing was written.
+        await waitFor(() => expect(
+            screen.getAllByRole('alert').some(alert => /same book/i.test(alert.textContent))
+        ).toBe(true));
+        expect(store.ideas.find(idea => idea.id === markIdea.id).topics).toHaveLength(0);
+    });
+
+    // The mirror: the same panel, the same button, a pair the rule allows.
+    // Without this the test above would pass just as well against a Link that
+    // refused everything.
+    test('a same-book link still goes through', async () => {
+        const markTopic = addTopic({ name: 'Discipleship', bookId: 41 });
+        const markIdea = addIdea({ title: 'Mustard seed', bookId: 41 });
+        store.pins = [
+            { itemType: 'topic', itemId: markTopic.id },
+            { itemType: 'idea', itemId: markIdea.id },
+        ];
+
+        await renderThoughts('/thoughts?book=41');
+
+        fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Select Discipleship' }));
+        fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Select Mustard seed' }));
+        await clickButton('Link');
+
+        await waitFor(() => expect(
+            store.ideas.find(idea => idea.id === markIdea.id).topics
+        ).toHaveLength(1));
     });
 
     test('a topic created here belongs to the book in scope', async () => {

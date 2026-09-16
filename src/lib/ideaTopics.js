@@ -10,6 +10,33 @@
 // hydrated two slightly different ways is two shapes for the client to hold.
 const { findTopicsForIdeas } = require('./topics');
 
+// An idea and a topic may only be linked when they are in the same book. Both
+// tables carry a book_id, so the rule is one comparison — asked here, in the
+// seam that already owns this pair, rather than in src/lib/links.js, whose
+// other two specs link notes and a note has no book.
+//
+// Takes a connection so the caller can ask it inside the transaction that does
+// the write, exactly as the ownership checks are. It counts MISMATCHES rather
+// than matches, and is scoped to the user, so a topic id that names nothing —
+// or someone else's row — contributes nothing here and is left to the
+// ownership check to refuse in its own words.
+const hasTopicOutsideIdeaBook = async (connection, userId, ideaId, topicIds) => {
+    if (topicIds.length === 0) {
+        return false;
+    }
+
+    const placeholders = topicIds.map(() => '?').join(', ');
+    const [rows] = await connection.execute(
+        `SELECT COUNT(*) AS mismatched
+         FROM topics t
+         JOIN ideas i ON i.id = ? AND i.user_id = ?
+         WHERE t.id IN (${placeholders}) AND t.user_id = ? AND t.book_id <> i.book_id`,
+        [ideaId, userId, ...topicIds, userId]
+    );
+
+    return Number(rows[0].mismatched) > 0;
+};
+
 // One flat query for the whole list rather than one per idea: every caller
 // loads a list at a time — the management page, the note editor's multi-select,
 // and the Analyze panel's imported set.
@@ -24,4 +51,4 @@ const withTopics = async (userId, ideas) => {
     return ideas.map(idea => ({ ...idea, topics: byIdeaId[idea.id] || [] }));
 };
 
-module.exports = { withTopics };
+module.exports = { hasTopicOutsideIdeaBook, withTopics };

@@ -249,19 +249,20 @@ carry no book, so entering Thoughts in a different book leaves yesterday's
 pins in place regardless — and `DELETE /api/pins/all`, the only clear the API
 has, would have reached books the reader never touched.
 
-It is wired in the page shell rather than inside either hook, preserving the
-property that file's header claims — `useThoughtsView`, `useThoughtsData` and
-`usePins` know nothing about each other, and joining them is the page's job.
+The filter is applied in the page shell rather than inside either hook,
+preserving the property that file's header claims — `useThoughtsView`,
+`useThoughtsData` and `usePins` know nothing about each other, and joining them
+is the page's job.
 
 The panel's **Clear** button keeps the wide `DELETE /api/pins/all` reach and
 says so in its own words ("Clear all books"), because a book-scoped clear
 would mean widening `/api/pins`, which is a non-goal.
 
-If the clear request fails the navigation still happens, and the existing
-action banner says so. The reader asked for the book change; a pin left behind
-is visible and recoverable, and refusing the navigation over it would be the
-louder wrong answer. This is the same split between load errors and action
-errors the page already draws.
+When the corpus itself fails to load there is nothing to filter against, so the
+panel shows every pin the reader has and says so above the list. It is the one
+window in which the panel can offer a cross-book pair, which is why the
+same-book rule is enforced by the server rather than by this filter alone —
+see the asymmetry section below.
 
 ### An empty book
 
@@ -319,9 +320,14 @@ Filing is free across books: a note anchored in Matthew may be filed under a
 Mark topic, because you switched the picker to Mark to do it. That is the
 point of the feature.
 
-A topic's *ideas*, by contrast, are always same-book — the only way to link an
-idea to a topic is the Thoughts pinned panel, whose list is filtered to the
-book on screen, so no cross-book pair can ever be selected together.
+A topic's *ideas*, by contrast, are always same-book, and `PUT
+/api/ideas/:id/topics` is what makes that true: it compares each topic's
+`book_id` to the idea's inside the transaction that writes the links, and
+answers 422 with the reason rather than writing a pair from two books. The
+Thoughts panel's per-book filter is the reason the refusal is almost never
+reached — it keeps the pair from being selected in the first place — but the
+filter is dropped when the corpus cannot load, so it is a convenience and the
+server check is the rule.
 
 So a topic's fan may hold notes from any book while its ideas are all its own.
 That is intended, but it is the one place the model is not uniform, and it is

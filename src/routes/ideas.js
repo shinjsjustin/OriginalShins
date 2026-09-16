@@ -20,12 +20,20 @@ const {
 } = require('../lib/ideas');
 const { findPassagesForNotes } = require('../lib/passages');
 const { removePinsForItem } = require('../lib/pins');
-const { withTopics } = require('../lib/ideaTopics');
+const { hasTopicOutsideIdeaBook, withTopics } = require('../lib/ideaTopics');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { TREE_SPECS, reorderMembers, moveMember, inTransaction } = require('../lib/ordering');
 const { respondToOrderingError } = require('./orderingErrors');
 
 const router = express.Router();
+
+// The refusal a cross-book link gets. 422 rather than 400: the body parsed and
+// named real rows, and what is wrong is the pairing itself — which is also
+// what lets the client say why, since its fetch wrapper maps a status to copy
+// rather than passing the server's own words through (see config/api.js).
+const CROSS_BOOK_STATUS = 422;
+
+const CROSS_BOOK_MESSAGE = 'A topic and an idea can only be linked when they are in the same book.';
 
 // Mounted behind isAuth, so req.user is always populated and every handler
 // takes its user id from the token rather than from the request.
@@ -235,6 +243,12 @@ router.delete('/:id', async (req, res) => {
 // add-one/remove-one pair: the UI is a multi-select, and a full-set PUT is the
 // only shape that cannot leave the two out of step. An empty array files the
 // idea under nothing, which is legal.
+//
+// This is the endpoint that makes "a topic's ideas are always its own book's"
+// true rather than merely customary. The Thoughts panel filters its list to
+// the book on screen, but a filter is a convenience the page drops when it has
+// no book to filter against — so the rule is enforced here, where nothing can
+// route around it, and the client is left to report the refusal.
 router.put('/:id/topics', async (req, res) => {
     const ideaId = parseRowId(req.params.id);
     if (ideaId === null) {
@@ -250,6 +264,15 @@ router.put('/:id/topics', async (req, res) => {
     try {
         connection = await db.getConnection();
         await connection.beginTransaction();
+
+        // Asked before the ownership check writes anything, and inside the same
+        // transaction, so nothing can move between the question and the write.
+        // A topic that is not the caller's falls through this one and is
+        // refused below, where that answer belongs.
+        if (await hasTopicOutsideIdeaBook(connection, req.user.id, ideaId, parsed.value)) {
+            await connection.rollback();
+            return res.status(CROSS_BOOK_STATUS).json({ error: CROSS_BOOK_MESSAGE });
+        }
 
         // Ownership of the idea and of every topic id is checked inside the
         // transaction, so nothing can change between the check and the write.

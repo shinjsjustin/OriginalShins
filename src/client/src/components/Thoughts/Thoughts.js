@@ -267,7 +267,10 @@ const Thoughts = () => {
     // filtered out and the reader told they have none. So the filter is
     // dropped rather than trusted, the pins that did load are shown whole, and
     // the panel says why the list is not book-scoped right now.
-    const isBookScoped = !error;
+    //
+    // `loadError` and not the merged `error`: a pins failure is a pins failure,
+    // and blaming the book for it would be the notice naming the wrong thing.
+    const isBookScoped = !loadError;
     const shownPins = isBookScoped ? pinsInBook : pins;
 
     return (

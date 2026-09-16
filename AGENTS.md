@@ -535,6 +535,15 @@ leaves a legal orphan. A parent that is not the caller's answers 404 (the same
 as one that never existed); a child id that is not answers 400 (the request
 named something real to someone else).
 
+`PUT /api/ideas/:id/topics` adds one rule the other two do not have: **an idea
+and a topic may only be linked within the same book**, answered 422 when they
+are not. `hasTopicOutsideIdeaBook` in `src/lib/ideaTopics.js` compares the two
+`book_id`s inside the same transaction that does the write. It lives there
+rather than in `links.js` because the other two specs link notes, and a note
+has no book. The Thoughts panel's per-book filter means the refusal is
+practically unreachable through the UI — but the panel drops that filter when
+the corpus cannot load, so the filter is the convenience and this is the rule.
+
 ### Scoping
 
 Neither link table carries a `user_id`, exactly as `note_references` does not.
