@@ -1,6 +1,11 @@
 import React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import PinnedPanel, { CLEAR_QUESTION, EMPTY_MESSAGE } from './PinnedPanel';
+import PinnedPanel, {
+    CLEAR_CONFIRM_LABEL,
+    CLEAR_LABEL,
+    CLEAR_QUESTION,
+    EMPTY_MESSAGE,
+} from './PinnedPanel';
 import { LINK_HINTS } from './linkRules';
 
 // ─── What the panel has to get right ────────────────────────────────────────
@@ -319,14 +324,14 @@ describe('Clear', () => {
         const { onClear } = renderPanel();
 
         // Act
-        await clickButton('Clear');
+        await clickButton(CLEAR_LABEL);
 
         // Assert — the question stands in for the button
         expect(onClear).not.toHaveBeenCalled();
         expect(screen.getByText(CLEAR_QUESTION)).toBeInTheDocument();
 
         // Act
-        await clickButton('Unpin all');
+        await clickButton(CLEAR_CONFIRM_LABEL);
 
         // Assert
         expect(onClear).toHaveBeenCalledTimes(1);
@@ -337,12 +342,12 @@ describe('Clear', () => {
         const { onClear } = renderPanel();
 
         // Act
-        await clickButton('Clear');
+        await clickButton(CLEAR_LABEL);
         await clickButton('Cancel');
 
         // Assert
         expect(onClear).not.toHaveBeenCalled();
-        expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: CLEAR_LABEL })).toBeInTheDocument();
     });
 
     test('is not offered when there is nothing to clear', () => {
@@ -350,7 +355,19 @@ describe('Clear', () => {
         renderPanel({ pins: [] });
 
         // Assert
-        expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: CLEAR_LABEL })).toBeDisabled();
+    });
+
+    // Clear is DELETE /api/pins/all: it reaches every book, including pins the
+    // book filter is keeping out of this list. A reader in a book they have
+    // pinned nothing in must still be able to press it, or the pins they
+    // cannot see are pins they cannot clear from this page at all.
+    test('is still offered when the only pins are in another book', () => {
+        // Arrange / Act
+        renderPanel({ pins: [], pinnedElsewhere: 3 });
+
+        // Assert
+        expect(screen.getByRole('button', { name: CLEAR_LABEL })).toBeEnabled();
     });
 });
 

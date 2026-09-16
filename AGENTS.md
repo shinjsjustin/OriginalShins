@@ -668,6 +668,24 @@ page a reader cannot undo — so unlike `useThoughtsView`'s `showIdea`,
 pushing one. A back button that restored `?book=` over a pinned panel that is
 now empty would be lying about what it undid.
 
+That clear only covers a book changed **on** this page, and pins carry no book
+of their own — `findPins` returns every pin the reader has, across every book —
+so the page also filters: **the panel may only hold pins whose item is in the
+book the canvas is drawing.** Without it a topic pinned in Matthew would still
+be in the panel when the reader next *entered* Thoughts in Mark, selectable
+beside a Mark idea, and Link would file that idea under a topic Mark's field
+does not draw — an idea on no canvas at all. Notes pass the filter whatever the
+scope is: a note has no book by design, and filing one under another book's
+topic is a thing the import picker deliberately offers. Nothing is deleted by
+the filter; return to that book and the pins are still there.
+
+The panel's **Clear** is deliberately wider than that. It is
+`DELETE /api/pins/all` and unpins every book at once, because a book-scoped
+clear would mean a book-scoped pins API and widening `/api/pins` is a non-goal.
+The button says so — "Clear all books", asking "Unpin everything, in every
+book?" — and stays enabled while pins exist in books the reader is not looking
+at, since it can reach those too.
+
 ### Why the pinned panel is the only editing surface
 
 Nothing on the canvas is editable. A card is a card; to change a topic's
@@ -679,8 +697,9 @@ appears. That is one rule with three consequences worth stating outright:
   touch — they would have to find it on the canvas and pin it by hand before
   they could write a word of it.
 - The panel is a working set, not a selection. It survives changing views, and
-  it is the same list in both, which is why `usePins` takes no arguments and
-  never reloads when the view changes.
+  `usePins` holds the same list in both, which is why it takes no arguments and
+  never reloads when the view changes. What the panel *shows* is that list
+  filtered to the book in scope — see "One book at a time" above.
 - Linking happens between pinned rows rather than on the cards. Two adjacent
   tiers in the panel, select them, press Link.
 
@@ -696,9 +715,13 @@ below it reads state from there rather than fetching again:
 | `usePins` | The pinned set |
 
 `useThoughtsData` takes the open idea's id, because that is what decides whether
-any notes are loaded at all; `usePins` knows nothing about the view. None of the
-three knows about the others, and that is why the panel and the canvas cannot
-disagree: they are handed the same arrays from the same two hooks.
+any notes are loaded at all; `usePins` knows nothing about the view or the book.
+None of the three knows about the others. Joining them is the page's job, and it
+is why the panel and the canvas cannot disagree: the panel's list is `usePins`'
+list read through the very arrays the canvas draws, so an item in one is an item
+in the other by construction. It also follows that the panel cannot say what it
+holds until the corpus has loaded — until then it says it is still loading
+rather than that nothing is pinned.
 
 The corpus is `GET /api/topics` + `GET /api/ideas` in parallel, and — in the
 idea view — `GET /api/ideas/:id` for which notes orbit in which order, then one

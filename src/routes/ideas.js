@@ -35,9 +35,12 @@ const router = express.Router();
 // nothing here refuses to create, read or save one.
 
 // GET /api/ideas
-// Every idea the user has, each with its topics and how many notes it gathers.
-// This is what the note editor's multi-select and the management list both
-// read, so it carries enough to render either without a second request.
+// Every idea in the book `?book=` names, each with its topics and how many
+// notes it gathers — one payload serving the Thoughts canvas, which fans an
+// idea out under the topic it names. Unscoped it is Analyze's chapter
+// shortlist, which resolves the ideas imported into a chapter and so needs
+// every book's. Either way it carries enough to render without a second
+// request.
 router.get('/', async (req, res) => {
     // Absent is legal and means every book. Present-but-nonsense is a 400
     // rather than a silent whole-corpus read — see parseBookScope.
@@ -63,9 +66,9 @@ router.get('/', async (req, res) => {
 // walks down from.
 //
 // A dedicated path rather than a flag on GET /api/ideas, because the two answer
-// different questions: the list endpoint serves the management page and the
-// note editor's multi-select, and both of them want every idea. Declared above
-// GET /:id so the literal segment is matched before the id pattern.
+// different questions: the list endpoint's callers want every idea in their
+// scope, filed or not. Declared above GET /:id so the literal segment is
+// matched before the id pattern.
 router.get('/unfiled', async (req, res) => {
     try {
         // No topics are attached: having none is what put these here.

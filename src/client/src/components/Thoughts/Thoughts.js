@@ -259,7 +259,9 @@ const Thoughts = () => {
     // scope is read off them — the same arrays the canvas draws, which is what
     // makes the panel and the canvas agree by construction rather than by
     // agreement. The pins themselves are left alone: come back to that book and
-    // they are still there.
+    // they are still there. The panel's Clear is the one exception, and says so
+    // in its own words — it unpins every book at once, because that is the only
+    // clear the API has.
     //
     // A note passes through whatever the scope is. A note has no book by
     // design — its book is its anchor — and filing one under another book's
@@ -270,6 +272,16 @@ const Thoughts = () => {
         const inBook = pin.itemType === 'topic' ? topics : ideas;
         return inBook.some(item => item.id === pin.itemId);
     });
+
+    // What the panel holds is `pins` read through the corpus, so until the
+    // corpus is in hand the panel cannot tell what it holds — and "Nothing
+    // pinned yet" over a pinned set it simply has not placed yet is the page
+    // stating something false. A bare /thoughts guarantees that window: the
+    // scope has to be seeded before `/topics` and `/ideas` are even asked for,
+    // and `/pins` has answered long before then. A corpus that failed to load
+    // is the same ignorance by another route — the lists are emptied, and the
+    // banner above already says why.
+    const arePinsUnknown = arePinsLoading || isLoading || Boolean(error);
 
     return (
         <div className="thoughts-page">
@@ -340,7 +352,8 @@ const Thoughts = () => {
                         and the only place an item can be changed. */}
                     <PinnedPanel
                         pins={pinsInBook}
-                        isLoading={arePinsLoading}
+                        pinnedElsewhere={pins.length - pinsInBook.length}
+                        isLoading={arePinsUnknown}
                         onUnpin={unpinMany}
                         onClear={clearPins}
                         onLink={linkPairs}

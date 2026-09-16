@@ -36,7 +36,13 @@ export const PANEL_LABEL = 'Pinned';
 
 export const EMPTY_MESSAGE = 'Nothing pinned yet. Pin a topic, idea or note on the canvas to edit it here.';
 
-export const CLEAR_QUESTION = 'Unpin everything?';
+// Clear is the one control in this panel that is NOT scoped to the book the
+// page is showing, and its words are where that is said. See the button below.
+export const CLEAR_LABEL = 'Clear all books';
+
+export const CLEAR_QUESTION = 'Unpin everything, in every book?';
+
+export const CLEAR_CONFIRM_LABEL = 'Unpin all books';
 
 // Expanded, the arrow points away from the centre — the direction the panel
 // travels when it closes. Collapsed, it points back: press it and the panel
@@ -54,8 +60,12 @@ const countLabel = (count) => `${count} selected`;
 const succeeded = (result) => result !== false && result !== null;
 
 /**
- * @param pins       usePins' hydrated list, in pin order
- * @param isLoading  the pin list itself is still in flight
+ * @param pins       the pins to show, in pin order — the page hands over the
+ *                   ones whose item is in the book it is drawing
+ * @param pinnedElsewhere  how many pins the reader has that are NOT in `pins`,
+ *                   because they belong to another book. Clear reaches them,
+ *                   so it is enabled for them — see the button.
+ * @param isLoading  what this panel holds is not yet known
  * @param onUnpin    (items) -> usePins.unpinMany
  * @param onClear    () -> usePins.clearPins
  * @param onLink     (pairs) -> useThoughtsData.linkPairs
@@ -64,6 +74,7 @@ const succeeded = (result) => result !== false && result !== null;
  */
 const PinnedPanel = ({
     pins,
+    pinnedElsewhere = 0,
     isLoading = false,
     onUnpin,
     onClear,
@@ -135,11 +146,25 @@ const PinnedPanel = ({
             <header className="thoughts-panel-header">
                 <h2 className="thoughts-panel-title">{PANEL_LABEL} ({pins.length})</h2>
 
+                {/* Deliberately wider than the list above it. `onClear` is
+                    DELETE /api/pins/all, which unpins every pin the reader
+                    has in every book — a book-scoped clear would mean a
+                    book-scoped pins API, and widening /api/pins is a stated
+                    non-goal. So the scope lives in the words instead: a
+                    reader looking at "Pinned (1)" is told, before they
+                    answer, that this reaches further than the one row they
+                    can see. Do not narrow these back to the shown list
+                    without narrowing the write too.
+
+                    Enabled on `pinnedElsewhere` as well for the same reason:
+                    pins hidden by the book filter are still pins, and a
+                    control that claims every book must be able to reach a
+                    book the reader is not looking at. */}
                 <ConfirmButton
-                    label="Clear"
+                    label={CLEAR_LABEL}
                     question={CLEAR_QUESTION}
-                    confirmLabel="Unpin all"
-                    disabled={pins.length === 0}
+                    confirmLabel={CLEAR_CONFIRM_LABEL}
+                    disabled={pins.length === 0 && pinnedElsewhere === 0}
                     onConfirm={handleClear}
                 />
 

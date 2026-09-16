@@ -3,6 +3,12 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter } from 'react-router-dom';
 import Thoughts from './Thoughts';
 import { CREATE_FORMS } from './CreateModal';
+import {
+    CLEAR_CONFIRM_LABEL,
+    CLEAR_LABEL,
+    CLEAR_QUESTION,
+    EMPTY_MESSAGE,
+} from './PinnedPanel';
 
 // ─── Creating on this page means pinning ────────────────────────────────────
 //
@@ -426,6 +432,85 @@ describe('scoping the page to one book', () => {
         expect(screen.getByRole('heading', { name: 'Pinned (1)' })).toBeInTheDocument();
         expect(within(panel()).getByText('Faith')).toBeInTheDocument();
         expect(store.pins).toHaveLength(1);
+    });
+
+    // Clear is the one control in the panel that is NOT scoped to the book on
+    // screen: DELETE /api/pins/all is the only clear the API has, and widening
+    // /api/pins is a non-goal. The reach is deliberate, so what has to be true
+    // is that the words admit it before the reader answers — "Pinned (1)" over
+    // a button that silently unpins three would be the page misleading them.
+    test('Clear reaches every book, and says so before it does', async () => {
+        // Arrange — one pin in each of two books, the page showing Mark.
+        const matthewTopic = addTopic({ name: 'Faith', bookId: 40 });
+        const markTopic = addTopic({ name: 'Discipleship', bookId: 41 });
+        store.pins = [
+            { itemType: 'topic', itemId: matthewTopic.id },
+            { itemType: 'topic', itemId: markTopic.id },
+        ];
+
+        await renderThoughts('/thoughts?book=41');
+        expect(screen.getByRole('heading', { name: 'Pinned (1)' })).toBeInTheDocument();
+
+        // Act — the question names the scope the count above it cannot.
+        await clickButton(CLEAR_LABEL);
+        expect(screen.getByText(CLEAR_QUESTION)).toBeInTheDocument();
+        await clickButton(CLEAR_CONFIRM_LABEL);
+
+        // Assert — both went, which is what the words just promised.
+        await waitFor(() => expect(store.pins).toHaveLength(0));
+    });
+
+    // Pins hidden by the book filter are still pins, and Clear is the only
+    // thing on this page that can reach them. Disabled on the shown count
+    // alone, a reader in a book they have pinned nothing in could not clear
+    // the other book's pins from here at all.
+    test('Clear is pressable when every pin is in another book', async () => {
+        const matthewTopic = addTopic({ name: 'Faith', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: matthewTopic.id }];
+
+        await renderThoughts('/thoughts?book=41');
+
+        expect(screen.getByRole('heading', { name: 'Pinned (0)' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: CLEAR_LABEL })).toBeEnabled();
+    });
+
+    // The panel's list is `pins` read through the corpus, so before the corpus
+    // arrives it knows nothing about what it holds. A bare /thoughts guarantees
+    // that window — the scope is seeded from the saved location, and /topics
+    // and /ideas are not asked for until it resolves, long after /pins has
+    // answered — and "Nothing pinned yet" said into it is simply false.
+    test('the panel does not claim to be empty before the corpus has loaded', async () => {
+        const topic = addTopic({ name: 'Faith', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: topic.id }];
+
+        let releaseLocation;
+        const locationGate = new Promise(resolve => { releaseLocation = resolve; });
+
+        global.fetch = jest.fn((url, options = {}) => {
+            const isLocationRead = url.endsWith('/user/location') && (options.method || 'GET') === 'GET';
+            return isLocationRead
+                ? locationGate.then(() => handleRequest(url, options))
+                : handleRequest(url, options);
+        });
+
+        await act(async () => {
+            render(
+                <MemoryRouter initialEntries={['/thoughts']}>
+                    <Thoughts />
+                </MemoryRouter>
+            );
+        });
+
+        // /pins has answered; the corpus has not been asked for yet.
+        expect(within(panel()).queryByText(EMPTY_MESSAGE)).not.toBeInTheDocument();
+
+        await act(async () => {
+            releaseLocation();
+            await locationGate;
+        });
+
+        // …and once it lands, the pin the panel was quiet about is there.
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
     });
 
     test('a topic created here belongs to the book in scope', async () => {
