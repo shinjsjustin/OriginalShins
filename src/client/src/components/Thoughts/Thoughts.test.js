@@ -649,6 +649,36 @@ describe('scoping the page to one book', () => {
         expect(ideaReads).not.toHaveLength(0);
     });
 
+    // The idea follows its own book, but only while it is the idea on screen.
+    // Picking a book from the title block closes the idea (showBook drops
+    // `?idea=`), and the load in hand still answers for the idea just closed —
+    // read as the current one, it would send the reader straight back to the
+    // book they just left, with their pick lost and nothing said.
+    test('changing book from the title block sticks while an idea is open', async () => {
+        // Arrange — an idea open in Matthew, and something to see in Mark.
+        addTopic({ name: 'Faith', bookId: 40 });
+        addTopic({ name: 'Discipleship', bookId: 41 });
+        const matthewIdea = addIdea({ title: 'Mustard seed', bookId: 40 });
+
+        await renderThoughts(`/thoughts?idea=${matthewIdea.id}&book=40`);
+        const canvas = screen.getByRole('region', { name: 'Thoughts canvas' });
+        await waitFor(() => expect(within(canvas).getByText('Mustard seed')).toBeInTheDocument());
+
+        // Act
+        fireEvent.click(screen.getByRole('button', { name: /Matthew Topics/ }));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+        });
+
+        // Assert — Mark, and still Mark once every load has settled. Mark's own
+        // field is what the canvas draws, so the topics view came back with the
+        // book rather than the page sitting on the idea it left.
+        expect(await screen.findByRole('button', { name: /Mark Topics/ })).toBeInTheDocument();
+        await waitFor(() => expect(within(canvas).getByText('Discipleship')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /Mark Topics/ })).toBeInTheDocument();
+        expect(within(canvas).queryByText('Faith')).not.toBeInTheDocument();
+    });
+
     // The other half of that rule: an id that names nothing is not a book to
     // follow, so it must still reach the error banner rather than being
     // quietly re-scoped into silence.

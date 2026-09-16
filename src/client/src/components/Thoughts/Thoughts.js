@@ -139,7 +139,9 @@ const Thoughts = () => {
     // `ideaBookId` is what the idea itself said when its notes were loaded, so
     // this costs no request. It stays null when the idea did not resolve at
     // all, which is how a deleted or mistyped id keeps falling through to the
-    // load error instead of being quietly re-scoped.
+    // load error instead of being quietly re-scoped — and null again whenever
+    // it would be an answer about an idea this page is no longer showing, so
+    // the reader's own book change cannot be undone by the idea it closed.
     useEffect(() => {
         if (ideaBookId !== null) adoptIdeaBook(ideaBookId);
     }, [ideaBookId, adoptIdeaBook]);

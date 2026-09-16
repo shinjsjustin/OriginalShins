@@ -276,11 +276,19 @@ const useTopicPassages = (revision) => {
 const useThoughtsData = (bookId = null, ideaId = null) => {
     const [data, setData] = useState(EMPTY);
     const [isLoading, setIsLoading] = useState(true);
-    // Which book `data` is an answer ABOUT, rather than whether a request is in
+    // Which question `data` is an answer TO, rather than whether a request is in
     // flight. A refetch after a save holds the same book's rows the whole time,
     // and anything reading `isLoading` to decide whether the corpus is known
     // would call it unknown once per write.
-    const [settledBookId, setSettledBookId] = useState(null);
+    //
+    // Both halves of the question are kept together, in one value, because
+    // `data` answers them together: the book decides the topic and idea lists,
+    // and the idea decides the notes and `ideaBookId`. Held apart, a reader
+    // could take `ideaBookId` from a load the current `ideaId` never asked for
+    // — which is exactly what an `?idea=` dropped by a book change leaves
+    // behind. Pairing them here means there is nowhere to read one without the
+    // other, rather than a guard at each call site that has to remember to.
+    const [answers, setAnswers] = useState({ bookId: null, ideaId: null });
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
     const [revision, setRevision] = useState(0);
@@ -299,16 +307,16 @@ const useThoughtsData = (bookId = null, ideaId = null) => {
             .then(loaded => {
                 setData(loaded);
                 setError('');
-                setSettledBookId(bookId);
+                setAnswers({ bookId, ideaId });
             })
             .catch(err => {
                 if (err.name === 'AbortError') return;
                 setData(EMPTY);
                 setError(err.message);
-                // Settled too: a book that failed is a book this hook has
+                // Answered too: a book that failed is a book this hook has
                 // finished answering for, and a reader left waiting on an
                 // answer that is never coming is the worse of the two.
-                setSettledBookId(bookId);
+                setAnswers({ bookId, ideaId });
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
@@ -427,9 +435,16 @@ const useThoughtsData = (bookId = null, ideaId = null) => {
         topics: data.topics,
         ideas: data.ideas,
         notes: data.notes,
-        ideaBookId: data.ideaBookId,
+        // Only ever the OPEN idea's book. `data` still holds the last load's
+        // answer while the next one is in flight, and after a book change that
+        // answer is about an idea the URL no longer names — reported as the
+        // current one, it would send the page back to the book the reader just
+        // left. Unknown until the two agree is the honest answer.
+        ideaBookId: answers.ideaId === ideaId ? data.ideaBookId : null,
         isLoading,
-        settledBookId,
+        // The book half alone: the topic and idea lists do not change when an
+        // idea opens, so a corpus read off them is still current.
+        settledBookId: answers.bookId,
         error,
         actionError,
         dismissActionError,
