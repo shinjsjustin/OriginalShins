@@ -176,8 +176,15 @@ const groupByNoteId = (passages) => passages.reduce((byNoteId, passage) => ({
     [passage.noteId]: [...(byNoteId[passage.noteId] || []), passage],
 }), {});
 
-const loadNotesForIdea = async (ideaId, signal) => {
-    if (ideaId === null) return [];
+// The open idea's notes, and the book the idea itself says it is in.
+//
+// The book comes free: this is the read that already fetches the idea, and it
+// is ownership-scoped rather than book-scoped, so it answers for an idea the
+// book in scope does not contain. The page uses it to follow the idea to its
+// own book — see Thoughts.js — which is why it is carried back rather than
+// dropped on the floor with the rest of the payload.
+const loadIdeaView = async (ideaId, signal) => {
+    if (ideaId === null) return { notes: [], ideaBookId: null };
 
     const payload = await fetchJson(`/ideas/${ideaId}`, { signal });
     const rows = (payload.idea && payload.idea.notes) || [];
@@ -194,29 +201,33 @@ const loadNotesForIdea = async (ideaId, signal) => {
 
     const passagesByNoteId = groupByNoteId(passagePayload.passages || []);
 
-    return details.map(detail => ({
-        ...detail.note,
-        passages: passagesByNoteId[detail.note.id] || [],
-    }));
+    return {
+        notes: details.map(detail => ({
+            ...detail.note,
+            passages: passagesByNoteId[detail.note.id] || [],
+        })),
+        ideaBookId: (payload.idea && payload.idea.bookId) || null,
+    };
 };
 
 const loadThoughts = async (bookId, ideaId, signal) => {
     const scope = `?book=${bookId}`;
 
-    const [topicsPayload, ideasPayload, notes] = await Promise.all([
+    const [topicsPayload, ideasPayload, ideaView] = await Promise.all([
         fetchJson(`${TOPICS_PATH}${scope}`, { signal }),
         fetchJson(`${IDEAS_PATH}${scope}`, { signal }),
-        loadNotesForIdea(ideaId, signal),
+        loadIdeaView(ideaId, signal),
     ]);
 
     return {
         topics: topicsPayload.topics || [],
         ideas: ideasPayload.ideas || [],
-        notes,
+        notes: ideaView.notes,
+        ideaBookId: ideaView.ideaBookId,
     };
 };
 
-const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [] });
+const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [], ideaBookId: null });
 
 // A topic's passages, fetched when its fan first opens rather than for every
 // topic when the view does.
@@ -265,6 +276,11 @@ const useTopicPassages = (revision) => {
 const useThoughtsData = (bookId = null, ideaId = null) => {
     const [data, setData] = useState(EMPTY);
     const [isLoading, setIsLoading] = useState(true);
+    // Which book `data` is an answer ABOUT, rather than whether a request is in
+    // flight. A refetch after a save holds the same book's rows the whole time,
+    // and anything reading `isLoading` to decide whether the corpus is known
+    // would call it unknown once per write.
+    const [settledBookId, setSettledBookId] = useState(null);
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
     const [revision, setRevision] = useState(0);
@@ -283,11 +299,16 @@ const useThoughtsData = (bookId = null, ideaId = null) => {
             .then(loaded => {
                 setData(loaded);
                 setError('');
+                setSettledBookId(bookId);
             })
             .catch(err => {
                 if (err.name === 'AbortError') return;
                 setData(EMPTY);
                 setError(err.message);
+                // Settled too: a book that failed is a book this hook has
+                // finished answering for, and a reader left waiting on an
+                // answer that is never coming is the worse of the two.
+                setSettledBookId(bookId);
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
@@ -406,7 +427,9 @@ const useThoughtsData = (bookId = null, ideaId = null) => {
         topics: data.topics,
         ideas: data.ideas,
         notes: data.notes,
+        ideaBookId: data.ideaBookId,
         isLoading,
+        settledBookId,
         error,
         actionError,
         dismissActionError,

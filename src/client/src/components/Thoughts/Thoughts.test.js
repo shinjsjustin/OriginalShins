@@ -152,6 +152,20 @@ const handleRequest = (url, options = {}) => {
         });
     }
 
+    // The panel's edit form reads the row it is about to change, then PATCHes
+    // it — the two requests a save is made of.
+    const topicDetail = /\/topics\/(\d+)$/.exec(url);
+    if (topicDetail && (method === 'GET' || method === 'PATCH')) {
+        const found = store.topics.find(row => row.id === Number(topicDetail[1]));
+        if (!found) return jsonResponse({ error: 'not found' }, 404);
+
+        if (method === 'GET') return jsonResponse({ topic: found });
+
+        const saved = { ...found, ...body };
+        store.topics = store.topics.map(row => (row.id === found.id ? saved : row));
+        return jsonResponse({ topic: saved });
+    }
+
     const note = /\/notes\/(\d+)$/.exec(url);
     if (note && method === 'GET') {
         const found = store.notes.find(row => row.id === Number(note[1]));
@@ -612,6 +626,40 @@ describe('scoping the page to one book', () => {
     // The mirror: the same panel, the same button, a pair the rule allows.
     // Without this the test above would pass just as well against a Link that
     // refused everything.
+    // `?idea=` and `?book=` can arrive naming different books: an idea result
+    // carries no book of its own, so one failed read while seeding is enough to
+    // write the saved location's book beside it. The idea is the more specific
+    // of the two, and the book it is NOT in has no card for it — so the scope
+    // follows the idea rather than drawing an empty canvas over a live one.
+    test('an idea from another book brings the scope with it', async () => {
+        // Arrange — the idea lives in Mark; the URL says Matthew.
+        addTopic({ name: 'Faith', bookId: 40 });
+        const markIdea = addIdea({ title: 'Mustard seed', bookId: 41 });
+
+        // Act
+        await renderThoughts(`/thoughts?idea=${markIdea.id}&book=40`);
+
+        // Assert — the idea is drawn, and the page says it is in Mark.
+        // On the canvas, not merely in the breadcrumb: the orbit draws its
+        // centre card only once the page found the idea in the list it loaded.
+        const canvas = screen.getByRole('region', { name: 'Thoughts canvas' });
+        await waitFor(() => expect(within(canvas).getByText('Mustard seed')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /Mark Topics/ })).toBeInTheDocument();
+        const ideaReads = requests.filter(r => r.method === 'GET' && /\/ideas\?book=41$/.test(r.url));
+        expect(ideaReads).not.toHaveLength(0);
+    });
+
+    // The other half of that rule: an id that names nothing is not a book to
+    // follow, so it must still reach the error banner rather than being
+    // quietly re-scoped into silence.
+    test('an idea that does not exist still reports the failure', async () => {
+        addTopic({ name: 'Faith', bookId: 40 });
+
+        await renderThoughts('/thoughts?idea=404&book=40');
+
+        expect(await screen.findByRole('alert')).toHaveTextContent(/could not find that/i);
+    });
+
     test('a same-book link still goes through', async () => {
         const markTopic = addTopic({ name: 'Discipleship', bookId: 41 });
         const markIdea = addIdea({ title: 'Mustard seed', bookId: 41 });
@@ -629,6 +677,48 @@ describe('scoping the page to one book', () => {
         await waitFor(() => expect(
             store.ideas.find(idea => idea.id === markIdea.id).topics
         ).toHaveLength(1));
+    });
+
+    // A save reloads the corpus, and for that whole window the lists in hand are
+    // still this book's — the panel can read them, and what it holds has not
+    // moved. "Loading pins…" announced over the rows it is already drawing,
+    // once per edit, would be the page reporting a doubt it does not have.
+    test('saving an edit does not make the panel claim to be loading', async () => {
+        // Arrange — a pinned topic, open in the panel's edit form.
+        const topic = addTopic({ name: 'Faith', description: 'What it is', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: topic.id }];
+
+        await renderThoughts('/thoughts?book=40');
+        fireEvent.mouseOver(within(panel()).getByText('Faith'));
+        await clickButton('Edit Faith');
+
+        // Hold the reload that the save is about to trigger, so the assertions
+        // land inside the window rather than after it.
+        let releaseReload;
+        const reloadGate = new Promise(resolve => { releaseReload = resolve; });
+        const answer = global.fetch.getMockImplementation();
+        global.fetch = jest.fn((url, options = {}) => (
+            (/\/topics\?book=/.test(url) && (options.method || 'GET') === 'GET')
+                ? reloadGate.then(() => answer(url, options))
+                : answer(url, options)
+        ));
+
+        // Act
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Faithfulness' } });
+        await clickButton('Save');
+
+        // Assert — mid-reload, the panel still shows what it holds and says
+        // nothing about loading.
+        expect(within(panel()).queryByText(/Loading pins/)).not.toBeInTheDocument();
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
+
+        await act(async () => {
+            releaseReload();
+            await reloadGate;
+        });
+
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
+        expect(store.topics.find(row => row.id === topic.id).name).toBe('Faithfulness');
     });
 
     test('a topic created here belongs to the book in scope', async () => {

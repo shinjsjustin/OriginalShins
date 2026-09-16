@@ -671,6 +671,17 @@ The last two are a request, so the page holds every fetch until
 then immediately refetching a different book's is the failure this exists to
 avoid.
 
+An open idea outranks a `?book=` that disagrees with it. The two can arrive
+naming different books — a search result for an idea carries no `?book=`, and
+one failed read while seeding is enough to write the saved location's book
+beside it — and the field of a book an idea is not in cannot draw that idea, so
+the page would sit on an empty canvas saying nothing. `adoptIdeaBook` moves the
+scope to the idea's own book and keeps `?idea=`, unlike `showBook`, which drops
+it. The book comes from the payload `useThoughtsData` already reads for the
+idea's notes, so following the idea costs no extra request; an `?idea=` that
+does not resolve at all reports no book and still falls through to the error
+banner.
+
 Unlike `useThoughtsView`'s `showIdea`, `useBookScope`'s `showBook`
 **replaces** the history entry rather than pushing one. The scope is not
 somewhere the reader navigated to — every entry to the page writes a `?book=`

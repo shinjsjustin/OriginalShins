@@ -37,9 +37,12 @@ const hasTopicOutsideIdeaBook = async (connection, userId, ideaId, topicIds) => 
     return Number(rows[0].mismatched) > 0;
 };
 
-// One flat query for the whole list rather than one per idea: every caller
-// loads a list at a time — the management page, the note editor's multi-select,
-// and the Analyze panel's imported set.
+// One flat query for the whole list rather than one per idea, because the
+// callers that load a list load a whole one: GET /api/ideas, both scoped to a
+// book for the Thoughts canvas and unscoped for Analyze's chapter shortlist.
+// The single-row callers — GET, PATCH and PUT /api/ideas/:id — come through
+// here too, hydrating a one-idea array, so an idea carries its topics the same
+// way whichever endpoint returned it.
 const withTopics = async (userId, ideas) => {
     const links = await findTopicsForIdeas(userId, ideas.map(idea => idea.id));
 

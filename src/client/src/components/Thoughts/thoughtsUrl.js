@@ -29,10 +29,13 @@ export const BOOK_PARAM = 'book';
 
 // The topics view — the whole field of topic cards for one book.
 //
-// The book is optional because two callers want different things. Search names
-// one, so a Mark topic's result lands on the field that actually holds it. The
-// page's own Reset View names none, because leaving an idea should not also
-// re-assert a scope the reader may have just changed.
+// The one caller today names a book: search's topic results pass
+// `topic.bookId` (searchModel.js), so a Mark topic's result lands on the field
+// that actually holds it. The book stays optional as the fallback for a caller
+// that has none to name — the page then seeds its own scope, exactly as a bare
+// /thoughts does. Nothing inside the page builds its links here: Reset View
+// edits the live query string in place (useThoughtsView) rather than composing
+// a URL, which is what lets it drop `?idea=` while leaving `?book=` alone.
 export const thoughtsUrl = (bookId = null) =>
     bookId === null ? THOUGHTS_PATH : `${THOUGHTS_PATH}?${BOOK_PARAM}=${bookId}`;
 

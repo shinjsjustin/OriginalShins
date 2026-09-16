@@ -26,7 +26,7 @@ Matthew can be filed under a Mark topic without leaving the chapter.
 |---|---|
 | Sync direction | **One-way.** Thoughts *seeds* its scope from `last_primary_book_id`; its title block is a page-local `?book=` override that never writes the saved location. |
 | Import picker scope | Opens on the centre panel's book, **resets every time it opens**. No sticky state. |
-| Deep links | **The result wins.** `?idea=123` with no `?book=` adopts the idea's own book; search's topic results carry `?book=`. |
+| Deep links | **The result wins.** `?idea=123` adopts the idea's own book — when no `?book=` is there, and also over a `?book=` that names a different one; search's topic results carry `?book=`. |
 | Slug uniqueness | **Per book** — `UNIQUE (user_id, book_id, slug)`. "faith" may exist in Matthew and in Mark as two different topics. |
 | Where filtering happens | **Server-side**, via an optional `?book=` on the two list endpoints. |
 | Pins on book change | **Left alone.** The panel is filtered to the book on screen, so nothing has to be deleted to keep the pair rule. |
@@ -173,12 +173,24 @@ The scope has four sources, in priority order. Two of them are asynchronous:
 | Priority | Source | When |
 |---|---|---|
 | 1 | `?book=` in the URL | present — resolved instantly, no fetch |
-| 2 | the open idea's own `bookId` | `?idea=123` with no `?book=` |
+| 2 | the open idea's own `bookId` | `?idea=123` with no `?book=`, **and** `?idea=123` beside a `?book=` that names a different book |
 | 3 | `last_primary_book_id` via `GET /user/location` | a bare `/thoughts` |
 | 4 | Genesis (book 1) | a new account, or the location read fails |
 
-So a new hook `useBookScope(ideaId)` returns `{ bookId, isResolving, showBook }`,
-and `useThoughtsData` holds its fetches until `isResolving` goes false.
+So a new hook `useBookScope(ideaId)` returns
+`{ bookId, isResolving, showBook, adoptIdeaBook }`, and `useThoughtsData` holds
+its fetches until `isResolving` goes false.
+
+`adoptIdeaBook` is priority 2 outranking priority 1. The two can arrive
+disagreeing — an idea result carries no `?book=`, so one failed read of that
+idea while seeding is enough to write the saved location's book beside it — and
+the field of a book an idea is not in cannot draw that idea: the canvas would be
+empty with nothing said. The idea is the more specific of the two things the URL
+asked for, so the scope follows it and `?idea=` stays put, unlike `showBook`
+which drops it. It costs no request: the idea's own `bookId` is already in the
+payload `useThoughtsData` reads for the idea's notes. An `?idea=` that does not
+resolve at all reports nothing, so a deleted or mistyped id still falls through
+to the error banner rather than being silently re-scoped.
 
 That gate is `useRestoreLocation`'s `isRestoring` applied a second time, for
 exactly the reason its comment gives: two things writing the query string in
@@ -397,7 +409,7 @@ fixing what is already wrong would leave it no more trustworthy than before.
 | `bookId` missing or out of canon on create | 400 from the input parser. |
 | Duplicate slug within a book | 409, "You already have a topic with that slug in this book". |
 | `GET /user/location` fails while seeding | Genesis. A convenience lost, not a page broken — the rule `useRestoreLocation` already follows. |
-| `clearPins` fails on book change | Navigation proceeds; the action banner reports it. |
+| `?idea=` names an idea in another book | The idea wins: the scope moves to the idea's own book (priority 2 above) and the orbit draws. |
 | `?idea=` names an idea that is gone | Unchanged: the load 404s and the page shows its error banner, with the URL still saying what was asked for. |
 
 ## 7. Testing
@@ -421,6 +433,8 @@ fetch harness, and that is where the new route behaviour goes too.
   entry, and leaves the pinned set on the server untouched.
 - `?idea=` with no `?book=` adopts the idea's book, and Reset View lands on
   that book's field.
+- `?idea=` beside a `?book=` naming a different book adopts the idea's book and
+  draws the idea, rather than an empty canvas.
 - An empty book shows the message, not the error banner.
 - A pin from another book is not in the panel; a pin from this book is, and
   survives a round trip through another book.

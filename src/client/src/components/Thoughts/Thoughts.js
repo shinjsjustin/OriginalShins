@@ -84,7 +84,7 @@ const TITLE_OF = Object.freeze({
 const Thoughts = () => {
     const { ideaId, showIdea, resetView } = useThoughtsView();
     const { books } = useBooks();
-    const { bookId, isResolving, showBook } = useBookScope(ideaId);
+    const { bookId, isResolving, showBook, adoptIdeaBook } = useBookScope(ideaId);
     // Which create form is open: 'topic', 'idea', or nothing.
     const [creatingKind, setCreatingKind] = useState(null);
     // Set only by createAndPin's own belt-and-braces guard below — see there.
@@ -93,7 +93,9 @@ const Thoughts = () => {
         topics,
         ideas,
         notes,
+        ideaBookId,
         isLoading,
+        settledBookId,
         error: loadError,
         actionError: dataActionError,
         createTopic,
@@ -127,6 +129,20 @@ const Thoughts = () => {
     const openIdea = ideaId === null
         ? null
         : ideas.find(idea => idea.id === ideaId) || null;
+
+    // That list is the book's, so an idea from another book is not in it, and
+    // the page would draw an empty canvas over a live idea. The idea is the
+    // more specific of the two things the URL asked for, so the scope follows
+    // it — the rule the spec already applies to an `?idea=` arriving with no
+    // book, extended to one arriving beside a book that disagrees.
+    //
+    // `ideaBookId` is what the idea itself said when its notes were loaded, so
+    // this costs no request. It stays null when the idea did not resolve at
+    // all, which is how a deleted or mistyped id keeps falling through to the
+    // load error instead of being quietly re-scoped.
+    useEffect(() => {
+        if (ideaBookId !== null) adoptIdeaBook(ideaBookId);
+    }, [ideaBookId, adoptIdeaBook]);
 
     // Create, then pin what came back. The pin is a second request and can fail
     // on its own; when it does, the item is still made and the banner says why
@@ -251,13 +267,21 @@ const Thoughts = () => {
         return inBook.some(item => item.id === pin.itemId);
     });
 
-    // What the panel holds is `pins` read through the corpus, so while the
-    // corpus is still coming the panel cannot tell what it holds — and
-    // "Nothing pinned yet" over a pinned set it simply has not placed yet is
-    // the page stating something false. A bare /thoughts guarantees that
-    // window: the scope has to be seeded before `/topics` and `/ideas` are even
-    // asked for, and `/pins` has answered long before then.
-    const arePinsUnknown = arePinsLoading || isLoading;
+    // What the panel holds is `pins` read through the corpus, so until the
+    // corpus is an answer about the book on screen the panel cannot tell what
+    // it holds — and "Nothing pinned yet" over a pinned set it simply has not
+    // placed yet is the page stating something false. A bare /thoughts
+    // guarantees that window: the scope has to be seeded before `/topics` and
+    // `/ideas` are even asked for, and `/pins` has answered long before then.
+    // A book change is the other: the lists in hand are still the last book's.
+    //
+    // `settledBookId` and not `isLoading`, because a request in flight is not
+    // the same question. Every save bumps useThoughtsData's revision and
+    // refetches, and the rows being refetched are the same book's the whole
+    // time — reading `isLoading` here would announce "Loading pins…" over a
+    // list the panel has rendered and can read perfectly well, once per write.
+    const isCorpusUnknown = isResolving || settledBookId !== bookId;
+    const arePinsUnknown = arePinsLoading || isCorpusUnknown;
 
     // A corpus that FAILED to load is a different case, and waiting is the
     // wrong answer to it: nothing further is coming, so a panel held on

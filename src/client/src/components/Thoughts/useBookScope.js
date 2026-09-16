@@ -15,6 +15,9 @@ import { LOCATION_PATH } from '../Analyze/savedLocation';
 //   3. last_primary_book_id         a bare /thoughts
 //   4. Genesis                      a new account, or the location read fails
 //
+// Source 2 also OVERRIDES source 1 when the two disagree — see `adoptIdeaBook`
+// at the foot of this file.
+//
 // Two of them are asynchronous, which is the whole reason this is a hook and
 // not a line in useThoughtsView. Until the question is settled the page has no
 // scope, and a fetch issued before then would fetch the wrong book's topics
@@ -50,7 +53,7 @@ export const GENESIS_BOOK_ID = 1;
 
 /**
  * @param ideaId the open idea, or null in the topics view
- * @returns { bookId, isResolving, showBook }
+ * @returns { bookId, isResolving, showBook, adoptIdeaBook }
  */
 const useBookScope = (ideaId = null) => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -146,9 +149,36 @@ const useBookScope = (ideaId = null) => {
         }, { replace: true });
     }, [setSearchParams]);
 
+    // The idea wins, even over a `?book=` that names a different book.
+    //
+    // Source 2 above only runs when no book is in the URL, so `?idea=` and
+    // `?book=` can arrive disagreeing — a search result for an idea carries no
+    // book, and a single failed read of that idea while seeding is enough to
+    // write the saved location's book beside it. The idea is the more specific
+    // request of the two, and the field of the book it is NOT in cannot draw
+    // it: the reader would be looking at a canvas with nothing on it.
+    //
+    // Unlike showBook this keeps `?idea=`, because here the idea is what
+    // decided the book rather than what the book left behind. Replaced rather
+    // than pushed: the reader never chose the book being corrected.
+    //
+    // The caller supplies the idea's own book — the page already reads it while
+    // loading the idea's notes (see useThoughtsData), so asking for it again
+    // here would be a second request for a payload the page has in hand.
+    const adoptIdeaBook = useCallback((ideaBookId) => {
+        const wanted = parseBookId(String(ideaBookId));
+        if (wanted === null || wanted === fromUrl) return;
+
+        setSearchParams(previous => {
+            const next = new URLSearchParams(previous);
+            next.set(BOOK_PARAM, String(wanted));
+            return next;
+        }, { replace: true });
+    }, [fromUrl, setSearchParams]);
+
     const bookId = fromUrl !== null ? fromUrl : seeded;
 
-    return { bookId, isResolving: bookId === null, showBook };
+    return { bookId, isResolving: bookId === null, showBook, adoptIdeaBook };
 };
 
 export default useBookScope;
