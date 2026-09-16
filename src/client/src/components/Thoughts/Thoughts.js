@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Navbar from '../Navbar';
 import TopBar from './TopBar';
 import TopicIdeaField from '../Bubbles/TopicIdeaField';
@@ -134,19 +134,26 @@ const Thoughts = () => {
     // `togglePin` is a toggle in name only here: an id the server has just
     // minted cannot already be in the pinned list.
     const createAndPin = useCallback(async (fields) => {
-        // Belt-and-braces: TopBar already disables + Topic and + Idea while
-        // the scope is unresolved (bookId is null only in that window — see
-        // useBookScope), so this should be unreachable from the UI. A future
-        // caller that reaches here anyway must not post a create the server
-        // is guaranteed to 400 on — and must not fail without a trace either,
-        // so this reports through the same banner a failed write already
-        // uses rather than swallowing the attempt.
+        // Belt-and-braces, and genuinely unreachable from the UI today: the
+        // create buttons are disabled by this same `isResolving` (see the
+        // prop passed to TopBar below), so no press a reader can make gets
+        // here with bookId still null — that is the one guarantee Fix 1 made
+        // instead of two independent ones that could drift. This guards a
+        // caller nothing here has been written to anticipate — a future
+        // control, a race — refusing rather than posting a create the server
+        // is guaranteed to 400 on. It reports through the same banner a
+        // failed write already uses, so a refusal is never silent even
+        // though this path is not exercised by a test: there is no way to
+        // reach it through this app's own UI to write one against, short of
+        // mocking the hook this component trusts for the scope, which is
+        // machinery this codebase's tests do not otherwise use. The effect
+        // below is what would keep this message from outliving the window it
+        // describes, if this were ever reached.
         if (bookId === null) {
             setScopeError("Still finding which book you're in. Please try again in a moment.");
             return null;
         }
 
-        setScopeError('');
         const create = creatingKind === 'topic' ? createTopic : createIdea;
         // The scope, not a field on the form. The title block above the modal
         // already says which book this is, and a second control saying the
@@ -159,6 +166,14 @@ const Thoughts = () => {
 
         return created;
     }, [bookId, creatingKind, createTopic, createIdea, togglePin]);
+
+    // The guard's message is only ever true while the scope is unresolved, so
+    // it has no reason to survive past that moment — without this, a banner
+    // set by a create attempted in that window would go on telling the reader
+    // we are "still finding which book you're in" long after we found it.
+    useEffect(() => {
+        if (!isResolving) setScopeError('');
+    }, [isResolving]);
 
     const saveItem = useCallback((pin, changes) => {
         if (pin.itemType === 'topic') return updateTopic(pin.itemId, changes);
@@ -228,6 +243,7 @@ const Thoughts = () => {
                 <TopBar
                     books={books}
                     bookId={bookId}
+                    isResolving={isResolving}
                     onChangeBook={changeBook}
                     idea={openIdea}
                     onResetView={resetView}

@@ -428,7 +428,12 @@ describe('scoping the page to one book', () => {
     // that window on purpose, with a promise this test controls rather than a
     // timer, so the assertions land deterministically inside it rather than
     // racing it.
-    test('a create control cannot post before the book in scope is known', async () => {
+    //
+    // This is the one place both create controls are checked together on
+    // purpose: TopBar draws both off the single `isResolving` Thoughts.js
+    // holds (see the prop it passes down), so this is one fact proven at two
+    // buttons, not two facts that happen to agree today.
+    test('the create controls wait for the book in scope, then unlock', async () => {
         let releaseLocation;
         const locationGate = new Promise(resolve => { releaseLocation = resolve; });
 
@@ -447,25 +452,20 @@ describe('scoping the page to one book', () => {
             );
         });
 
-        // Still resolving: the control must not invite a press that cannot
+        // Still resolving: neither control may invite a press that cannot
         // succeed, the same way the rest of the page is already saying
         // "Loading your thoughts…" in this window.
-        const topicButton = screen.getByRole('button', { name: '+ Topic' });
-        expect(topicButton).toBeDisabled();
+        expect(screen.getByRole('button', { name: '+ Topic' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: '+ Idea' })).toBeDisabled();
 
-        // A disabled button does not dispatch a click at all — this is the
-        // same guarantee the browser gives, not a mock standing in for it —
-        // so this is the create genuinely being unreachable, not merely
-        // unclicked.
-        fireEvent.click(topicButton);
-        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-        // Let the seed resolve so the test does not leave a request hanging.
+        // Let the seed resolve.
         await act(async () => {
             releaseLocation();
             await locationGate;
         });
 
-        expect(requests.some(r => r.method === 'POST' && r.url.endsWith('/topics'))).toBe(false);
+        // The scope is known now, and the controls say so.
+        expect(await screen.findByRole('button', { name: '+ Topic' })).toBeEnabled();
+        expect(screen.getByRole('button', { name: '+ Idea' })).toBeEnabled();
     });
 });

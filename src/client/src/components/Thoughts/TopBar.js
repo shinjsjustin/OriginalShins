@@ -45,16 +45,24 @@ export const breadcrumbFor = (idea) => {
 
 /**
  * @param books         every book, from /api/books
- * @param bookId        the book in scope — null while useBookScope is still
- *                       seeding it, which is exactly when a create cannot
- *                       succeed (the server requires a bookId on both
- *                       POST /topics and POST /ideas)
+ * @param bookId        the book in scope
+ * @param isResolving   true while useBookScope is still seeding bookId — the
+ *                       same window Thoughts.js shows "Loading your
+ *                       thoughts…" in, and the window a create cannot
+ *                       succeed in (the server requires a bookId on both
+ *                       POST /topics and POST /ideas). Passed down rather
+ *                       than re-derived from `bookId === null` here, so
+ *                       there is exactly one place that decides what
+ *                       "unresolved" means — see linkRules.js's header for
+ *                       the same reasoning applied to a different pair of
+ *                       call sites that must not drift apart.
  * @param onChangeBook  (bookId) -> void
  * @param idea          the open idea, or null in the topics view
  */
 const TopBar = ({
     books = [],
     bookId = null,
+    isResolving = false,
     onChangeBook,
     idea = null,
     onResetView,
@@ -62,11 +70,6 @@ const TopBar = ({
     onCreateIdea,
 }) => {
     const crumb = breadcrumbFor(idea);
-    // Same null the canvas below is already showing "Loading your thoughts…"
-    // for (see Thoughts.js's isResolving) — a disabled create button here is
-    // consistent with what the rest of the page is already saying, rather
-    // than inviting a press the server is guaranteed to 400.
-    const isScopeUnresolved = bookId === null;
 
     return (
         <header className="thoughts-topbar">
@@ -84,7 +87,7 @@ const TopBar = ({
                         type="button"
                         className="thoughts-action"
                         onClick={onCreateTopic}
-                        disabled={isScopeUnresolved}
+                        disabled={isResolving}
                     >
                         + Topic
                     </button>
@@ -92,7 +95,7 @@ const TopBar = ({
                         type="button"
                         className="thoughts-action"
                         onClick={onCreateIdea}
-                        disabled={isScopeUnresolved}
+                        disabled={isResolving}
                     >
                         + Idea
                     </button>
