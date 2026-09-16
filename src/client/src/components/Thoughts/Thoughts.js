@@ -223,17 +223,21 @@ const Thoughts = () => {
     const actionError = dataActionError || pinsActionError || scopeError;
 
     // The same check BookTitle makes before it will print a name: a `null`
-    // here means the canon has not arrived yet (or named a book that is not
-    // in it), and 'this book' below is a belt-and-braces default for the
-    // string, never something the empty-book message is allowed to show —
-    // see `showEmptyMessage`.
+    // here means the canon has not arrived yet, or named a book that is not in
+    // it. Nothing on this page spells a book until this is non-null.
     const book = books.find(candidate => candidate.id === bookId) || null;
-    const bookName = book ? book.name : 'this book';
 
     const isReady = !isResolving && !isLoading && !error;
     const showTopicsView = isReady && ideaId === null;
-    const showEmptyMessage = showTopicsView && book !== null
-        && topics.length === 0 && ideas.length === 0;
+
+    // Handed to the field rather than drawn beside it: the field already says
+    // when it is empty, and a second message saying the same thing one line
+    // lower is the page disagreeing with itself about whose job that is. It
+    // falls back to the field's own wording until the canon has arrived, for
+    // the reason BookTitle draws nothing then — `this book` is not a name.
+    const emptyMessage = book === null
+        ? undefined
+        : `No topics in ${book.name} yet. Press + Topic to start one.`;
 
     return (
         <div className="thoughts-page">
@@ -278,18 +282,13 @@ const Thoughts = () => {
                             <TopicIdeaField
                                 topics={topics}
                                 ideas={ideas}
+                                emptyMessage={emptyMessage}
                                 onSelectIdea={showIdea}
                                 isPinned={isPinned}
                                 onTogglePin={togglePin}
                                 passagesByTopicId={passagesByTopicId}
                                 onTopicOpen={loadPassagesFor}
                             />
-                        )}
-
-                        {showEmptyMessage && (
-                            <p className="thoughts-message">
-                                No topics in {bookName} yet. Press + Topic to start one.
-                            </p>
                         )}
 
                         {/* Outside the guards above on purpose: an orbit that

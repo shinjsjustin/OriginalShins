@@ -78,19 +78,32 @@
   gap: var(--space-sm);
 }
 
+/* A grid item stretches to fill its track unless told otherwise, and the outer
+   two tracks are `1fr` — so without these the Reset View button would be drawn
+   as a bar the full width of its column. Each side is pinned to the edge it
+   belongs against, which is what the old flex row's space-between did. */
+.thoughts-topbar-row > .thoughts-action {
+  justify-self: start;
+}
+
 .thoughts-topbar-creates {
   display: flex;
   gap: var(--space-sm);
   justify-self: end;
 }
 
-/* The same palette as `.thoughts-action` beside it — paper tokens, not ground
-   ones. The title is a peer of the two buttons in this row, and a control that
-   took a different palette would read as belonging to something else. It is
-   transparent at rest because it is a title first and a button second. */
+/* Transparent at rest, because it is a title first and a button second — and
+   that is exactly why it cannot borrow `.thoughts-action`'s colour. That button
+   paints its own paper background, so paper's dark ink reads on it. This one
+   paints nothing, so it sits on the chrome and takes the chrome's own
+   foreground, `--on-ground`. Dark ink over `--bg-dark` is the same colour twice
+   and the title disappears.
+
+   On hover it does paint paper, so it takes paper's ink for as long as it has
+   paper under it — the two always change together. */
 .thoughts-book-title {
   background: none;
-  color: var(--text-primary);
+  color: var(--on-ground);
   font-size: var(--font-lg);
   font-weight: 600;
   padding: var(--space-xs) var(--space-sm);
@@ -100,6 +113,7 @@
 
 .thoughts-book-title:hover {
   background-color: var(--bg-card);
+  color: var(--text-primary);
 }
 
 /* The overlay's surface is edge-to-edge and transparent by design, so the grid
