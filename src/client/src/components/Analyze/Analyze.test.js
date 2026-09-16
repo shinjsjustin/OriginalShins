@@ -328,7 +328,7 @@ const handleRequest = (url, options = {}) => {
 
     if (url.endsWith('/ideas') && method === 'POST') {
         // The server's fallback: an absent title becomes the default.
-        const idea = addIdea(body.title === undefined ? 'Untitled idea' : body.title);
+        const idea = addIdea(body.title === undefined ? 'Untitled idea' : body.title, body.bookId);
         store.ideas = store.ideas.map(item => (
             item.id === idea.id ? { ...item, body: body.body || '' } : item
         ));
@@ -849,7 +849,7 @@ describe('Notes panel', () => {
         // Assert — an idea, not a note, and no reference anywhere near it.
         const created = requestsMatching(r => r.method === 'POST' && r.url.endsWith('/ideas'));
         expect(created).toHaveLength(1);
-        expect(created[0].body).toEqual({ title: 'Covenant', body: 'A thread.' });
+        expect(created[0].body).toEqual({ title: 'Covenant', body: 'A thread.', bookId: 1 });
         expect(requestsMatching(r => r.method === 'POST' && r.url.endsWith('/notes'))).toHaveLength(0);
 
         // ...and it appears in the panel, having produced no highlight.
@@ -879,6 +879,18 @@ describe('Notes panel', () => {
 
         expect(requestsMatching(r => r.method === 'POST')).toHaveLength(0);
         expect(within(panel('Notes')).getByRole('button', { name: '+ New idea' })).toBeInTheDocument();
+    });
+
+    test('an idea composed while reading Matthew is a Matthew idea', async () => {
+        await renderAnalyze('/analyze?l=40.1');
+
+        fireEvent.click(await screen.findByRole('button', { name: '+ New idea' }));
+        fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'The narrow gate' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save idea' }));
+
+        await waitFor(() => expect(
+            requests.some(r => r.method === 'POST' && r.url.endsWith('/ideas') && r.body.bookId === 40)
+        ).toBe(true));
     });
 
     test('an idea the reader owns is not listed until this chapter holds it', async () => {

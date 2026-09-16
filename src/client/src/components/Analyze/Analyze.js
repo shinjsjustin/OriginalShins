@@ -230,19 +230,20 @@ const Analyze = () => {
         }
     }, [notes, retain]);
 
-    // A new idea starts in the chapter it was started in. "+ New idea" sits in
-    // this panel, beside this passage, which says the idea belongs here as
-    // plainly as importing one does — and without the second call the button's
-    // whole result would disappear the moment it succeeded, into a corpus this
-    // panel no longer lists. The idea is created either way: a failed import
-    // costs the shortlist an entry, not the reader their idea.
+    // A new idea starts in the book and chapter it was started in. "+ New
+    // idea" sits in this panel, beside this passage, which says the idea
+    // belongs here as plainly as importing one does — and without the second
+    // call the button's whole result would disappear the moment it succeeded,
+    // into a corpus this panel no longer lists. The idea is created either
+    // way: a failed import costs the shortlist an entry, not the reader their
+    // idea.
     const handleCreateIdea = useCallback(async (body) => {
-        const created = await createIdea(body);
+        const created = await createIdea({ ...body, bookId: primary.bookId });
         if (created) {
             await importIdea(created.id);
         }
         return created;
-    }, [createIdea, importIdea]);
+    }, [createIdea, importIdea, primary.bookId]);
 
     const handleDeleteNote = useCallback(async (noteId) => {
         const removed = await notes.removeNote(noteId);
