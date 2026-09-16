@@ -35,9 +35,11 @@ const IDEAS = [
 ];
 
 // What the fetch fake serves for this book. Reset before each test and
-// overridable per test — see renderPicker's `topics`/`ideas` overrides.
+// overridable per test — see renderPicker's `topics`/`ideas`/`failTopics`
+// overrides.
 let topicsFixture;
 let ideasFixture;
+let topicsFail;
 
 const jsonResponse = (body) => Promise.resolve({
     ok: true,
@@ -45,8 +47,14 @@ const jsonResponse = (body) => Promise.resolve({
     json: () => Promise.resolve(body),
 });
 
+const serverError = () => Promise.resolve({
+    ok: false,
+    status: 500,
+    json: () => Promise.resolve({}),
+});
+
 const handleRequest = (url) => {
-    if (url.includes('/topics')) return jsonResponse({ topics: topicsFixture });
+    if (url.includes('/topics')) return topicsFail ? serverError() : jsonResponse({ topics: topicsFixture });
     if (url.includes('/ideas')) return jsonResponse({ ideas: ideasFixture });
     return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
 };
@@ -54,16 +62,19 @@ const handleRequest = (url) => {
 beforeEach(() => {
     topicsFixture = TOPICS;
     ideasFixture = IDEAS;
+    topicsFail = false;
     global.fetch = jest.fn(handleRequest);
 });
 
-// `topics`/`ideas` configure the fetch fake's response for this render; every
-// other override is a prop on ImportPicker itself. Async because the corpus
-// arrives over the fake fetch — see Analyze.test.js's `mount` for why an
-// async act is what lets that first response land before the test proceeds.
-const renderPicker = async ({ topics, ideas, ...props } = {}) => {
+// `topics`/`ideas` configure the fetch fake's response for this render;
+// `failTopics` makes the topics read 500 instead. Every other override is a
+// prop on ImportPicker itself. Async because the corpus arrives over the fake
+// fetch — see Analyze.test.js's `mount` for why an async act is what lets
+// that first response land before the test proceeds.
+const renderPicker = async ({ topics, ideas, failTopics, ...props } = {}) => {
     if (topics) topicsFixture = topics;
     if (ideas) ideasFixture = ideas;
+    if (failTopics) topicsFail = true;
 
     const onImport = jest.fn();
     const onClose = jest.fn();
@@ -244,5 +255,19 @@ describe('ImportPicker', () => {
 
         const dialog = screen.getByRole('dialog', { name: 'Import into this note' });
         expect(within(dialog).getByRole('button', { name: 'Import' })).toBeInTheDocument();
+    });
+
+    test('a failed corpus read is reported, not shown as an empty book', async () => {
+        // An empty field and a failed one read identically to TopicIdeaField —
+        // both are just nothing on the canvas. A reader whose read failed must
+        // be told, or they will conclude the book is empty and go make a
+        // duplicate topic. See useImportCorpus's error.
+        await renderPicker({ failTopics: true });
+
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        // Not the empty-book prompt, and no cards — the field itself never
+        // drew, rather than drawing and finding nothing to show.
+        expect(screen.queryByText('Sabbath', { selector: '.thoughts-bubble-title' })).toBeNull();
+        expect(importButton()).toBeDisabled();
     });
 });

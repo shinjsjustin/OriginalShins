@@ -16,13 +16,22 @@ import BookGrid from '../Books/BookGrid';
 // It draws nothing while the canon is still loading. A title naming a book
 // nobody has seen would be a claim about a row that has not arrived, and the
 // same rule TopBar's breadcrumb follows for an idea still in flight.
+//
+// `noun` exists because this title is no longer only Thoughts'. ImportPicker
+// (see components/Bubbles/ImportPicker.js) puts the same title block over a
+// field that is not always topics — a chapter's importer picks ideas only,
+// and "Matthew Topics" would misname a picker whose sole purpose there is
+// choosing an idea. The default is "Topics" so this page's own call is
+// unchanged.
 
 /**
  * @param books     every book, from /api/books
  * @param bookId    the book in scope
  * @param onChange  (bookId) -> void
+ * @param noun      the word after the book's name — what this button's field
+ *                  actually holds. Defaults to "Topics", this page's own.
  */
-const BookTitle = ({ books, bookId, onChange }) => {
+const BookTitle = ({ books, bookId, onChange, noun = 'Topics' }) => {
     const [isPicking, setIsPicking] = useState(false);
 
     const book = books.find(item => item.id === bookId) || null;
@@ -43,7 +52,7 @@ const BookTitle = ({ books, bookId, onChange }) => {
                 className="thoughts-book-title"
                 onClick={() => setIsPicking(true)}
             >
-                {book.name} Topics
+                {book.name} {noun}
             </button>
 
             {isPicking && (

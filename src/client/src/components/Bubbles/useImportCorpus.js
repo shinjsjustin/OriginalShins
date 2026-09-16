@@ -13,7 +13,10 @@ import useCollection from '../Analyze/useCollection';
 //
 // Built on useCollection for the fetch-and-revision plumbing, and the scope
 // rides in the `path` it is keyed on — so changing book IS the refetch, with
-// no second effect to keep in step.
+// no second effect to keep in step. useCollection aborts the in-flight
+// request whenever `path` changes, so a reader clicking through several books
+// quickly cannot have an earlier book's slower response land after a later
+// one's — there is no stale-response race to guard against here.
 const useImportCorpus = (bookId) => {
     const topics = useCollection(`/topics?book=${bookId}`, 'topics');
     const ideas = useCollection(`/ideas?book=${bookId}`, 'ideas');

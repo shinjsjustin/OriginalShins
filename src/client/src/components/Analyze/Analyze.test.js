@@ -2357,7 +2357,9 @@ describe('The import picker\'s own book scope', () => {
 
         fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
 
-        expect(await screen.findByRole('button', { name: /Matthew Topics/ })).toBeInTheDocument();
+        // The chapter importer only ever picks ideas, so the title reads
+        // "Matthew Ideas" here — see ImportPicker's titleNoun.
+        expect(await screen.findByRole('button', { name: /Matthew Ideas/ })).toBeInTheDocument();
         const reads = requests.filter(r => r.method === 'GET' && /\/topics/.test(r.url));
         expect(reads[reads.length - 1].url).toContain('book=40');
     });
@@ -2368,7 +2370,7 @@ describe('The import picker\'s own book scope', () => {
         await renderAnalyze('/analyze?l=40.1');
 
         fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
-        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Ideas/ }));
         fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
 
         await waitFor(() => expect(
@@ -2382,9 +2384,9 @@ describe('The import picker\'s own book scope', () => {
         await renderAnalyze('/analyze?l=40.1');
 
         fireEvent.click(await screen.findByRole('button', { name: 'Import idea' }));
-        fireEvent.click(await screen.findByRole('button', { name: /Matthew Topics/ }));
+        fireEvent.click(await screen.findByRole('button', { name: /Matthew Ideas/ }));
         fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
-        await screen.findByRole('button', { name: /Mark Topics/ });
+        await screen.findByRole('button', { name: /Mark Ideas/ });
 
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
         fireEvent.click(screen.getByRole('button', { name: 'Import idea' }));
@@ -2392,7 +2394,7 @@ describe('The import picker\'s own book scope', () => {
         // The common case is filing into the book you are reading. An overlay that
         // remembered a one-off excursion into Mark would quietly file the next
         // note wrong.
-        expect(await screen.findByRole('button', { name: /Matthew Topics/ })).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /Matthew Ideas/ })).toBeInTheDocument();
     });
 
     test('a note anchored in Matthew can be filed under a Mark topic', async () => {
