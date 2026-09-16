@@ -368,7 +368,6 @@ const Analyze = () => {
                             collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
                             notes={notes.notes}
                             unreferenced={notes.unreferenced}
-                            ideas={ideas}
                             chapterIdeas={chapterIdeaList}
                             importedIdeaIds={importedIdeas.map(idea => idea.id)}
                             isLoading={notes.isLoading}

@@ -35,7 +35,6 @@ const NotesPanel = ({
     collapse = null,
     notes,
     unreferenced,
-    ideas,
     chapterIdeas,
     importedIdeaIds,
     isLoading,
