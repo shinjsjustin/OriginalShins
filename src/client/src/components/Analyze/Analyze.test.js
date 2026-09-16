@@ -256,6 +256,14 @@ const jsonResponse = (body, status = 200) => Promise.resolve({
 
 const noContent = () => Promise.resolve({ ok: true, status: 204, json: () => Promise.resolve(null) });
 const notFound = () => Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+const badRequest = (error) => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({ error }) });
+
+// Mirrors src/lib/ideaInput.js#parseBookId (and the identical rule in
+// topicInput.js): a book id is required and must be 1-66. Only the HTTP
+// handler enforces this — addIdea/addTopic below are fixtures that seed the
+// store directly and keep their own book-40 default for tests that do not
+// care which book they land in.
+const isValidBookId = (value) => Number.isInteger(value) && value >= 1 && value <= 66;
 
 // Matches with or without the scope, and applies it when it is there — so a
 // test asserting that the page asked for one book is asserting against a
@@ -327,6 +335,12 @@ const handleRequest = (url, options = {}) => {
     }
 
     if (url.endsWith('/ideas') && method === 'POST') {
+        // Required, not defaulted — matching the real server, which refuses to
+        // guess which book a caller meant.
+        if (!isValidBookId(body.bookId)) {
+            return badRequest('bookId must be a book id between 1 and 66');
+        }
+
         // The server's fallback: an absent title becomes the default.
         const idea = addIdea(body.title === undefined ? 'Untitled idea' : body.title, body.bookId);
         store.ideas = store.ideas.map(item => (
