@@ -45,7 +45,10 @@ export const breadcrumbFor = (idea) => {
 
 /**
  * @param books         every book, from /api/books
- * @param bookId        the book in scope
+ * @param bookId        the book in scope — null while useBookScope is still
+ *                       seeding it, which is exactly when a create cannot
+ *                       succeed (the server requires a bookId on both
+ *                       POST /topics and POST /ideas)
  * @param onChangeBook  (bookId) -> void
  * @param idea          the open idea, or null in the topics view
  */
@@ -59,6 +62,11 @@ const TopBar = ({
     onCreateIdea,
 }) => {
     const crumb = breadcrumbFor(idea);
+    // Same null the canvas below is already showing "Loading your thoughts…"
+    // for (see Thoughts.js's isResolving) — a disabled create button here is
+    // consistent with what the rest of the page is already saying, rather
+    // than inviting a press the server is guaranteed to 400.
+    const isScopeUnresolved = bookId === null;
 
     return (
         <header className="thoughts-topbar">
@@ -72,10 +80,20 @@ const TopBar = ({
                 <BookTitle books={books} bookId={bookId} onChange={onChangeBook} />
 
                 <div className="thoughts-topbar-creates">
-                    <button type="button" className="thoughts-action" onClick={onCreateTopic}>
+                    <button
+                        type="button"
+                        className="thoughts-action"
+                        onClick={onCreateTopic}
+                        disabled={isScopeUnresolved}
+                    >
                         + Topic
                     </button>
-                    <button type="button" className="thoughts-action" onClick={onCreateIdea}>
+                    <button
+                        type="button"
+                        className="thoughts-action"
+                        onClick={onCreateIdea}
+                        disabled={isScopeUnresolved}
+                    >
                         + Idea
                     </button>
                 </div>

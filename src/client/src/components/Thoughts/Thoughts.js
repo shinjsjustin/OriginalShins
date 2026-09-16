@@ -87,6 +87,8 @@ const Thoughts = () => {
     const { bookId, isResolving, showBook } = useBookScope(ideaId);
     // Which create form is open: 'topic', 'idea', or nothing.
     const [creatingKind, setCreatingKind] = useState(null);
+    // Set only by createAndPin's own belt-and-braces guard below — see there.
+    const [scopeError, setScopeError] = useState('');
     const {
         topics,
         ideas,
@@ -132,6 +134,19 @@ const Thoughts = () => {
     // `togglePin` is a toggle in name only here: an id the server has just
     // minted cannot already be in the pinned list.
     const createAndPin = useCallback(async (fields) => {
+        // Belt-and-braces: TopBar already disables + Topic and + Idea while
+        // the scope is unresolved (bookId is null only in that window — see
+        // useBookScope), so this should be unreachable from the UI. A future
+        // caller that reaches here anyway must not post a create the server
+        // is guaranteed to 400 on — and must not fail without a trace either,
+        // so this reports through the same banner a failed write already
+        // uses rather than swallowing the attempt.
+        if (bookId === null) {
+            setScopeError("Still finding which book you're in. Please try again in a moment.");
+            return null;
+        }
+
+        setScopeError('');
         const create = creatingKind === 'topic' ? createTopic : createIdea;
         // The scope, not a field on the form. The title block above the modal
         // already says which book this is, and a second control saying the
@@ -143,7 +158,7 @@ const Thoughts = () => {
         await togglePin(creatingKind, created.id, TITLE_OF[creatingKind](created));
 
         return created;
-    }, [creatingKind, createTopic, createIdea, togglePin, bookId]);
+    }, [bookId, creatingKind, createTopic, createIdea, togglePin]);
 
     const saveItem = useCallback((pin, changes) => {
         if (pin.itemType === 'topic') return updateTopic(pin.itemId, changes);
@@ -190,7 +205,7 @@ const Thoughts = () => {
     }, [clearPins, showBook]);
 
     const error = loadError || pinsError;
-    const actionError = dataActionError || pinsActionError;
+    const actionError = dataActionError || pinsActionError || scopeError;
 
     // The same check BookTitle makes before it will print a name: a `null`
     // here means the canon has not arrived yet (or named a book that is not

@@ -419,4 +419,53 @@ describe('scoping the page to one book', () => {
             requests.some(r => r.method === 'POST' && r.url.endsWith('/ideas') && r.body.bookId === 41)
         ).toBe(true));
     });
+
+    // A bare /thoughts has no `?book=` and no `?idea=`, so useBookScope must
+    // read the saved location before bookId is known — see the "nothing is
+    // fetched before the scope is settled" test above. That gap is exactly
+    // the window a reader could otherwise press + Topic in and post a create
+    // with no bookId, which the real server 400s on. This holds the page in
+    // that window on purpose, with a promise this test controls rather than a
+    // timer, so the assertions land deterministically inside it rather than
+    // racing it.
+    test('a create control cannot post before the book in scope is known', async () => {
+        let releaseLocation;
+        const locationGate = new Promise(resolve => { releaseLocation = resolve; });
+
+        global.fetch = jest.fn((url, options = {}) => {
+            const isLocationRead = url.endsWith('/user/location') && (options.method || 'GET') === 'GET';
+            return isLocationRead
+                ? locationGate.then(() => handleRequest(url, options))
+                : handleRequest(url, options);
+        });
+
+        await act(async () => {
+            render(
+                <MemoryRouter initialEntries={['/thoughts']}>
+                    <Thoughts />
+                </MemoryRouter>
+            );
+        });
+
+        // Still resolving: the control must not invite a press that cannot
+        // succeed, the same way the rest of the page is already saying
+        // "Loading your thoughts…" in this window.
+        const topicButton = screen.getByRole('button', { name: '+ Topic' });
+        expect(topicButton).toBeDisabled();
+
+        // A disabled button does not dispatch a click at all — this is the
+        // same guarantee the browser gives, not a mock standing in for it —
+        // so this is the create genuinely being unreachable, not merely
+        // unclicked.
+        fireEvent.click(topicButton);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+        // Let the seed resolve so the test does not leave a request hanging.
+        await act(async () => {
+            releaseLocation();
+            await locationGate;
+        });
+
+        expect(requests.some(r => r.method === 'POST' && r.url.endsWith('/topics'))).toBe(false);
+    });
 });
