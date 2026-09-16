@@ -52,10 +52,11 @@ const Analyze = () => {
     const { primary, compare, setPrimary, setCompare } = usePanelPositions(books, isRestoring);
     const notes = useNotes(primary);
 
-    // The ideas a note can be filed under, and the standalone ideas the notes
-    // panel lists. Loaded once for the page rather than per note: the editor
-    // opens on whichever note you click, and a picker that fetched its options
-    // on open would show an empty list for a moment every time.
+    // The whole corpus of ideas, unscoped, and the composer that adds one.
+    // Its one reader is the chapter shortlist below, which needs every book's
+    // ideas and not this chapter's: an idea imported into a chapter may have
+    // been written while reading another one. The note editor no longer takes
+    // this list — its picker asks for the book it is opened on, when it opens.
     const { ideas, createIdea } = useIdeas();
 
     // The shortlist for the chapter the primary panel is showing. It takes

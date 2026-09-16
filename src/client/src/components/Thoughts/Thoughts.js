@@ -239,6 +239,38 @@ const Thoughts = () => {
         ? undefined
         : `No topics in ${book.name} yet. Press + Topic to start one.`;
 
+    // ── The panel may only ever hold what the canvas is showing ────────────
+    //
+    // changeBook clears the pinned set, but that only covers a book changed
+    // ON this page. Pins are per-user and carry no book of their own — see
+    // findPins in src/lib/pins.js, which returns every pin across every book —
+    // so a topic pinned in Matthew is still on the server when the reader next
+    // ENTERS Thoughts in Mark, whether by a `?book=` link, an `?idea=` that
+    // adopts its own book, or the seed from the saved location. Left in the
+    // panel it is selectable beside a Mark idea, and Link would file that idea
+    // under a topic Mark's field does not draw: the idea then hangs off a topic
+    // on no canvas at all, and this page can no longer undo it.
+    //
+    // Filtered rather than cleared on entry, and one rule rather than a second
+    // clearing path beside changeBook's. Clearing would need to know which book
+    // yesterday's pins were placed in, which nothing records, and clearing
+    // unconditionally would throw a pinned set away on a plain reload. The
+    // page's own scoped lists already say which items are in this book, so the
+    // scope is read off them — the same arrays the canvas draws, which is what
+    // makes the panel and the canvas agree by construction rather than by
+    // agreement. The pins themselves are left alone: come back to that book and
+    // they are still there.
+    //
+    // A note passes through whatever the scope is. A note has no book by
+    // design — its book is its anchor — and filing one under another book's
+    // topic is a thing this app deliberately offers.
+    const pinsInBook = pins.filter(pin => {
+        if (pin.itemType === 'note') return true;
+
+        const inBook = pin.itemType === 'topic' ? topics : ideas;
+        return inBook.some(item => item.id === pin.itemId);
+    });
+
     return (
         <div className="thoughts-page">
             <Navbar />
@@ -307,7 +339,7 @@ const Thoughts = () => {
                     {/* Slot two: the pinned panel — the page's editing surface,
                         and the only place an item can be changed. */}
                     <PinnedPanel
-                        pins={pins}
+                        pins={pinsInBook}
                         isLoading={arePinsLoading}
                         onUnpin={unpinMany}
                         onClear={clearPins}

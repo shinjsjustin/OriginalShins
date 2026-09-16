@@ -391,6 +391,43 @@ describe('scoping the page to one book', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent(/server ran into a problem/i);
     });
 
+    // ─── The panel holds this book's pins, and only this book's ────────────
+    //
+    // changeBook clears the set, but only for a book changed on the page.
+    // Pins are per-user and carry no book, so a topic pinned while reading
+    // Matthew is still on the server when the reader next ENTERS Thoughts in
+    // Mark. Left in the panel it is selectable beside a Mark idea, and Link
+    // would file that idea under a topic Mark's field does not draw — the idea
+    // would then hang off a topic on no canvas at all, with no way to undo it
+    // from this page.
+    test('a pin from another book is not in the panel when the page opens in this one', async () => {
+        // Arrange — pinned while reading Matthew; the reader is now in Mark.
+        const matthewTopic = addTopic({ name: 'Faith', bookId: 40 });
+        addIdea({ title: 'Mustard seed', bookId: 41 });
+        store.pins = [{ itemType: 'topic', itemId: matthewTopic.id }];
+
+        // Act
+        await renderThoughts('/thoughts?book=41');
+
+        // Assert
+        expect(screen.getByRole('heading', { name: 'Pinned (0)' })).toBeInTheDocument();
+        expect(within(panel()).queryByText('Faith')).not.toBeInTheDocument();
+    });
+
+    // The other half of the rule above: the filter scopes the panel rather
+    // than emptying it, and a pin is still there when the reader comes back
+    // to the book it was placed in — nothing was deleted behind their back.
+    test('a pin from this book is in the panel, and still there on return', async () => {
+        const matthewTopic = addTopic({ name: 'Faith', bookId: 40 });
+        store.pins = [{ itemType: 'topic', itemId: matthewTopic.id }];
+
+        await renderThoughts('/thoughts?book=40');
+
+        expect(screen.getByRole('heading', { name: 'Pinned (1)' })).toBeInTheDocument();
+        expect(within(panel()).getByText('Faith')).toBeInTheDocument();
+        expect(store.pins).toHaveLength(1);
+    });
+
     test('a topic created here belongs to the book in scope', async () => {
         await renderThoughts('/thoughts?book=41');
 
