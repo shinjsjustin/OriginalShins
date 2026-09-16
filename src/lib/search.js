@@ -115,7 +115,7 @@ const searchTopics = async (userId, query) => {
     const [rows] = await db.execute(
         contentQuery({
             table: 'topics',
-            columns: 'id, name, slug, description',
+            columns: 'id, book_id, name, slug, description',
             titleColumn: 'name',
             bodyColumn: 'description',
         }),
@@ -124,6 +124,10 @@ const searchTopics = async (userId, query) => {
 
     return rows.map(row => ({
         id: row.id,
+        // What the result links to. Without it a Mark topic's row would land
+        // the reader on whatever book their scope happened to hold, with no
+        // sign of why the topic they clicked was not on it.
+        bookId: row.book_id,
         name: row.name,
         slug: row.slug,
         snippet: buildSnippet(row.description, query),

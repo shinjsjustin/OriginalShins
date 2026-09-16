@@ -104,12 +104,22 @@ describe('idea results', () => {
         // Act / Assert
         expect(groupNamed('ideas').linkOf(idea)).toBe('/thoughts?idea=7');
     });
+
+    test('an idea result needs no book — the page adopts the idea\'s own', () => {
+        const link = groupNamed('ideas').linkOf({ id: 7, title: 'Sower' });
+        expect(link).toBe('/thoughts?idea=7');
+    });
 });
 
 describe('topic results', () => {
     test('link to the topics view, where every topic is a card', () => {
         // A topic has no view of its own to open, so the link is the field.
         expect(groupNamed('topics').linkOf({ id: 3, name: 'Care' })).toBe('/thoughts');
+    });
+
+    test('a topic result links to the field that actually holds it', () => {
+        const link = groupNamed('topics').linkOf({ id: 3, name: 'Servanthood', bookId: 41 });
+        expect(link).toBe('/thoughts?book=41');
     });
 });
 

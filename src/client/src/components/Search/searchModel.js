@@ -58,8 +58,13 @@ export const GROUPS = Object.freeze([
         keyOf: (topic) => topic.id,
         // The topics view, where every topic is a card. A topic has no view of
         // its own to land on, so this is as close as a link gets — the reader
-        // arrives at the field with the name they searched for on it.
-        linkOf: () => thoughtsUrl(),
+        // arrives at the book whose field actually holds it, rather than
+        // whatever book their scope happened to be on. `bookId` defaults to
+        // null (not just left undefined) so a row that somehow arrives without
+        // one — a cached result from before this change, say — falls back to
+        // thoughtsUrl's own bare-path branch instead of producing a URL that
+        // literally reads "book=undefined".
+        linkOf: (topic) => thoughtsUrl(topic.bookId ?? null),
     },
     {
         key: 'scripture',
