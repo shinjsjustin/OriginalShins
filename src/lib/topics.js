@@ -8,6 +8,7 @@ const { withFirstReferences } = require('./references');
 
 const toTopic = (row, extras = {}) => ({
     id: row.id,
+    bookId: row.book_id,
     name: row.name,
     slug: row.slug,
     description: row.description,
@@ -26,9 +27,17 @@ const toTopic = (row, extras = {}) => ({
 // (it.idea_id, ni.note_id): a link row whose target failed the user_id check
 // leaves the joined row NULL and is therefore not counted, instead of inflating
 // a number nobody would think to question.
-const findTopics = async (userId) => {
+// `bookId` is the optional scope: null reads every book, which is what the
+// endpoint answers when no `?book=` is given. The predicate is built rather
+// than always present because a constant-true clause would defeat the
+// (user_id, book_id, sort_order, id) index for the unscoped read.
+const findTopics = async (userId, bookId = null) => {
+    const scope = bookId === null ? '' : ' AND t.book_id = ?';
+    const params = bookId === null ? [userId] : [userId, bookId];
+
     const [rows] = await db.execute(
-        `SELECT t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
+        `SELECT t.id, t.book_id, t.name, t.slug, t.description, t.sort_order,
+                t.created_at, t.updated_at,
                 COUNT(DISTINCT i.id) AS idea_count,
                 COUNT(DISTINCT n.id) AS note_count
          FROM topics t
@@ -36,10 +45,11 @@ const findTopics = async (userId) => {
          LEFT JOIN ideas i        ON i.id = it.idea_id AND i.user_id = t.user_id
          LEFT JOIN note_ideas ni  ON ni.idea_id = i.id
          LEFT JOIN notes n        ON n.id = ni.note_id AND n.user_id = t.user_id
-         WHERE t.user_id = ?
-         GROUP BY t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at
+         WHERE t.user_id = ?${scope}
+         GROUP BY t.id, t.book_id, t.name, t.slug, t.description, t.sort_order,
+                  t.created_at, t.updated_at
          ORDER BY t.sort_order, t.id`,
-        [userId]
+        params
     );
 
     return rows.map(row => toTopic(row, {
@@ -55,7 +65,7 @@ const findTopics = async (userId) => {
 // chain, because for a single row there is no fan-out to collapse.
 const findTopicById = async (userId, topicId) => {
     const [rows] = await db.execute(
-        `SELECT t.id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
+        `SELECT t.id, t.book_id, t.name, t.slug, t.description, t.sort_order, t.created_at, t.updated_at,
                 (SELECT COUNT(*)
                  FROM idea_topics it
                  JOIN ideas i ON i.id = it.idea_id AND i.user_id = t.user_id
@@ -177,15 +187,18 @@ const findNotesForTopics = async (userId, topicIds) => {
     })));
 };
 
-const insertTopic = async (userId, { name, slug, description }) => {
+const insertTopic = async (userId, { bookId, name, slug, description }) => {
+    // Scoped to (user, book), not to the user. Otherwise every new book would
+    // start its cards numbered after Matthew's, and a book's first topic would
+    // sort below topics it can never be shown beside.
     const [orderRows] = await db.execute(
-        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ?',
-        [userId]
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM topics WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
     );
 
     const [result] = await db.execute(
-        'INSERT INTO topics (user_id, name, slug, description, sort_order) VALUES (?, ?, ?, ?, ?)',
-        [userId, name, slug, description, Number(orderRows[0].next_order)]
+        'INSERT INTO topics (user_id, book_id, name, slug, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [userId, bookId, name, slug, description, Number(orderRows[0].next_order)]
     );
 
     return result.insertId;
@@ -251,23 +264,7 @@ const reorderTopics = async (connection, userId, topicIds) => {
     return { ordered: topicIds.length };
 };
 
-// Whether the user owns a topic, and nothing else about it.
-//
-// findTopicById answers this too, but it pays for two correlated count
-// subqueries to do it, and the caller here — the Overview page's ?topicId=
-// filter — needs no counts and asks on every request including the ones its
-// cache answers. So the cheapest possible form of the question gets its own
-// query rather than a count being computed and thrown away.
-const ownsTopic = async (userId, topicId) => {
-    const [rows] = await db.execute(
-        'SELECT id FROM topics WHERE id = ? AND user_id = ?',
-        [topicId, userId]
-    );
-
-    return rows.length > 0;
-};
-
-// UNIQUE (user_id, slug) is enforced by the database rather than by a read
+// UNIQUE (user_id, book_id, slug) is enforced by the database rather than by a read
 // followed by a write, which two concurrent requests could both pass. The
 // driver's error code is translated here so routes never match on a string.
 const isDuplicateSlugError = (err) => err && err.code === 'ER_DUP_ENTRY';
@@ -276,7 +273,6 @@ module.exports = {
     toTopic,
     findTopics,
     findTopicById,
-    ownsTopic,
     findTopicsForIdeas,
     findTopicsForNotes,
     findNotesForTopics,

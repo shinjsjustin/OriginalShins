@@ -46,7 +46,6 @@ const Navbar = () => {
                         {[
                             { path: '/analyze', label: 'Analyze' },
                             { path: '/search', label: 'Search' },
-                            { path: '/overview', label: 'Overview' },
                             { path: '/thoughts', label: 'Thoughts' },
                         ].map(link => (
                             <button

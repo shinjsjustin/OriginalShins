@@ -25,30 +25,33 @@ BibleApp/
     │       ├── 005_pins.sql        # pins: the Thoughts page's editable set
     │       ├── 006_reading_location.sql # where each reader left off
     │       ├── 007_chapter_ideas.sql# ideas filed against a chapter
-    │       └── 008_note_topics.sql # notes filed directly under a topic
+    │       ├── 008_note_topics.sql # notes filed directly under a topic
+    │       └── 009_topic_books.sql # topics + ideas gain book_id; slug unique per (user, book)
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
     │   ├── references.js           # note_references reads/writes; index resolution
     │   ├── notes.js                # notes reads/writes, all scoped by user_id
     │   ├── ideas.js                # ideas reads/writes + the cross-tier lookups
+    │   ├── ideaTopics.js           # Hydrates a list of ideas with their topics; the ideas/topics seam
     │   ├── topics.js               # topics reads/writes, list counts, both note_topics reads
+    │   ├── chapterIdeas.js         # chapter_ideas reads/writes: the ideas imported into one chapter
     │   ├── links.js                # note_ideas / idea_topics / note_topics: full-set replace
     │   ├── ordering.js             # sort_order + re-parenting (server-side only)
     │   ├── slug.js                 # Topic slug derivation + validation
     │   ├── textInput.js            # Shared body-validation primitives
     │   ├── noteInput.js            # Request-body validation for the notes API
     │   ├── ideaInput.js            # Request-body validation for the ideas API
+    │   ├── chapterIdeaInput.js     # Request-body validation for PUT /api/chapter-ideas
     │   ├── topicInput.js           # Request-body validation for the topics API
     │   ├── pinInput.js             # Request-body validation for the pins API
+    │   ├── locationInput.js        # Request-body validation for PUT /api/user/location
     │   ├── pins.js                 # pins reads/writes + the hydrating joins
+    │   ├── location.js             # Reads/writes the saved Analyze location on the admin row
     │   ├── searchInput.js          # The one query param /api/search takes
     │   ├── search.js               # The four search queries + their ranking rule
     │   ├── snippet.js              # Pure: the excerpt a result shows
-    │   ├── overviewInput.js        # The two query params /api/overview takes
-    │   ├── overviewQueries.js      # Its three reads: the same refs grouped three ways
-    │   ├── overview.js             # /api/overview's payload: anchors + labels per tier
-    │   └── overviewCache.js        # That payload, per topic scope, until a write voids it
+    │   └── passages.js             # The scripture text behind a note's anchors (Thoughts page only)
     ├── scripts/
     │   ├── import-scripture.js     # CLI: npm run import:scripture
     │   └── scripture/
@@ -58,8 +61,7 @@ BibleApp/
     │       ├── load-rows.js        # transactional clear-and-reload
     │       └── verify.js           # post-import count assertions
     ├── middleware/
-    │   ├── isAuth.js               # JWT Bearer token validator
-    │   └── invalidateOverview.js   # Drops the overview cache after any write
+    │   └── isAuth.js               # JWT Bearer token validator
     └── routes/
         ├── auth.js                 # POST /api/auth/register, /api/auth/login
         ├── user.js                 # GET  /api/user/me  (protected)
@@ -67,10 +69,10 @@ BibleApp/
         ├── chapter.js              # GET  /api/chapter/:bookId/:chapter
         ├── notes.js                # GET/POST/PATCH/DELETE /api/notes (+ one note, references, ideas, topics)
         ├── references.js           # DELETE /api/references/:id
-        ├── ideas.js                # CRUD /api/ideas + PUT /api/ideas/:id/topics
-        ├── topics.js               # CRUD /api/topics (list carries counts + direct notes; + passages)
+        ├── ideas.js                # CRUD /api/ideas (?book=, bookId required) + PUT /api/ideas/:id/topics
+        ├── chapterIdeas.js         # GET/PUT /api/chapter-ideas (one chapter's imported idea set)
+        ├── topics.js               # CRUD /api/topics (?book=, bookId required; list carries counts + direct notes)
         ├── search.js               # GET /api/search?q= (four groups)
-        ├── overview.js             # GET /api/overview?tiers=&topicId= (cached per scope)
         ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
         └── orderingErrors.js       # ordering results -> HTTP, shared by three routers
     └── client/                     # React app (Create React App)
@@ -95,6 +97,8 @@ BibleApp/
                 │   ├── Logout.js
                 │   ├── AccessDenied.js
                 │   └── PostRegisterPage.js
+                ├── Books/              # The 66-book grid, shared by two pages
+                │   └── BookGrid.js         # Split by testament; reports a book id and nothing more
                 ├── Analyze/            # The Analyze page: scripture + notes
                 │   ├── Analyze.js          # Page shell; owns cross-panel state only
                 │   ├── ScripturePanel.js   # One chapter + its footer (controlled)
@@ -103,44 +107,45 @@ BibleApp/
                 │   ├── PanelHeader.js      # Label, passage, and the collapse tab
                 │   ├── CollapseTab.js      # Pushes a side panel aside
                 │   ├── PanelSpine.js       # What a pushed-aside panel becomes
-                │   ├── SelectionActions.js # Add note / Clear selection, in the corner
+                │   ├── PendingSelectionTray.js # What's selected right now, across the canon
                 │   ├── NoteListItem.js     # One row of the notes list
                 │   ├── IdeaListItem.js     # One row of the ideas list
                 │   ├── IdeaComposer.js     # Inline capture for a standalone idea
                 │   ├── NoteEditor.js       # Read/edit one note + its references
+                │   ├── NoteFiling.js       # An open note's idea + topic membership, and the picker to change it
                 │   ├── PanelFooter.js      # ← | Book | Chapter | →
                 │   ├── BookPicker.js       # Modal grid of all 66 books
                 │   ├── ChapterPicker.js    # Modal grid of one book's chapters
                 │   ├── Modal.js            # Overlay shell (Escape / backdrop)
-                │   ├── MultiSelect.js      # Checkbox list; reports the COMPLETE set
                 │   ├── navigation.js       # Pure position + chapter-step helpers
                 │   ├── panelParams.js      # The names of the ?l= ?r= ?note= params
                 │   ├── analyzeUrl.js       # Pure: every link INTO this page
                 │   ├── highlights.js       # Pure: references -> per-verse tints
-                │   ├── verseSelection.js   # Pure: verse-index range -> reference
+                │   ├── pendingSelection.js # Pure: the reader's clicked-verse basket, across chapters
                 │   ├── selectionRuns.js    # Pure: clicked verses -> contiguous refs
+                │   ├── chapterIdeas.js     # Pure: which of the chapter's ideas to shortlist in the panel
+                │   ├── noteFilingSets.js   # Pure: add/remove one id from a note's idea or topic set
+                │   ├── savedLocation.js    # Pure: the saved-location payload <-> the page's query params
                 │   ├── markdown.js         # marked + DOMPurify; list excerpts
                 │   ├── useBooks.js         # Loads /api/books once
                 │   ├── usePanelPositions.js# Reads/writes ?l= (primary) and ?r=
                 │   ├── useNotes.js         # The chapter's notes + every write
                 │   ├── useCollection.js    # One list + its fetch/revision plumbing
                 │   ├── useIdeas.js         # /api/ideas + PUT :id/topics
+                │   ├── useChapterIdeas.js  # /api/chapter-ideas + its import/remove writes
                 │   ├── useActiveNote.js    # Which note the editor is showing
-                │   └── useSelectedVerses.js# The page's one verse selection
-                ├── Thoughts/           # /thoughts — the three tiers as one canvas
+                │   ├── useSelectedVerses.js# The page's one verse selection
+                │   └── useSavedLocation.js # Reads the saved location on arrival, writes it as the reader moves
+                ├── Thoughts/           # /thoughts — the three tiers as one canvas, scoped to one book
                 │   ├── Thoughts.js         # Page shell; owns which card is selected
                 │   ├── TopBar.js           # Reset View, the two Create buttons, the crumb
-                │   ├── TopicsField.js      # The topics view: a card per topic + unfiled
+                │   ├── BookTitle.js        # The clickable "${Book} Topics" title; the page's book control
                 │   ├── IdeaOrbit.js        # The idea view: one idea, its notes ringing it
-                │   ├── BubbleCard.js       # Every card on both views is this component
                 │   ├── PinnedPanel.js      # The right-docked panel: the page's only editor
                 │   ├── PinnedItem.js       # One pinned row, and the form it becomes
                 │   ├── CreateModal.js      # Make a topic or an idea, without leaving
                 │   ├── ConfirmButton.js    # Two-press Clear and Delete
-                │   ├── fieldLayout.js      # Pure: N topics + a canvas -> where each sits
-                │   ├── fanLayout.js        # Pure: a topic's ideas -> the fan they open on
                 │   ├── orbitLayout.js      # Pure: an idea's notes -> the ring they orbit
-                │   ├── cardGeometry.js     # Pure: the box sums both canvases share
                 │   ├── linkRules.js        # Pure: a pinned selection -> may it be linked
                 │   ├── slug.js             # Client half of the slug rule
                 │   ├── format.js           # "2 ideas", "0 notes"
@@ -148,50 +153,34 @@ BibleApp/
                 │   ├── useThoughtsView.js  # Reads/writes ?idea= — which view is showing
                 │   ├── useThoughtsData.js  # The three tiers + every write the canvas makes
                 │   ├── usePins.js          # /api/pins, optimistically
-                │   └── useCanvasSize.js    # The measured pixel size a layout is given
+                │   └── useBookScope.js     # Resolves the book in scope: ?book=, the open idea, saved location, or Genesis
+                ├── Bubbles/            # The field-of-bubbles UI shared by the topics view and the import picker
+                │   ├── BloomCluster.js     # One anchor card + the fan it opens on hover
+                │   ├── BubbleCard.js       # One card on the Thoughts canvas: topic, idea, note, or unfiled
+                │   ├── BubbleOverlay.js    # Full-screen shell a field of bubbles floats in (Escape / backdrop)
+                │   ├── ImportPicker.js     # Picking one topic or idea out of the field, with a confirm step
+                │   ├── TopicIdeaField.js   # The topics view: a card per topic + unfiled, each blooming its ideas
+                │   ├── cardGeometry.js     # Pure: the box sums both canvases share
+                │   ├── fanLayout.js        # Pure: a topic's ideas -> the fan they open on
+                │   ├── fieldLayout.js      # Pure: N topics + a canvas -> where each sits
+                │   ├── useBloom.js         # Which card is blooming — hover, lock, Esc — shared by both canvases
+                │   ├── useCanvasSize.js    # The measured pixel size a layout is given
+                │   ├── useImportCorpus.js  # The import picker's own book-scoped topics + ideas read
+                │   └── Bubbles.css         # The overlay shell + cluster geometry; cards styled by Thoughts.css
                 ├── Search/             # /search — one box across all four tiers
                 │   ├── SearchPage.js       # Page shell: the input and the states
                 │   ├── SearchGroup.js      # One heading + its rows, all links
-                │   ├── SearchNav.js        # Thoughts | Overview | Search | Analyze
+                │   ├── SearchNav.js        # Thoughts | Search | Analyze
                 │   ├── searchModel.js      # Pure: the groups and where a row goes
                 │   ├── useSearch.js        # Debounced query -> one request
                 │   └── useDebouncedValue.js# Generic: a value that has settled
-                ├── Overview/           # /overview — the whole canon on one axis
-                │   ├── Overview.js         # Page shell; owns the two fetches
-                │   ├── ScriptureAxis.js    # The axis: book and chapter ticks + labels
-                │   ├── TierRails.js        # The rails being shown, and their headings
-                │   ├── TierStems.js        # One stem per anchor, axis -> one rail
-                │   ├── TierArcs.js         # One chained path per group, on one rail
-                │   ├── TierToggles.js      # Which rails are drawn; writes the URL
-                │   ├── OverviewSearch.js   # The filter box: local text, debounced into ?q=
-                │   ├── ZoomBand.js         # The band a shift-drag pulls down the axis
-                │   ├── ArcTooltip.js       # What a hovered chain says: tier, title, refs
-                │   ├── TierDrawer.js       # One note/idea/topic, opened by its chain
-                │   ├── axisModel.js        # Pure: /api/books -> every mark, yForIndex/indexForY
-                │   ├── anchorPoints.js     # Pure: one tier -> validated points on the axis
-                │   ├── stemModel.js        # Pure: those points -> one stem each
-                │   ├── arcModel.js         # Pure: those points -> one chained path per group
-                │   ├── tierLabels.js       # Pure: a label tier -> tooltip text, nearest ref
-                │   ├── arcSearch.js        # Pure: a term -> which groups, on which rails
-                │   ├── tierDetail.js       # Pure: one endpoint's row -> what the drawer shows
-                │   ├── overviewLayout.js   # The 560 x 1000 world every coordinate is in
-                │   ├── overviewParams.js   # Pure: the ?tiers= / ?topicId= / ?q= contract
-                │   ├── viewport.js         # Pure: pan, zoom, zoom-to-range, the thresholds
-                │   ├── pointerCapture.js   # The two drags' shared, forgiving capture calls
-                │   ├── usePanZoom.js       # Writes the transform to the DOM, not to state
-                │   ├── useZoomRegion.js    # Shift-drag: the band, and the range it resolves to
-                │   ├── useArcInteraction.js# Delegated hover and click; highlight via the DOM
-                │   ├── useArcSearch.js     # Writes the search's marks onto the drawing
-                │   ├── useTierDetail.js    # Loads the one group the drawer opened
-                │   ├── useOverviewParams.js# Reads/writes ?tiers=, ?topicId= and ?q=
-                │   └── useOverviewData.js  # Loads /api/overview for the rails shown
                 └── Styling/
                     ├── Form.css        # Auth/form container styles
                     ├── Home.css        # Landing page + .industrial-button
                     ├── Navbar.css      # Profile icon + dropdown panel
-                    ├── Analyze.css     # Analyze page panels, footers, modals, multi-select
+                    ├── Books.css       # BookGrid's own rules, ported from Analyze.css's book-picker block
+                    ├── Analyze.css     # Analyze page panels, footers, modals
                     ├── Search.css      # Search page: the box, the nav, the result groups
-                    ├── Overview.css    # The axis, rails, stems, arcs, tooltip, drawer, counter-transforms
                     └── Thoughts.css    # The canvas, the cards, the fan and orbit, the pinned panel
 ```
 
@@ -266,7 +255,6 @@ Every verse carries a single monotonic integer, `verse_index`, running 1..N over
 the whole Bible in canonical order. It is computed **once at import time** and
 never at query time. It turns:
 
-- the Overview y-axis into a linear mapping, with no per-book math
 - reference overlap into an integer range comparison
   (`start_index <= :chapter_end AND end_index >= :chapter_start`)
 - canonical sorting into a plain `ORDER BY start_index`
@@ -290,6 +278,7 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/005_pins.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/006_reading_location.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/007_chapter_ideas.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/008_note_topics.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/009_topic_books.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
@@ -364,9 +353,9 @@ them as `PRIMARY_PARAM` and `COMPARE_PARAM`.
 A third param, `?note=<id>`, opens the editor on one note. Unlike `l` and `r` it
 is a one-shot instruction rather than state: nothing writes it back, and closing
 the editor does not reopen the note even though the param is still in the URL.
-It exists so another page can hand a note over — the Thoughts canvas, the search
-results and the Overview drawer all link to
-`/analyze?l=<book>.<chapter>&note=<id>`, the chapter of the note's first anchor.
+It exists so another page can hand a note over — the search results link to
+`/analyze?l=<book>.<chapter>&note=<id>`, the chapter of the note's first
+anchor, built by `Analyze/analyzeUrl.js`'s `analyzeUrlForNote`.
 A note with no anchor still opens, from the notes panel's `unreferenced` list,
 which is the same whatever chapter the panels show.
 
@@ -546,6 +535,15 @@ leaves a legal orphan. A parent that is not the caller's answers 404 (the same
 as one that never existed); a child id that is not answers 400 (the request
 named something real to someone else).
 
+`PUT /api/ideas/:id/topics` adds one rule the other two do not have: **an idea
+and a topic may only be linked within the same book**, answered 422 when they
+are not. `hasTopicOutsideIdeaBook` in `src/lib/ideaTopics.js` compares the two
+`book_id`s inside the same transaction that does the write. It lives there
+rather than in `links.js` because the other two specs link notes, and a note
+has no book. The Thoughts panel's per-book filter means the refusal is
+practically unreachable through the UI — but the panel drops that filter when
+the corpus cannot load, so the filter is the convenience and this is the rule.
+
 ### Scoping
 
 Neither link table carries a `user_id`, exactly as `note_references` does not.
@@ -560,12 +558,13 @@ directions from becoming a circular import.
 
 ### Slugs
 
-`topics.slug` is derived from the name and is unique per user
-(`UNIQUE (user_id, slug)`). The client derives it as you type (`Thoughts/slug.js`)
-and the server derives it again from what it receives (`src/lib/slug.js`) — the
-client's copy is a convenience for the form, never the authority. Uniqueness is
-enforced by the index and surfaced as a **409**, not by a read-then-write that
-two concurrent requests could both pass.
+`topics.slug` is derived from the name and is unique per user **per book**
+(`UNIQUE (user_id, book_id, slug)` — see [A topic and an idea belong to a
+book](#a-topic-and-an-idea-belong-to-a-book) for why). The client derives it as
+you type (`Thoughts/slug.js`) and the server derives it again from what it
+receives (`src/lib/slug.js`) — the client's copy is a convenience for the form,
+never the authority. Uniqueness is enforced by the index and surfaced as a
+**409**, not by a read-then-write that two concurrent requests could both pass.
 
 Renaming a topic does not silently re-slug it: a slug can already be in a saved
 URL, so changing it is an explicit act and the form sends both fields.
@@ -574,16 +573,29 @@ URL, so changing it is an explicit act and the form sends both fields.
 
 | Route | Does |
 |-------|------|
-| `GET /api/topics` | Every topic with `ideaCount` and `noteCount`. The note count walks topic → idea → note and counts DISTINCT notes, so a note reached through three of the topic's ideas counts once. |
+| `GET /api/topics?book=` | Every topic in that book with `ideaCount` and `noteCount`. The note count walks topic → idea → note and counts DISTINCT notes, so a note reached through three of the topic's ideas counts once. |
 | `GET /api/topics/:id` | The topic with the ideas filed under it, each carrying its `noteCount`. Notes are not nested — a topic's worth of notes would be fetched on every topic opened and displayed on almost none of them. The Thoughts page's pinned panel reads this endpoint for a pinned topic; the canvas itself never needs it, since `GET /api/topics` already carries the counts a card prints. |
-| `POST/PATCH/DELETE /api/topics(/:id)` | CRUD. Deleting a topic cascades its links and leaves its ideas as unfiled ideas. |
-| `GET /api/ideas` | Every idea with its topics and its `noteCount` — one payload serving the Thoughts canvas, which fans an idea out under the topic it names, and the note editor's multi-select. It is also where "unfiled" comes from: an idea whose `topics` is empty, computed on the client rather than asked for. |
+| `POST/PATCH/DELETE /api/topics(/:id)` | CRUD. `POST` requires a `bookId`. Deleting a topic cascades its links and leaves its ideas as unfiled ideas. |
+| `GET /api/ideas?book=` | Every idea in that book with its topics and its `noteCount` — one payload serving the Thoughts canvas, which fans an idea out under the topic it names. Called without the scope by Analyze's chapter shortlist, which resolves imported ideas across every book. It is also where "unfiled" comes from: an idea whose `topics` is empty, computed on the client rather than asked for. |
 | `GET /api/ideas/:id` | The idea with its linked topics *and* notes. The notes are compact rows — a title and `firstReference`, the one anchor a link into Analyze needs — with no bodies: a row here is a way to reach a note rather than a rendering of one. The idea view loads this to learn which notes orbit, in which order, then fetches each note for the body its card shows. |
-| `POST/PATCH/DELETE /api/ideas(/:id)` | CRUD. Deleting an idea cascades its links and leaves its notes as unfiled notes. |
+| `POST/PATCH/DELETE /api/ideas(/:id)` | CRUD. `POST` requires a `bookId`. Deleting an idea cascades its links and leaves its notes as unfiled notes. |
 
 Every note payload from `/api/notes` carries `ideas` alongside `references`, for
 the same reason it carries the full reference set: the editor shows both the
 moment it opens, and a partial payload would mean a second round trip.
+
+### A topic and an idea belong to a book
+
+Both list endpoints take an optional `?book=<bookId>`, restricting the answer
+to one book; a malformed value is a **400**, the same rule every other
+`bookId`/`chapter` param in this API follows. `POST` to either endpoint
+requires a `bookId` in the body — a topic or an idea always belongs to
+exactly one book now, and there is no account-wide tier above it to fall back
+to. Migration `009_topic_books.sql` is why: a topic's slug is unique per
+`(user_id, book_id)` rather than per `user_id` alone, so "faith" in Matthew
+and "faith" in Mark are two different topics with different ideas filed
+under them, and the first book a reader works through no longer claims the
+name for the other sixty-five.
 
 ### The pages
 
@@ -633,13 +645,75 @@ string:
 
 | URL | Shows |
 |-----|-------|
-| `/thoughts` | The topics view: one card per topic on a field, plus an unfiled card when there is anything unfiled |
+| `/thoughts` | The topics view: one card per topic in the book showing, plus an unfiled card when there is anything unfiled |
 | `/thoughts?idea=<id>` | The idea view: that idea enlarged at the centre, its notes ringing it |
 
 `Thoughts/thoughtsUrl.js` owns that contract and is what other pages import to
 link here, the same way `Analyze/analyzeUrl.js` owns links into Analyze. A topic
 has no param of its own because it has no view of its own — the field IS every
 topic — so a link to one topic can only be a link to the field.
+
+### One book at a time
+
+The page shows one book's topics, not the whole account's — a reader works
+through one book at a time, and the topics they want in front of them are
+that book's (see `db/migrations/009_topic_books.sql`). The title reads
+`${Book} Topics` and is also the control: `Thoughts/BookTitle.js` opens the
+same 66-book grid `/analyze` uses (`components/Books/BookGrid.js`, shared by
+both pickers) in this page's own `BubbleOverlay`, and picking a book writes
+`?book=`.
+
+`Thoughts/useBookScope.js` resolves which book that is, in priority order:
+`?book=` in the URL if one is there; failing that, the `bookId` of the idea
+`?idea=` names, when the page arrived already pointed at one; failing that,
+the reader's saved Analyze location; and Genesis for an account with neither.
+The last two are a request, so the page holds every fetch until
+`useBookScope` reports `isResolving: false` — fetching one book's topics and
+then immediately refetching a different book's is the failure this exists to
+avoid.
+
+An open idea outranks a `?book=` that disagrees with it. The two can arrive
+naming different books — a search result for an idea carries no `?book=`, and
+one failed read while seeding is enough to write the saved location's book
+beside it — and the field of a book an idea is not in cannot draw that idea, so
+the page would sit on an empty canvas saying nothing. `adoptIdeaBook` moves the
+scope to the idea's own book and keeps `?idea=`, unlike `showBook`, which drops
+it. The book comes from the payload `useThoughtsData` already reads for the
+idea's notes, so following the idea costs no extra request; an `?idea=` that
+does not resolve at all reports no book and still falls through to the error
+banner.
+
+Unlike `useThoughtsView`'s `showIdea`, `useBookScope`'s `showBook`
+**replaces** the history entry rather than pushing one. The scope is not
+somewhere the reader navigated to — every entry to the page writes a `?book=`
+of its own — so pushing would leave back stepping through book picks instead
+of leaving the page, with the picker itself one press away the whole time.
+
+Changing book deletes nothing. Pins carry no book of their own — `findPins`
+returns every pin the reader has, across every book — so the page filters
+instead: **the panel may only hold pins whose item is in the book the canvas is
+drawing.** Without it a topic pinned in Matthew would still be in the panel
+when the reader next *entered* Thoughts in Mark, selectable beside a Mark idea,
+and Link would file that idea under a topic Mark's field does not draw — an
+idea on no canvas at all. One rule covers every way into a book, the title
+block included, which is why nothing is cleared on a book change. Notes pass
+the filter whatever the scope is: a note has no book by design, and filing one
+under another book's topic is a thing the import picker deliberately offers.
+Nothing is deleted by the filter; return to that book and the pins are still
+there.
+
+If the corpus itself fails to load there is nothing to read the scope off, so
+the panel drops the filter, shows every pin the reader has, and says so in a
+line above the list. Hiding them behind a filter that can no longer answer
+would take away the page's only editing surface at the moment it is least
+recoverable.
+
+The panel's **Clear** is deliberately wider than that. It is
+`DELETE /api/pins/all` and unpins every book at once, because a book-scoped
+clear would mean a book-scoped pins API and widening `/api/pins` is a non-goal.
+The button says so — "Clear all books", asking "Unpin everything, in every
+book?" — and stays enabled while pins exist in books the reader is not looking
+at, since it can reach those too.
 
 ### Why the pinned panel is the only editing surface
 
@@ -652,26 +726,34 @@ appears. That is one rule with three consequences worth stating outright:
   touch — they would have to find it on the canvas and pin it by hand before
   they could write a word of it.
 - The panel is a working set, not a selection. It survives changing views, and
-  it is the same list in both, which is why `usePins` takes no arguments and
-  never reloads when the view changes.
+  `usePins` holds the same list in both, which is why it takes no arguments and
+  never reloads when the view changes. What the panel *shows* is that list
+  filtered to the book in scope — see "One book at a time" above.
 - Linking happens between pinned rows rather than on the cards. Two adjacent
   tiers in the panel, select them, press Link.
 
-### Three hooks, composed by the page
+### Four hooks, composed by the page
 
-`Thoughts.js` is a shell. It holds three hooks and joins them, and every piece
+`Thoughts.js` is a shell. It holds four hooks and joins them, and every piece
 below it reads state from there rather than fetching again:
 
 | Hook | Holds |
 |------|-------|
 | `useThoughtsView` | Which view is showing — reads and writes `?idea=` and nothing else |
-| `useThoughtsData` | The corpus: every topic, every idea, and the notes of whichever idea is open, plus every write the canvas and the panel can make |
+| `useBookScope` | Which book is showing — reads and writes `?book=`, seeding it when the URL names none (see [One book at a time](#one-book-at-a-time)) |
+| `useThoughtsData` | The corpus: that book's topics and ideas, and the notes of whichever idea is open, plus every write the canvas and the panel can make |
 | `usePins` | The pinned set |
 
-`useThoughtsData` takes the open idea's id, because that is what decides whether
-any notes are loaded at all; `usePins` knows nothing about the view. None of the
-three knows about the others, and that is why the panel and the canvas cannot
-disagree: they are handed the same arrays from the same two hooks.
+`useThoughtsData` takes the book in scope and the open idea's id — between them
+they decide which lists are fetched and whether any notes are loaded at all —
+and `useBookScope` takes the idea's id too, since an open idea outranks a
+`?book=` that disagrees with it. `usePins` takes nothing and knows nothing about
+either. Each is handed what it needs rather than reaching for another; joining
+them is the page's job, and it is why the panel and the canvas cannot disagree:
+the panel's list is `usePins`' list read through the very arrays the canvas
+draws, so an item in one is an item in the other by construction. It also
+follows that the panel cannot say what it holds until the corpus has loaded —
+until then it says it is still loading rather than that nothing is pinned.
 
 The corpus is `GET /api/topics` + `GET /api/ideas` in parallel, and — in the
 idea view — `GET /api/ideas/:id` for which notes orbit in which order, then one
@@ -838,10 +920,6 @@ Two status decisions worth not re-litigating:
   sent — including for the ordinary race where two tabs unpin the same card —
   and that is a success.
 
-`/api/pins` is mounted with `isAuth` but **not** with `invalidatesOverview`. A
-pin is not content: it changes nothing the overview draws, and invalidating on
-one would spend a full rebuild on a toggle.
-
 #### Why usePins is optimistic when nothing else on the page is
 
 Every other write here refetches, because a link write changes counts on rows the
@@ -866,14 +944,18 @@ because they are separate facts and either can be true without the other. Each
 hook reports both, and the page shows whichever spoke — two hooks failing the
 same way at once is one server being down, and one banner says that.
 
-### Opening a note
+### Notes are not edited here
 
-A note card links to `/analyze?l=<book>.<chapter>&note=<id>` — the chapter of its
-first anchor, with the editor opened on it — built by `Analyze/analyzeUrl.js`.
+A note on this canvas is something to pin, not something to open: its card's
+only action is `onTogglePin`, the same as a topic's or an idea's. There is no
+note editor on this page and no link to one.
+
 The alternative, an editor embedded in the canvas, would mean a second home for
 the note editor, its reference list and its ideas multi-select, all of which
 exist on `/analyze` and all of which are only useful beside the scripture they
-point at.
+point at. The one page that does hand a note to that editor is `/search`, whose
+note results link to `/analyze?l=<book>.<chapter>&note=<id>` — see
+`Search/searchModel.js`, the only caller of `analyzeUrlForNote`.
 
 ---
 
@@ -947,7 +1029,7 @@ it right.
 |-------|----------|
 | Note | `/analyze?l=<book>.<chapter>&note=<id>` — the editor, at its first anchor |
 | Idea | `/thoughts?idea=<id>` — the idea view, its notes orbiting it |
-| Topic | `/thoughts` — the topics view, where every topic is a card |
+| Topic | `/thoughts?book=<book>` — the topics view, on the book whose field holds it |
 | Scripture | `/analyze?l=<book>.<chapter>` — the primary panel on that chapter |
 
 How many topics an idea is filed under does not change its link, and neither
@@ -955,14 +1037,16 @@ does being filed under none. The tree this replaced could only reach an idea
 through a topic — or through the unfiled bucket — so both were special cases
 there; the idea view is reached by id, so neither is a case at all now.
 
-A topic gets the bare field because a topic has no view of its own to open. That
-is the honest limit of the link and not an oversight: adding a param that merely
-scrolled the field would be a second URL contract for a hover's worth of state.
+A topic gets a field rather than a view of its own, because a topic has no view
+of its own to open — but it names its book, so a Mark topic lands on Mark's
+field instead of wherever the reader's scope happened to be. That is the honest
+limit of the link and not an oversight: adding a param that merely scrolled the
+field would be a second URL contract for a hover's worth of state.
 
 Those URLs are built by two pure modules and not by the search page:
 `Analyze/analyzeUrl.js` owns every link **into** Analyze (the Thoughts note cards
-use it too), and `Thoughts/thoughtsUrl.js` owns `?idea=`. The page that reads a
-param owns the name of it.
+use it too), and `Thoughts/thoughtsUrl.js` owns `?idea=` and `?book=`. The page
+that reads a param owns the name of it.
 
 ### An idea that no longer exists
 
@@ -973,8 +1057,8 @@ as its error banner with the URL still saying what was asked for.
 
 What *is* handled on the client is a malformed value: anything that is not a
 positive integer (`abc`, `-1`, `0`, `1.5`, absent) is the topics view rather than
-an error, the same rule `overviewParams` follows for a stale `?topicId=`. A saved
-link must not become an error page.
+an error, the same rule `parsePosition` follows for a stale panel position in
+`Analyze/navigation.js`. A saved link must not become an error page.
 
 ### The page, not the Navbar
 
@@ -993,578 +1077,6 @@ answer to "shep" can never land after the answer to "shepherd".
 
 A query below the minimum is not sent at all — the server would refuse it with a
 400, and asking it to is a round trip to be told what the page already knows.
-
----
-
-## Overview page
-
-`/overview` is the whole canon as one vertical axis with three rails beside it.
-Phase 6a built the axis — book and chapter ticks, labels, pan and zoom. Phase 6b
-added the stems: one horizontal line per note reference, from the axis across to
-the notes rail. Phase 6c completed the notes tier — each note's anchors chained
-into one arc, a tooltip on hover, and a drawer on click. Phase 6d gave the
-ideas and topics rails the same two things, from the same components over the
-same references grouped differently, and added the two controls that decide what
-is drawn: checkboxes per rail and a filter to one topic, both held in the URL.
-Phase 6e — the last, and the one the plan calls "genuinely optional" — adds the
-two interactions left on its list: a box that dims every arc whose group is not
-called what the reader typed, and a shift-drag that flies the view to the
-stretch of canon it encloses.
-
-### One renderer, three rails
-
-The plan's table is the whole of what separates the tiers:
-
-| Tier | Group by | Anchors |
-| :---- | :---- | :---- |
-| Notes | note | that note's references |
-| Ideas | idea | references of all notes linked to it |
-| Topics | topic | references of all notes under all its ideas |
-
-They are three readings of one set of rows, so everything downstream of the
-query is shared: `anchorPoints` places any tier, `stemModel` and `arcModel` take
-a tier and a rail x, `TierStems` and `TierArcs` take a `rail` prop,
-`tierLabels` reads any label tier, and `useArcInteraction` resolves a hover to
-`(rail, groupId)` rather than to a note. `Overview.js` loops over the rails
-being shown; there is no per-tier component and no per-tier branch in the
-drawing.
-
-That matters for one property above all: **the same verse is at the same y on
-every rail**. It is true by construction rather than by three implementations
-agreeing — all three go through `axisModel.yForIndex`. A second copy of the
-renderer per tier is exactly how three rails would come to tell three different
-stories about one corpus.
-
-One note therefore appears three times over — once as itself, once under each
-idea it is linked to, once under each of those ideas' topics. That is the
-picture, not duplication to be removed.
-
-### `GET /api/overview?tiers=notes,ideas,topics&topicId=`
-
-Every anchor point the page plots, grouped by the thing it belongs to, in the
-compact arrays the build plan specifies, plus a parallel tier of what the page
-*says* about each group:
-
-```json
-{
-  "notes":       [[17, [3, 34, 1051, 19203]], [22, [26136]]],
-  "noteLabels":  [[17, "Justified by faith", [[3, 1, 1, 1, 5], [34, 1, 2, 1, 3]]]],
-  "ideas":       [[4, [3, 34, 1051, 19203, 26136]]],
-  "ideaLabels":  [[4, "Faith as a thread", [[3, 1, 1, 1, 5], ...]]],
-  "topics":      [[1, [3, 34, 1051, 19203, 26136]]],
-  "topicLabels": [[1, "Faith", [[3, 1, 1, 1, 5], ...]]]
-}
-```
-
-Six keys, two shapes: a geometry tier and a label tier per rail, built by one
-pair of functions from rows that differ only in what they are grouped by. The
-three joins are in `src/lib/overviewQueries.js`.
-
-An **anchor** is the midpoint of one reference's `verse_index` range, rounded:
-`ROUND((start_index + end_index) / 2)`. A reference is a span, but a stem is one
-line and an arc endpoint is one point, so each reference has to collapse to a
-single number, and the midpoint is the only choice that does not pull long
-passages toward their opening verse.
-
-Anchors are sorted ascending and deduplicated **within a group**, server-side.
-That is what the chained arcs need — sort the points, chain the consecutive
-pairs — so doing it here means no client ever sorts anything. Two *different*
-notes anchored to the same verse keep their own anchor and get their own stem;
-deduplication never crosses a group.
-
-Groups with no reference at all — an orphan note, an idea gathering nothing —
-are absent from the payload rather than present with an empty array. They are a
-legal state, but they anchor to nothing and so draw nothing.
-
-Arrays, not objects: nothing on the page looks a field up by name, and `[17,
-[3]]` is a fifth of what `{ "id": 17, "anchors": [3] }` costs once the key is
-repeated a few thousand times.
-
-Every one of the three queries is `SELECT DISTINCT` over the reference's own id.
-The joins fan out: a note filed under two of a topic's ideas is reached twice,
-so its references would arrive twice in that topic's group. The anchor Set would
-absorb it, but the reference list a reader reads would print the same passage
-twice for a reason that has nothing to do with the passage. Collapsing it at the
-source is where it can be seen. The same fan-out reaches the *notes* tier the
-moment `topicId` filters it, which is why that query is DISTINCT too.
-
-### The two query params
-
-`tiers` names the rails to return, defaulting to all three, and is applied
-**after** the cache rather than before it: the payload is built whole, so a
-reader toggling the topics rail off and on is served from memory both times
-instead of re-running the widest of the three joins on the way back. The client
-requests exactly the rails the URL says to draw, so a rail switched off costs
-nothing on the wire and nothing in the join.
-
-`topicId` restricts every tier to what falls under one topic — the plan's own
-answer to its open question 2, the cross-testament noise a topic like "Faith"
-produces when the whole canon is on one axis. It changes which rows are *read*,
-so unlike `tiers` it is part of the cache key. A `topicId` naming a topic the
-caller does not own is a **404**, not an empty diagram: every join would simply
-match nothing, and "you have written nothing under this topic" and "this is not
-your topic" are answers a reader must not have to tell apart by squinting at an
-empty rail.
-
-`q` was reserved for 6e and is still not parsed here, because 6e did not need
-it: see "Search is client-side, and why" below. An unknown param is ignored
-rather than refused, so the plan's `?q=` on this endpoint remains available to a
-later phase without breaking the links written today.
-
-#### The label tiers, and why they are parallel
-
-The tooltip has to name what an arc is: "Romans 5:1–5; Hebrews 11:1", under the
-group's title. An anchor cannot answer that — the midpoint of 45:1..45:5 is a
-verse_index with no memory of the range it came from — so the display data is
-shipped too, as `[groupId, title, references]` with each reference the fixed
-5-tuple `[anchor, bookId, chapter, startVerse, endVerse]`.
-
-Parallel rather than a third element on each pair, for three reasons. The
-geometry tier is read while drawing and the label tier only when a pointer stops
-on something. Pairing the two halves of a rail by name (`ideas`/`ideaLabels`)
-keeps them obviously the same rail. And nothing that already read `notes` had to
-learn a new element when 6d arrived.
-
-A topic's label carries every reference of every note under every one of its
-ideas, which is hundreds — so `tierLabels.js` caps what the *summary line*
-names at six and counts the rest ("… and 214 more"). The `references` array
-itself is never trimmed: `nearestReference` still has to search all of it, or a
-click past the sixth passage of a topic would open the wrong chapter.
-
-Two details:
-
-- The anchor is **repeated** from the geometry tier. Those six bytes are what
-  let the client answer "which reference did the reader click nearest to?" with
-  an equality test rather than by re-deriving chapter spans from `/api/books`.
-- References are **not** deduplicated the way anchors are. Two references that
-  collapse to the same anchor are still two references and both belong in the
-  list a reader reads; it is only the point on the axis they share.
-
-Only the book *id* travels — the client has the canon loaded for the axis
-already, and joining the name on there rather than repeating "Romans" a few
-thousand times is most of why this tier is affordable. Measured against 250
-notes and 1,003 references, the notes tier is 33 KB, or ~390 KB extrapolated to
-the plan's ceiling of a few thousand notes. The two tiers above it re-list the
-same references under their ideas and topics, so the ceiling is that figure
-times (1 + ideas per note + topics per note) — low single digits for a corpus
-anyone has actually filed. Still inside the megabyte the plan budgets, and
-`?tiers=` is how a reader who does not want the wide ones stops paying.
-
-What is deliberately absent is the note **body**: it is the one field with no
-bound on its length, and a few thousand of them would make the request the whole
-page waits on scale with how much the reader has written, to draw a picture that
-never shows a body. `GET /api/notes/:id` fetches the one that is opened.
-
-### The cache, and what invalidates it
-
-This is the one endpoint that reads a user's entire corpus — three times over,
-once per tier — and its answer only changes when the reader writes something. So
-`src/lib/overviewCache.js` holds the built payload in memory, per user and per
-**topic scope**, until a write makes it wrong.
-
-Per scope, because only `topicId` changes what has to be read; `tiers` is a
-selection from a payload built whole and is applied in the route. The number of
-entries a user can hold is therefore bounded by the number of topics they have
-written plus one, and an invalidation drops all of them — a write to any of the
-six tables can change what falls under any topic.
-
-`src/middleware/invalidateOverview.js` is mounted in `server.js` between
-`isAuth` and the router on all four content mounts:
-
-```js
-app.use('/api/notes',      isAuth, invalidatesOverview, noteRoutes);
-app.use('/api/references', isAuth, invalidatesOverview, referenceRoutes);
-app.use('/api/ideas',      isAuth, invalidatesOverview, ideaRoutes);
-app.use('/api/topics',     isAuth, invalidatesOverview, topicRoutes);
-```
-
-Those four routers are the only place `notes`, `note_references`, `note_ideas`,
-`idea_topics`, `ideas` and `topics` are written. Mounting the invalidation there
-rather than calling it from each of their ~15 write handlers is deliberate: a
-write handler added in a later phase is covered the day it is written, and there
-is no line for anyone to forget.
-
-Two details that are load-bearing:
-
-- It invalidates on `res.on('finish')`, not on the way in. Dropping the entry
-  before the handler runs would leave a window in which the write has not
-  committed but the cache is empty — a read arriving in it would rebuild from
-  the old rows and cache them, and the page would stay wrong until the next
-  write.
-- A cache entry carries a **version**, bumped by every invalidation. A rebuild
-  that started before a write and finished after it declines to store its
-  result. Without that, the interleaving `read → write commits → read stores`
-  caches a payload that was stale before it was written. The version is on the
-  user's entry, not on one scope of it, so a write invalidates every scope at
-  once and a rebuild of any of them is checked against the same counter.
-
-Verified against the live database: a `PUT` returning 200 — which is what both
-full-set link endpoints, `PUT /api/notes/:id/ideas` and `PUT /api/ideas/:id/topics`,
-return — drops every cached scope, while a `PUT` that 400s and a `GET` drop
-none. Both of those endpoints sit behind the `/api/notes` and `/api/ideas`
-mounts, so they were covered by the middleware the day it was written; that is
-the property the mount-level placement exists to guarantee.
-
-Only 2xx and 3xx invalidate. A 400 or a 404 wrote nothing, and rebuilding for
-them would spend a full scan on the requests most likely to be retried.
-
-### Why the stems are not inside the rail group
-
-Everything in the diagram lives in one transformed `<g>`, and the horizontal
-half of the zoom is undone by CSS in two different ways:
-
-| Feature | At | Counter-transform |
-|---|---|---|
-| Axis line, label columns, rail lines | one fixed x | `translateX` (`.overview-pinned`) |
-| Book/chapter ticks, **stems** | two fixed x | `scaleX` (`.overview-ticks`, `.overview-stems`) |
-
-The translation holds one x still and lets everything else drift from it by the
-zoom factor — right for a column of labels, wrong for a stem, whose axis end
-would sit a thousand units off the world at 10x. So `TierStems` is a *sibling*
-of `TierRails` rather than a child of a rail, and takes the colour of its tier
-from a `data-rail` attribute instead of by inheritance. `TierArcs` sits the same
-way, for the same reason: an arc spans the rail it starts on and the bulge out
-from it.
-
-That is also what makes three rails fit the frame 6a fixed without moving
-anything. `ARC_BULGE.max` is 80 and the rails are 120 apart, so a tier's arcs
-stay clear of the tier outside it; a quadratic reaches half way to its control
-point, so the outermost rail at x 510 bulges to 550 — inside the 560-unit
-world. The numbers 6a chose for an empty page were chosen for this.
-
-Verified in the browser: a stem's horizontal span is pixel-identical from 1x to
-400x, left end on the axis and right end on the rail, and an arc's screen
-bounding box is 13.6px wide at both 1x and 400x while its height goes from 461px
-to 184,496px.
-
-### The one stroke that is not `design × --ov-inverse-scale`
-
-Every other stroke on the page is sized that way, and for a stem it is exactly
-right: a stem is horizontal, its stroke is measured vertically, and the vertical
-half of the zoom is the half that survives the counter-scale.
-
-An arc is neither horizontal nor vertical. Under the scene's `scale(s)` followed
-by the group's `scaleX(1/s)`, x is left alone and y is multiplied by s — so a
-near-vertical stretch of an arc comes out at its drawn width and a near-
-horizontal one comes out s times wider, and no single multiplier corrects both.
-The inverse-scale multiplier would make the vertical stretches — most of a long
-arc — vanish at high zoom.
-
-So the arcs use `vector-effect: non-scaling-stroke`, which computes the stroke
-after the transform and is therefore constant on screen everywhere along the
-curve, at every zoom, with no per-frame work. It is the exception, and the
-highlight rules keep arcs and stems in separate selectors so neither is handed
-the other's rule by accident.
-
-### Pointing at a curve
-
-Two paths per note, not one: the drawn chain about a pixel wide, and beneath it
-the same `d` with a 12px transparent stroke that is the pointer's target. That
-is 3 elements per note (a group and two paths) rather than 3 per *arc*, which is
-what the chain being one continuous `M ... Q ... Q ...` buys.
-
-`pointer-events: stroke` on the hit path is load-bearing. Without it the browser
-also fills the region a curve encloses for hit-testing, and a long arc's sweep
-covers much of the rail — every short chain drawn inside it would be
-unclickable, and the reader would be pointing at one note and hovering another.
-
-### The highlight is a DOM write, not a render
-
-Hovering a note lights all of its arcs and stems and dims the rest of the tier.
-Expressed as React state that is a prop change on every arc and every stem —
-a full reconciliation of the drawing per pointer crossing, on the page that goes
-to some length to avoid one per wheel notch.
-
-So `useArcInteraction` writes two attributes and CSS does the rest:
-`data-focused` on the `<svg>` turns every tier down, and `data-active` on the
-handful of elements belonging to one group turns those back up.
-
-A group is `(rail, id)`, never an id alone: note 7, idea 7 and topic 7 are three
-different rows and, with all three rails drawn, three different chains on screen
-at once. `TierArcs` and `TierStems` publish `data-group-id`, and the rail is
-already on the tier group above them as `data-rail`, so the highlight selects
-`[data-rail="ideas"] [data-group-id="7"]` rather than stamping the tier onto
-every one of a few thousand elements. The previous active set is remembered, so
-changing the highlight touches only what enters or leaves it.
-
-Dimming all three rails rather than only the hovered one is deliberate: the
-question a lit chain answers is "where does this land, and what else is there?",
-and leaving the other two at full strength would drown the answer in the thing
-it is being read against.
-
-React still commits once per hovered note, because the tooltip's text is
-content — but every child is memoised on props a pointer never changes, so that
-commit reaches the tooltip and nothing else.
-
-The listeners are on the `<svg>`, one per event, and resolve the group by walking
-up from `event.target` to the nearest `data-group-id` and on to the enclosing
-`data-rail`. Stems are
-`pointer-events: none`: they light up with their note, but a rail carrying a
-thousand hair-thin stems would flicker between notes on every pixel of travel.
-
-### Why a click is not simply a click
-
-`usePanZoom` captures the pointer on every `pointerdown` so a drag running off
-the `<svg>` keeps panning. Capture can retarget the events that follow, so the
-press is recorded on the way down — where `event.target` is still the arc — and
-the click consults that. The same record answers the other half: a click landing
-more than 4px from where the press started was a pan, and opens nothing.
-
-Where the click landed *along* the chain decides where the drawer's link goes.
-`usePanZoom.toWorldY` removes the viewBox fit and the pan/zoom from the client
-y, `axisModel.indexForY` turns that into a verse_index, and
-`tierLabels.nearestReference` picks the reference whose anchor is closest. That
-is why the anchor is repeated into the label tier: the last step is an equality
-test on integers rather than a re-derivation of chapter spans. It earns most on
-the upper rails, where a topic's chain runs the height of the canon and its
-first reference says nothing about where the reader was pointing.
-
-The drawer itself is one component for all three tiers. `tierDetail.js` maps
-whichever of `GET /api/notes/:id`, `/api/ideas/:id` or `/api/topics/:id` was
-read into one shape — title, body, a list heading and rows — so the shell never
-asks which tier it is showing except at the two places the answer changes what a
-reader can *do*: only a note's link opens the Analyze editor (`?l=&note=`) where
-the other two position the panel alone, and only a topic offers "show only this
-topic", which is the plan's filter reached from the diagram rather than from the
-URL bar. Those three endpoints already existed — they are what the Thoughts
-page's pinned panel reads too — so there is no `/api/overview/:something` to keep
-in step.
-
-The rows inside the drawer are links of their own: an idea's notes and a topic's
-ideas each lead to the page that shows one — `/analyze?l=&note=` for a note,
-`/thoughts?idea=` for an idea — while a note's references are text and nothing
-more, since the drawer was opened from the diagram those references drew.
-
-Verified in the browser against 250 notes and 751 arcs: hovering lit one chain's
-5 stems and its arc group and dimmed every other arc to 0.08; the tooltip read
-"Exodus 8:31–32; Judges 14:15–19; Ezra 3:9–13; Proverbs 31:5–9; Acts 20:21–25";
-clicking near the foot of that chain opened the drawer with the rendered body
-and a link reading "Open in Analyze at Acts 20:21–25"; a drag beginning on an
-arc panned and opened nothing; and all of it still worked at 5x zoom.
-
-### The URL is the page's state
-
-Which rails are drawn, which topic the diagram is restricted to and what the
-reader is searching for live in the query string, the same convention the
-Analyze page's panel positions follow:
-
-```
-/overview                       all three rails, the whole corpus
-/overview?tiers=notes,topics    two rails
-/overview?topicId=3             all three rails, restricted to topic 3
-/overview?q=faith               everything drawn, arcs named "faith" lit
-```
-
-The back button undoes a toggle, a reload keeps it, and "look at this, topics
-only, under Faith" is a link rather than a list of instructions. `overviewParams.js`
-holds the names and the parsing and is pure, so a link *into* the page — the
-drawer's "show only this topic" — needs no hook; `useOverviewParams` is the
-`useSearchParams` half. Nothing normalises, so nothing replaces on the toggle
-path: a bare `/overview` stays bare and the param appears the moment a default
-stops being true.
-
-Typing is the one exception to that last rule, and `?q=` is **replaced** into
-the current history entry rather than pushed. A search term is not one decision
-but a stream of them; pushing per settled burst would bury the page the reader
-came from under one entry per word, and a reader who searched and then wanted
-to leave would press back eight times to get out. They still get both things
-the URL is for — a reload that keeps the filter and a link that carries it —
-without a back button that walks backwards through their own typing.
-
-A whitespace-only `?q=` reads as no search at all. Dimming the whole diagram
-over a stray space is the one reading of it that helps nobody; beyond that the
-value is taken as typed, because case and punctuation are the matcher's
-business and normalising here would leave the box and the address bar
-disagreeing about what the reader wrote.
-
-Two parsing rules earn their place. `?tiers=nonsense` falls back to all three
-rather than to nothing — a stale or hand-edited link should show the page, not a
-blank frame with no way back — while `?tiers=` (the empty value) really does
-mean none, because a reader who unticks every box has said something specific.
-And a malformed `?topicId=` is ignored rather than refused, so a link from a
-deleted topic still draws; a *well-formed* id naming a topic that does not exist
-is the server's answer to give, and it gives a 404.
-
-### Search is client-side, and why
-
-The plan's API surface reserves `?q=` on `/api/overview`, and 6e does not use
-it. Every group's **title** is already in the payload — it is what the tooltip
-prints — so narrowing to "the ones I called covenant" is a substring test over
-data that has arrived, not a round trip. The request path in `useOverviewData`
-is built from `tiers` and `topicId` alone and does not move when the term does,
-so typing costs nothing on the wire and never re-runs the three joins.
-
-What that buys beyond the request: the filter cannot get out of step with the
-picture. A served `q` would mean a payload that answers one term while the
-drawing on screen was built from another, for as long as the request is in
-flight — a page that is briefly, invisibly wrong on precisely the control whose
-feedback loop is one keystroke long.
-
-What is deliberately **not** matched is the note body. It is the one field with
-no bound on its length and it is not in this payload at all, by the same
-decision that keeps the payload affordable. `/search` is the page that reads
-bodies; this box narrows the picture already on screen.
-
-#### Filter, not hide
-
-The plan's own wording — "filter to matching arcs rather than hiding others
-outright" — and nothing in `useArcSearch` uses `display`. This page's entire
-content is *where* a chain falls, and an arc taken out of the drawing takes its
-position with it: every arc left would then look equally central against an
-axis with nothing else on it. So the unmatched are dimmed to 0.06 and stay
-exactly where they were.
-
-A term that matches nothing therefore dims the whole diagram, which is the
-honest answer and looks exactly like a page that has lost its data. The status
-line beside the box is what tells the two apart, the same job the `?topicId=`
-banner does for the other filter.
-
-#### Two filters, along two axes
-
-`?topicId=` is structural and served: it asks the database what falls under one
-topic, and every rail is restricted to that. `?q=` is textual and local: it asks
-which groups the reader *called* something. They compose, and each answers a
-question the other cannot — a note titled "faith" is a real answer to "what did
-I name this?" whether or not anyone ever filed it under the topic, and a note
-filed under Faith is a real answer to "what is here?" whatever it is called.
-That is also why the search matches each rail on its own titles rather than
-following the links between the tiers: the transitive reading of "show me Faith"
-already exists, better, one control over.
-
-#### The marks are a DOM write, for the third time
-
-`data-searching` on the `<svg>` turns the tiers down and `data-match` on the
-groups that matched turns those back up — the highlight's mechanism exactly,
-with different attribute names because the two states are independent. A reader
-can hover a chain while a search is running, and the search rules sit **above**
-the highlight rules in `Overview.css` so hover wins: a search narrows the field,
-and a hover then picks one thing out of what is left, including out of what the
-search dimmed.
-
-Passing the matched set down as a prop would work and would re-reconcile a few
-thousand paths per settled keystroke, on a page that declined that trade for the
-hover highlight and for the whole of pan and zoom.
-
-Two details in `useArcSearch` are load-bearing:
-
-- The write is **per rail**, not per matched group. A one-letter term matches
-  nearly everything, and a `querySelectorAll` per match would then be thousands
-  of selector runs on a keystroke; asking each drawn rail once and testing
-  membership against a `Set` bounds it at three queries whatever matched.
-- Its callback ref does **not** close over the matches. React calls a callback
-  ref with null and then with the node again whenever the callback's identity
-  changes, and `Overview.js` composes four such refs onto one `<svg>` — so a ref
-  that changed per keystroke would detach the element from all four hooks,
-  taking `usePanZoom`'s wheel listener off and putting it back, and clearing
-  this hook's record of what it had marked while the marks stayed on the
-  elements. The first search then leaves its highlight behind for the next one
-  to add to. That was found by a test, not by looking.
-
-### Magnify: zoom to a region, not a fisheye
-
-The plan offers "a fisheye on the axis, or simpler, a zoom-to-region on drag",
-and names magnify "the feature most likely to be cut". The second is what is
-built, and the reason is the same one that shapes everything above it.
-
-A fisheye is a second, non-linear mapping from `verse_index` to y running
-alongside the linear one, and every tick, stem and arc on the page is placed
-through the mapping. Non-linear means it cannot be applied as a transform, so it
-would have to be re-derived per frame for a few thousand elements — the one cost
-this page is arranged from top to bottom not to pay. It would also mean two
-mappings that have to agree, on a page whose central property is that the same
-verse is at the same y on every rail *by construction*.
-
-A region drag produces a scale and a translation — the same pair a wheel notch
-produces. So everything already written to hold strokes, labels and stems still
-under zoom holds them still under this, and the magnified view is the ordinary
-view. `viewport.viewportForRange` is the whole of it.
-
-**Shift, not a mode.** Plain drag already means pan and has to keep meaning it.
-A toolbar toggle would free the plain drag but adds a state the reader has to
-remember being in; a modifier lasts exactly as long as the key is held and
-cannot be left switched on. The hint line beside the toggles is what makes it
-discoverable, since a modifier is otherwise invisible. `Overview.js` routes the
-`pointerdown` — region, or pan-and-maybe-click — so neither `usePanZoom` nor
-`useArcInteraction` knows this gesture exists. A shift-press deliberately does
-not reach the arc hook either, or a short shift-drag would land inside the click
-slop and open a drawer on top of the view it had just flown to.
-
-**Two coordinate systems, on purpose.** The band is *drawn* in fitted
-coordinates, as a sibling of the transformed scene, so it needs no
-counter-transform and sits under the pointer at any zoom — it is a report of
-where the pointer has been, not part of the drawing. The range it *resolves* to
-is in world coordinates, because that is what is flown to and it must not move
-when the transform does. Both ends of the drag are recorded through both
-conversions at the moment they happen; converting one to the other afterwards
-would mean reading a transform the flight is in the middle of changing.
-
-**Why it is animated.** A hard cut from the whole canon to a tenth of it leaves
-nobody any way to tell what they are now looking at. The flight is 320ms of
-`requestAnimationFrame` writing the transform through the same `apply` a wheel
-notch uses — so it is frames of two DOM writes and still no re-render, and the
-wheel, a drag and the reset button interrupt it simply by calling `apply`
-themselves. Scale is interpolated **geometrically** and the content point at the
-centre of the box **linearly**: zoom is multiplicative, so a linear lerp of the
-scale spends most of a 1x → 40x flight already past 20x and reads as a lurch
-then a crawl. `prefers-reduced-motion` gets the destination and not the journey.
-
-Reset — the plan's "fit all" — stays instantaneous and cancels any flight. It is
-the escape hatch for a reader who is lost, and an escape hatch that takes a
-third of a second to open is one you press twice.
-
-A drag shorter than `MIN_REGION_SPAN` (10 fitted units, a few pixels on any
-screen) is discarded rather than obeyed: a shift-click is a slip of the hand,
-and flying to the ceiling zoom somewhere the reader never chose is the one
-outcome of this feature that is genuinely hard to recover from. A *cancelled*
-pointer flies nowhere either — the reader never let go, so they never said
-where.
-
-#### Verified in the browser
-
-Against the seeded corpus of 20 notes, 6 ideas and 4 topics (30 groups, 89
-stems, 18 chains):
-
-- Typing "faith" put `?q=faith` in the URL and lit 6 of 30 groups across all
-  three rails, with the unmatched arcs at computed opacity 0.06 and the matched
-  at 1 — and all 18 chains and all 89 stems still in the DOM. Clearing the box
-  removed the param and every mark.
-- A shift-drag from fitted y 400 to 500 drew a full-width band at exactly
-  `y=400, height=100`, left the scene transform untouched while it was pulled,
-  and on release flew to `scale 9.9998` — where world y 300 projected to fitted
-  **0.04** and world y 400 to **1000.02**, i.e. the selected range filling the
-  1000-unit box.
-- In that landed view `--ov-inverse-scale` was 0.100002, the book label measured
-  8.5px tall, a stem 78.4px wide and a book tick 8.96px — the same on-screen
-  sizes as at rest, so the counter-scales survive a region zoom exactly.
-- `/overview?tiers=notes,topics&topicId=12&q=babylon` drew two rails, showed the
-  topic banner, reported "1 of 7 highlighted", and still opened the drawer with
-  its body, references and Analyze link on a click. Hovering a chain the search
-  had dimmed lit it to opacity 1, which is the composition the CSS ordering
-  exists to give.
-
-### Where virtualisation would go
-
-The plan reserves it for "when you actually have thousands", which is not yet.
-When it is, the filter belongs in `TierArcs` and nowhere else: take the current
-viewport (`usePanZoom` already holds it) and render only the arcs whose y span
-intersects it, keyed by `groupId` so React reuses the paths that survive. Two
-things make it safe to defer — `buildArcs` is pure and returns each group's
-points, so the filter is a predicate over data the component already has, and
-the highlight walks the live DOM by attribute, so an arc out of the tree is
-simply not found rather than found and stale. What it will cost is a re-render
-per pan, which is the thing this page is arranged to avoid; hence it waits for a
-page that is measurably too slow without it.
-
-### Verifying a stem is where it claims to be
-
-A stem in the wrong place is not a visible failure — it is a line that reads
-perfectly well and points at the wrong book. The check the plan asks for, and
-the numbers it produced, are recorded in the header of
-`components/Overview/stemModel.js`: four notes across the canon, each anchor's y
-inverted back to a `verse_index`, that index resolved to a book and chapter
-through the spans `/api/books` ships, and the answer compared with the chapter
-whose `GET /api/notes?bookId=&chapter=` returns the note — which is the list the
-Analyze page's notes panel renders.
 
 ---
 
@@ -1645,142 +1157,8 @@ page pass while the query it sent was wrong — and the query is half of what th
 page does. It runs on fake timers, because the debounce is the other half:
 "five keystrokes, one request" is an assertion about time.
 
-`Overview.test.js` holds four lines no screenshot can. The first is that pan
-and zoom never re-render: a `Profiler` counts commits across a wheel gesture and
-a drag, and expects none — with the stems and the arcs in the tree as well as
-the ticks, since a few thousand of them redrawing per wheel notch is the failure
-the whole page is arranged to avoid. The second is that a stem and the axis mark
-for the same verse land on the same y, asserted against the linear rule spelled
-out in the test rather than imported from the page, so the two cannot be wrong
-together.
-
-The third is the count of the arcs. A note with four references has to produce
-three curves and not six, and that is the phase's one failure that looks like a
-feature: pairwise arcs read as a denser, richer note rather than as a bug, and
-by the time anyone notices, the cost is quadratic in what the reader has
-written. So a fixture note carries four references specifically to tell 3 from
-6, and the same property is asserted on the geometry directly in
-`arcModel.test.js` — including that it survives an anchor being dropped for
-naming no verse.
-
-The fourth arrived with 6d, and it is why that suite's mock **derives** the
-ideas and topics tiers from two link tables the way `src/lib/overviewQueries.js`
-derives them, rather than shipping a fixture for each rail. A hand-written ideas
-tier would let the page pass while the grouping it exists to show was wrong. So
-the store holds notes, their references, `note_ideas` and `idea_topics`, and
-answers `/api/overview` by walking them — which makes "link a note to an idea
-and its anchors appear on the idea's chain" an assertion about a round trip, and
-"the same verse is at the same y on all three rails" an assertion about one
-mapping rather than three fixtures that happen to agree. The mock also reads the
-query string it was sent, so "the request asked for one tier" and "the response
-carried one tier" are the same fact.
-
-One more line that no screenshot and no DOM assertion can hold: `buildArcs` must
-run when a payload lands and at no other time. Hovering legitimately commits
-React — the tooltip is content — and a rebuilt arc has a byte-identical `d`, so
-the only way to see the difference is to count the calls. The suite wraps
-`arcModel` in a counter and asserts that a dozen pointer events across two rails
-rebuild nothing. It fails without the `useMemo` in `useOverviewParams`, which is
-the point: `tiers` is parsed out of the URL on every render, and an unmemoised
-array would re-derive every chain on every rail per pointer crossing.
-
-The rest of that suite covers the two controls: a toggle removes a rail's arcs,
-stems and heading and writes `?tiers=` (and *removes* the param when every rail
-is back on, since a URL carries departures from the default); a URL arriving
-with `?tiers=topics` draws only that rail and asks the server only for it;
-`?tiers=` asks for nothing at all; and `?topicId=` restricts every rail, is sent
-to the server rather than applied to the answer, is announced on the page with a
-way back, and reports a topic that is not the reader's without losing the axis.
-
-`arcModel.test.js` and `stemModel.test.js` cover the rail parameterisation
-directly — the same tier hung on two different rails has identical ys and
-different xs, and a whole-canon arc on the outermost rail stays inside the
-world. `tierLabels.test.js` covers the summary cap: a topic's tooltip names the
-first few passages and counts the rest, while the `references` array it searches
-for a click keeps all of them.
-
-The rest of the arc suite is about the interaction rather than the drawing:
-hovering one arc lights that note's whole chain *and* its stems and dims
-everything else; the pointer crossing to another note moves the highlight;
-leaving the drawing puts everything back; and the arc elements are asserted to
-be the *same DOM nodes* before and after a hover, which is the assertion that
-the highlight is not quietly re-rendering the tier. Clicking asserts the drawer
-opens on the right note, that its body is fetched rather than carried in the
-overview payload, that the "open in Analyze" link follows the *end of the chain
-the reader clicked* — the same chain clicked at its head and at its foot has to
-give two different chapters, or the nearest-anchor rule is not being applied at
-all — and that a drag beginning on an arc opens nothing.
-
-`stemModel.test.js` and `arcModel.test.js` also cover the payload boundary:
-an anchor naming no verse on the axis, a malformed pair, an empty tier.
-`tierLabels.test.js` covers the other half of it — a reference tuple missing a
-field, an untitled group (named after the rail it is on, since "Untitled note"
-over a topic arc is a sentence about the wrong thing), and the canon not having
-loaded yet, which is reachable because the page's two requests resolve
-independently and a hover can land between them. `axisModel.test.js` asserts `indexForY` is the exact inverse of
-`yForIndex`, since a click goes one way through that pair and the drawing goes
-the other.
-
-6e adds two more suites and two more lines. `arcSearch.test.js` covers the
-matching directly, and the assertion worth having there is that an *empty* box
-is "no search" rather than "a search for nothing": a term that matches nothing
-legitimately dims the whole diagram, so the two states are indistinguishable on
-screen until a reader clears the box and the page goes blank. It also asserts
-the property that makes this a filter rather than a search — typing more of a
-word can only take matches away.
-
-In `Overview.test.js`, every test that asserts something is dimmed also asserts
-it is still in the DOM, and the arc counts per rail are compared before and
-after. That is the plan's "filter, don't hide" written down as something that
-can fail. Alongside it: the term reaches `?q=` and leaves again when the box is
-cleared; a link arriving with `?q=` fills the box and marks the drawing; a rail
-switched on *during* a search arrives already filtered (which is why the search
-effect depends on the geometry and not only on the term); a hover still lights a
-chain the search dimmed; and the server is asked nothing at all while the reader
-types. One test exists purely for a bug the suite found — that changing the term
-must not leave the previous term's marks behind, which is what an unstable
-callback ref on a shared `<svg>` produces.
-
-The magnify tests lean on jsdom running a real animation-frame loop, so the
-flight is left to fly and waited out. They assert that nothing has moved by the
-time the release returns (it flies, it does not cut), that the landed transform
-projects the selected range onto exactly the fitted box, that
-`--ov-inverse-scale` is still the reciprocal of the scale afterwards, that a
-drag shorter than `MIN_REGION_SPAN` and a cancelled pointer both fly nowhere,
-that a shift-drag beginning on a chain opens no drawer, that a wheel notch takes
-over from a flight already under way, and that none of it rebuilds a single arc.
-`viewport.test.js` covers `viewportForRange` and `interpolateViewports` as
-arithmetic: a range dragged upwards reads the same as one dragged down, a
-hairline band is clamped to `MAX_SCALE` and *centred* rather than pinned to the
-top, and the flight steps the scale by a constant ratio while moving the centre
-of the view at an even rate.
-
-Note what this cannot cover: jsdom dispatches the drag events, it does not
-implement dragging. That the browser starts a drag from a `draggable` row, and
-that `preventDefault` in `dragover` is what makes a row droppable, are verified
-by reading the spec and by using the page, not by this suite.
-
-The same limit applies to the Overview arcs, and further. jsdom has no layout
-and no SVG geometry, so it cannot answer whether a 1px curve can actually be
-hit, whether `pointer-events: stroke` keeps a long arc from swallowing the
-clicks inside its sweep, or whether `vector-effect: non-scaling-stroke` holds a
-stroke still at 400x. Those were checked in a browser against a seeded corpus of
-250 notes; the numbers are recorded in the Overview page section above. 6e's
-two gestures were checked the same way — the band's position and the landed
-transform read straight off the live DOM, and the on-screen size of a label, a
-stem and a tick compared against their resting sizes to confirm the
-counter-scales survive a region zoom. Those numbers are recorded there too.
-
 The server has no test runner of its own — the root `package.json` has only
-`test:client`. The three joins of 6d were therefore verified by seeding a
-corpus directly into MySQL and reading `buildOverviewPayload` back: an idea
-anchored every note linked to it, a topic anchored every note under all of its
-ideas, a note reached through two of a topic's ideas was listed once rather than
-twice (the DISTINCT), an unfiled note appeared on the notes rail and vanished
-under `topicId`, and `selectTiers(payload, ['ideas'])` returned exactly
-`ideas` and `ideaLabels`. The cache invalidation was checked the same way, by
-driving the middleware directly: a `PUT` returning 200 dropped every cached
-scope, a `PUT` returning 400 and a `GET` dropped none.
+`test:client`.
 
 ---
 

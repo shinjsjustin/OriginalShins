@@ -35,8 +35,6 @@ const NotesPanel = ({
     collapse = null,
     notes,
     unreferenced,
-    topics,
-    ideas,
     chapterIdeas,
     importedIdeaIds,
     isLoading,
@@ -132,8 +130,7 @@ const NotesPanel = ({
                     <NoteEditor
                         note={activeNote}
                         books={books}
-                        topics={topics}
-                        ideas={ideas}
+                        bookId={position.bookId}
                         onSave={onSaveNote}
                         onDelete={onDeleteNote}
                         onAddPassage={onAddPassage}
@@ -231,8 +228,8 @@ const NotesPanel = ({
             {isImporting && (
                 <ImportPicker
                     label={`Import an idea into ${heading}`}
-                    topics={topics}
-                    ideas={ideas}
+                    books={books}
+                    bookId={position.bookId}
                     selectableKinds={['idea']}
                     onImport={handleImport}
                     onClose={() => setIsImporting(false)}

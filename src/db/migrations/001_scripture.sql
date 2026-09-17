@@ -9,8 +9,8 @@
 -- The `verse_index` column on `verses` is a single monotonic integer running
 -- 1..N over the whole Bible in canonical order (N = 31,102 for KJV, 31,095 for
 -- WEB). It is computed once at import time and never at query time. Chapter
--- ranges are denormalized onto `chapters` as start_index / end_index so both
--- the chapter fetch and the Overview axis are plain integer comparisons.
+-- ranges are denormalized onto `chapters` as start_index / end_index so the
+-- chapter fetch is a plain integer comparison.
 
 SET NAMES utf8mb4;
 

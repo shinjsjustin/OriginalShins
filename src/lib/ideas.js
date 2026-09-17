@@ -13,6 +13,7 @@ const { withFirstReferences } = require('./references');
 
 const toIdea = (row, extras = {}) => ({
     id: row.id,
+    bookId: row.book_id,
     title: row.title,
     body: row.body,
     sortOrder: row.sort_order,
@@ -24,20 +25,23 @@ const toIdea = (row, extras = {}) => ({
 // Every idea the user has, with how many notes each one gathers.
 //
 // The count joins through to `notes` and re-checks user_id there. The link
-// table cannot hold a cross-user row today, but the count is what the
-// management UI shows and a wrong one would be invisible — so it is proven by
-// the query rather than by an argument about who could have written the link.
-const findIdeas = async (userId) => {
+// table cannot hold a cross-user row today, but the count is what an idea card
+// prints and a wrong one would be invisible — so it is proven by the query
+// rather than by an argument about who could have written the link.
+const findIdeas = async (userId, bookId = null) => {
+    const scope = bookId === null ? '' : ' AND i.book_id = ?';
+    const params = bookId === null ? [userId] : [userId, bookId];
+
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 COUNT(DISTINCT ni.note_id) AS note_count
          FROM ideas i
          LEFT JOIN note_ideas ni ON ni.idea_id = i.id
          LEFT JOIN notes n ON n.id = ni.note_id AND n.user_id = i.user_id
-         WHERE i.user_id = ?
-         GROUP BY i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at
+         WHERE i.user_id = ?${scope}
+         GROUP BY i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at
          ORDER BY i.sort_order, i.id`,
-        [userId]
+        params
     );
 
     return rows.map(row => toIdea(row, { noteCount: Number(row.note_count) }));
@@ -49,7 +53,7 @@ const findIdeas = async (userId) => {
 // a property of the list endpoint.
 const findIdeaById = async (userId, ideaId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 (SELECT COUNT(*)
                  FROM note_ideas ni
                  JOIN notes n ON n.id = ni.note_id
@@ -81,7 +85,7 @@ const NOTE_COUNT_SUBQUERY = `(SELECT COUNT(*)
 // has to say whether expanding it will show anything before it is expanded.
 const findIdeasForTopic = async (userId, topicId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 ${NOTE_COUNT_SUBQUERY} AS note_count
          FROM idea_topics it
          JOIN ideas i ON i.id = it.idea_id
@@ -99,7 +103,7 @@ const findIdeasForTopic = async (userId, topicId) => {
 // appears nowhere in the tree proper.
 const findUnfiledIdeas = async (userId) => {
     const [rows] = await db.execute(
-        `SELECT i.id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
+        `SELECT i.id, i.book_id, i.title, i.body, i.sort_order, i.created_at, i.updated_at,
                 ${NOTE_COUNT_SUBQUERY} AS note_count
          FROM ideas i
          LEFT JOIN idea_topics it ON it.idea_id = i.id
@@ -168,15 +172,18 @@ const findNotesForIdea = async (userId, ideaId) => {
 
 // Appends to the end of the user's list. sort_order is server-derived so two
 // clients creating ideas concurrently cannot collide on a value either picked.
-const insertIdea = async (userId, { title, body }) => {
+const insertIdea = async (userId, { bookId, title, body }) => {
+    // Scoped to (user, book), not to the user. Otherwise every new book would
+    // start its ideas numbered after Matthew's, and a book's first idea would
+    // sort below ideas it can never be shown beside.
     const [orderRows] = await db.execute(
-        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM ideas WHERE user_id = ?',
-        [userId]
+        'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM ideas WHERE user_id = ? AND book_id = ?',
+        [userId, bookId]
     );
 
     const [result] = await db.execute(
-        'INSERT INTO ideas (user_id, title, body, sort_order) VALUES (?, ?, ?, ?)',
-        [userId, title, body, Number(orderRows[0].next_order)]
+        'INSERT INTO ideas (user_id, book_id, title, body, sort_order) VALUES (?, ?, ?, ?, ?)',
+        [userId, bookId, title, body, Number(orderRows[0].next_order)]
     );
 
     return result.insertId;

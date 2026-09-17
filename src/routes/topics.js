@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { parseRowId } = require('../lib/params');
+const { parseRowId, parseBookScope } = require('../lib/params');
 const {
     parseCreateTopic,
     parseUpdateTopic,
@@ -28,12 +28,12 @@ const router = express.Router();
 // Mounted behind isAuth. The top tier: a topic gathers ideas, which gather
 // notes, and every one of those links is optional in both directions.
 
-// UNIQUE (user_id, slug) is enforced by the database, not by a read-then-write
+// UNIQUE (user_id, book_id, slug) is enforced by the database, not by a read-then-write
 // that two concurrent requests could both pass. Every write that can collide
 // funnels through here so the 409 reads the same wherever it comes from.
 const respondToWriteError = (res, err, context) => {
     if (isDuplicateSlugError(err)) {
-        return res.status(409).json({ error: 'You already have a topic with that slug' });
+        return res.status(409).json({ error: 'You already have a topic with that slug in this book' });
     }
 
     console.error(`${context} error:`, err);
@@ -41,15 +41,23 @@ const respondToWriteError = (res, err, context) => {
 };
 
 // GET /api/topics
-// Every topic with the size of what hangs beneath it, and the notes filed
-// directly under it.
+// Every topic in the book `?book=` names, with the size of what hangs beneath
+// it and the notes filed directly under it. Unscoped, it is every topic the
+// reader has.
 //
 // The notes ride along on the list rather than being a request per card: the
 // topics view draws every fan at once, so a per-topic endpoint would be one
 // round trip per card on a view that opens cold. Two queries either way.
 router.get('/', async (req, res) => {
+    // Absent is legal and means every book. Present-but-nonsense is a 400
+    // rather than a silent whole-corpus read — see parseBookScope.
+    const { bookId, error } = parseBookScope(req.query.book);
+    if (error) {
+        return res.status(400).json({ error });
+    }
+
     try {
-        const topics = await findTopics(req.user.id);
+        const topics = await findTopics(req.user.id, bookId);
         const notes = await findNotesForTopics(req.user.id, topics.map(topic => topic.id));
 
         const notesByTopicId = notes.reduce((byTopicId, note) => ({
@@ -69,6 +77,12 @@ router.get('/', async (req, res) => {
     }
 });
 
+// NOTE: unreachable from the client — nothing in src/client calls this, nor
+// PUT /:id/ideas/order below. This one predates book scoping and is still
+// per-account across books, so it would need a book scope before it could be
+// wired up. Left as it is rather than churned, since there is no caller to
+// keep working.
+//
 // PUT /api/topics/order — { topicIds: [...] }
 //
 // The root level of the Topic page's tree, reordered by dragging. Topics have
@@ -157,9 +171,11 @@ router.get('/:id/passages', async (req, res) => {
     }
 });
 
-// POST /api/topics — { name, slug?, description? }
+// POST /api/topics — { name, slug?, description?, bookId }
 // The name is required because the slug is derived from it; the client sends
-// the slug it generated and the server derives it again regardless.
+// the slug it generated and the server derives it again regardless. `bookId` is
+// required too — a topic belongs to exactly one book, and its slug is only
+// unique within that book.
 router.post('/', async (req, res) => {
     const parsed = parseCreateTopic(req.body);
     if (parsed.error) {

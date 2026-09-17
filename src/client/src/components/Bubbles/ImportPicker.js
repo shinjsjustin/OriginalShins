@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import BubbleOverlay from './BubbleOverlay';
 import TopicIdeaField from './TopicIdeaField';
+import BookTitle from '../Thoughts/BookTitle';
+import useImportCorpus from './useImportCorpus';
 import { UNTITLED_IDEA_LABEL } from '../Thoughts/TopBar';
 
 // Picking one thing out of the field of bubbles, and confirming it.
@@ -57,6 +59,25 @@ const emptyPrompt = (selectableKinds) => {
     return PROMPT_IDEA_ONLY;
 };
 
+// BookTitle's default noun is "Topics", which is right on Thoughts — the field
+// there is topics — but wrong here whenever selectableKinds says otherwise: a
+// chapter's importer picks ideas only, and titling it "Matthew Topics" would
+// name a picker whose sole purpose there is choosing an idea. Same
+// three-way split as emptyPrompt, and for the same reason — what the title
+// says has to match what selectableKinds actually offers.
+const NOUN_BOTH = 'Topics & Ideas';
+const NOUN_TOPIC_ONLY = 'Topics';
+const NOUN_IDEA_ONLY = 'Ideas';
+
+const titleNoun = (selectableKinds) => {
+    const canPickTopic = selectableKinds.includes('topic');
+    const canPickIdea = selectableKinds.includes('idea');
+
+    if (canPickTopic && canPickIdea) return NOUN_BOTH;
+    if (canPickTopic) return NOUN_TOPIC_ONLY;
+    return NOUN_IDEA_ONLY;
+};
+
 /**
  * The line the confirm bar shows.
  *
@@ -82,8 +103,8 @@ export const describePick = (pick, topics, ideas, selectableKinds) => {
 
 /**
  * @param label            the dialog's accessible name
- * @param topics           every topic, for the field
- * @param ideas            every idea, each carrying its topics
+ * @param books            every book, for the title block
+ * @param bookId           the book to open on — the centre panel's
  * @param selectableKinds  which tiers may be picked: ['idea'] or ['idea','topic']
  * @param onImport         ({ kind, id }) -> void. Does NOT close the picker —
  *                         the caller owns the write, so the caller owns the close
@@ -91,12 +112,19 @@ export const describePick = (pick, topics, ideas, selectableKinds) => {
  */
 const ImportPicker = ({
     label,
-    topics = [],
-    ideas = [],
+    books = [],
+    bookId,
     selectableKinds = ['idea'],
     onImport,
     onClose,
 }) => {
+    // Initialised from the caller's book and discarded when the overlay
+    // closes, so the next open starts at the panel again — see
+    // useImportCorpus. Changing it here never moves the scripture panel: this
+    // is a question about which corpus to file INTO, not about what is being
+    // read.
+    const [scopeBookId, setScopeBookId] = useState(bookId);
+    const { topics, ideas, isLoading, error } = useImportCorpus(scopeBookId);
     const [pick, setPick] = useState(null);
 
     const canPick = (kind) => selectableKinds.includes(kind);
@@ -111,20 +139,56 @@ const ImportPicker = ({
         if (canPick('topic')) setPick({ kind: 'topic', id });
     };
 
+    // Clear the pick when the book changes — a card picked in Matthew is not
+    // on Mark's field, and a confirm bar still naming it would import
+    // something the reader can no longer see.
+    const changeBook = (nextBookId) => {
+        setScopeBookId(nextBookId);
+        setPick(null);
+    };
+
     return (
         <BubbleOverlay label={label} onClose={onClose}>
             <div className="bubble-picker">
-                <div className="bubble-picker-field">
-                    <TopicIdeaField
-                        topics={topics}
-                        ideas={ideas}
-                        pick={pick}
-                        onSelectIdea={pickIdea}
-                        // Always handed over, so a topic click opens its fan
-                        // through the same path whether or not topics are
-                        // pickable here; the guard is inside pickTopic.
-                        onPickTopic={pickTopic}
+                <div className="bubble-picker-scope">
+                    <BookTitle
+                        books={books}
+                        bookId={scopeBookId}
+                        onChange={changeBook}
+                        noun={titleNoun(selectableKinds)}
                     />
+                </div>
+
+                {/* Loading and failure both have to read as themselves and not
+                    as an empty book — an empty field says "Pick a topic or an
+                    idea to import." exactly the way a book with nothing in it
+                    would, and a reader whose read failed or is still in
+                    flight would read that as "this book is empty" and go
+                    make a duplicate. Same shape NotesPanel uses for its own
+                    error/isLoading. */}
+                <div className="bubble-picker-field">
+                    {error && (
+                        <p className="thoughts-message thoughts-message--error" role="alert">
+                            {error}
+                        </p>
+                    )}
+
+                    {!error && isLoading && (
+                        <p className="thoughts-message">Loading…</p>
+                    )}
+
+                    {!error && !isLoading && (
+                        <TopicIdeaField
+                            topics={topics}
+                            ideas={ideas}
+                            pick={pick}
+                            onSelectIdea={pickIdea}
+                            // Always handed over, so a topic click opens its fan
+                            // through the same path whether or not topics are
+                            // pickable here; the guard is inside pickTopic.
+                            onPickTopic={pickTopic}
+                        />
+                    )}
                 </div>
 
                 {/* Its own strip rather than a bar floating over the canvas:

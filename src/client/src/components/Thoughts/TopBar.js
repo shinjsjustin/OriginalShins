@@ -1,8 +1,12 @@
 import React from 'react';
+import BookTitle from './BookTitle';
 
 // The Thoughts page's one strip of chrome: the way back to the whole field,
 // the two things a reader can create here, and — in the idea view — which idea
-// they are inside.
+// they are inside. It also holds which book is in scope, and that is a
+// different fact from the breadcrumb's: the crumb says which idea is open,
+// the title says which book the field is drawn from, and neither replaces the
+// other.
 //
 // ── Why the crumb names one topic and is not a path ────────────────────────
 //
@@ -40,9 +44,31 @@ export const breadcrumbFor = (idea) => {
 };
 
 /**
- * @param idea the open idea, or null in the topics view
+ * @param books         every book, from /api/books
+ * @param bookId        the book in scope
+ * @param isResolving   true while useBookScope is still seeding bookId — the
+ *                       same window Thoughts.js shows "Loading your
+ *                       thoughts…" in, and the window a create cannot
+ *                       succeed in (the server requires a bookId on both
+ *                       POST /topics and POST /ideas). Passed down rather
+ *                       than re-derived from `bookId === null` here, so
+ *                       there is exactly one place that decides what
+ *                       "unresolved" means — see linkRules.js's header for
+ *                       the same reasoning applied to a different pair of
+ *                       call sites that must not drift apart.
+ * @param onChangeBook  (bookId) -> void
+ * @param idea          the open idea, or null in the topics view
  */
-const TopBar = ({ idea = null, onResetView, onCreateTopic, onCreateIdea }) => {
+const TopBar = ({
+    books = [],
+    bookId = null,
+    isResolving = false,
+    onChangeBook,
+    idea = null,
+    onResetView,
+    onCreateTopic,
+    onCreateIdea,
+}) => {
     const crumb = breadcrumbFor(idea);
 
     return (
@@ -54,11 +80,23 @@ const TopBar = ({ idea = null, onResetView, onCreateTopic, onCreateIdea }) => {
                     ⟲ Reset View
                 </button>
 
+                <BookTitle books={books} bookId={bookId} onChange={onChangeBook} />
+
                 <div className="thoughts-topbar-creates">
-                    <button type="button" className="thoughts-action" onClick={onCreateTopic}>
+                    <button
+                        type="button"
+                        className="thoughts-action"
+                        onClick={onCreateTopic}
+                        disabled={isResolving}
+                    >
                         + Topic
                     </button>
-                    <button type="button" className="thoughts-action" onClick={onCreateIdea}>
+                    <button
+                        type="button"
+                        className="thoughts-action"
+                        onClick={onCreateIdea}
+                        disabled={isResolving}
+                    >
                         + Idea
                     </button>
                 </div>

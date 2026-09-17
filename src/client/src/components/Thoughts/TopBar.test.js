@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import TopBar, { UNFILED_LABEL, UNTITLED_IDEA_LABEL, breadcrumbFor } from './TopBar';
 
 // The bar has one piece of logic in it and it is the crumb: an idea has a SET
@@ -55,4 +55,54 @@ describe('TopBar', () => {
         expect(screen.getByText('Faith')).toBeInTheDocument();
         expect(screen.getByText('Covenant renewal')).toBeInTheDocument();
     });
+});
+
+const books = [
+    { id: 1, name: 'Genesis', testament: 'OT', canonicalOrder: 1 },
+    { id: 40, name: 'Matthew', testament: 'NT', canonicalOrder: 40 },
+    { id: 41, name: 'Mark', testament: 'NT', canonicalOrder: 41 },
+];
+
+const renderBar = (props = {}) => render(
+    <TopBar
+        books={books}
+        bookId={40}
+        onChangeBook={() => {}}
+        onResetView={() => {}}
+        onCreateTopic={() => {}}
+        onCreateIdea={() => {}}
+        {...props}
+    />
+);
+
+test('titles the page with the book in scope', () => {
+    renderBar();
+    expect(screen.getByRole('button', { name: /Matthew Topics/ })).toBeInTheDocument();
+});
+
+test('the title opens the book grid and reports the pick', () => {
+    const onChangeBook = jest.fn();
+    renderBar({ onChangeBook });
+
+    fireEvent.click(screen.getByRole('button', { name: /Matthew Topics/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark' }));
+
+    expect(onChangeBook).toHaveBeenCalledWith(41);
+});
+
+test('says nothing about a book until the canon is in', () => {
+    // /api/books is still in flight. A title naming a book nobody has seen
+    // would be a claim about a row that has not loaded.
+    renderBar({ books: [] });
+    expect(screen.queryByRole('button', { name: /Topics$/ })).not.toBeInTheDocument();
+});
+
+test('picking the book already in scope reports nothing', () => {
+    const onChangeBook = jest.fn();
+    renderBar({ onChangeBook });
+
+    fireEvent.click(screen.getByRole('button', { name: /Matthew Topics/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Matthew' }));
+
+    expect(onChangeBook).not.toHaveBeenCalled();
 });

@@ -1,8 +1,11 @@
 // Validation for the JSON bodies the ideas API accepts.
 //
 // An idea is a note's shape one tier up: a title and a markdown body. It shares
-// the notes API's rule that everything is optional at creation, because the
-// management UI creates one and lets you fill it in afterwards.
+// the notes API's rule that the text is optional at creation, because the
+// places that create one — the Thoughts page's Create modal and Analyze's idea
+// composer — make the row first and let you fill it in afterwards. The book it
+// belongs to is the exception: that is required, since an idea has no
+// account-wide tier to fall back to.
 const {
     ok,
     fail,
@@ -12,6 +15,7 @@ const {
     parseNullableId,
     parsePosition,
 } = require('./textInput');
+const { MAX_BOOK_ID, parsePositiveIntField } = require('./params');
 
 // VARCHAR(255) and TEXT, matching the columns in 003_ideas_topics.sql.
 const MAX_TITLE_LENGTH = 255;
@@ -25,7 +29,17 @@ const parseTitle = (value, fallback) =>
 const parseBody = (value, fallback) =>
     parseTextField('body', value, { fallback, maxLength: MAX_BODY_LENGTH });
 
-// POST /api/ideas — { title?, body? }
+// Required, not defaulted. A default here would be a guess about which book
+// the reader meant, and the only caller that cannot say which book it is in is
+// a caller that should not be creating an idea.
+const parseBookId = (value) => {
+    const bookId = parsePositiveIntField(value, MAX_BOOK_ID);
+    return bookId === null
+        ? fail('bookId must be a book id between 1 and 66')
+        : ok(bookId);
+};
+
+// POST /api/ideas — { title?, body?, bookId }
 const parseCreateIdea = (payload) => {
     if (!isPlainObject(payload)) {
         return fail('request body must be a JSON object');
@@ -37,12 +51,19 @@ const parseCreateIdea = (payload) => {
     const body = parseBody(payload.body, '');
     if (body.error) return body;
 
-    return ok({ title: title.value, body: body.value });
+    const bookId = parseBookId(payload.bookId);
+    if (bookId.error) return bookId;
+
+    return ok({ bookId: bookId.value, title: title.value, body: body.value });
 };
 
 // PATCH /api/ideas/:id — a partial update, same rule as a note's: only the
 // fields present are written, and naming none of them is an error rather than
 // a silent no-op.
+//
+// PATCH deliberately does not accept bookId: moving an idea between books
+// would have to move or orphan the notes filed under it, and that is its own
+// feature with its own answer for the tier below.
 const parseUpdateIdea = (payload) => {
     if (!isPlainObject(payload)) {
         return fail('request body must be a JSON object');

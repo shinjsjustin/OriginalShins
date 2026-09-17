@@ -265,6 +265,11 @@ const TopicCluster = ({
 const TopicIdeaField = ({
     topics = [],
     ideas = [],
+    // What an empty field says. The field is the only thing that knows it is
+    // empty, so it is the only thing that should say so — /thoughts hands in a
+    // message naming the book in scope, because "no topics yet" is a claim
+    // about one book there and about the whole picker here.
+    emptyMessage = 'No topics yet — start one with + Topic.',
     onSelectIdea = () => {},
     pick = null,
     onPickTopic = null,
@@ -343,9 +348,7 @@ const TopicIdeaField = ({
     return (
         <div className="thoughts-field" ref={canvasRef}>
             {clusters.length === 0 && (
-                <p className="thoughts-message">
-                    No topics yet — start one with + Topic.
-                </p>
+                <p className="thoughts-message">{emptyMessage}</p>
             )}
 
             {field.map((box, index) => {

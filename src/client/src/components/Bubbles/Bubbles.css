@@ -80,6 +80,15 @@
   min-height: 0;
 }
 
+/* Centred, with the same vertical padding as the bar below — the title block
+   reads as a peer of the confirm bar, not a heading bolted on top of it. */
+.bubble-picker-scope {
+  display: flex;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: var(--space-sm) var(--space-md);
+}
+
 .bubble-picker-bar {
   display: flex;
   align-items: center;

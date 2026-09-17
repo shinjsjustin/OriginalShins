@@ -58,8 +58,9 @@ export const GROUPS = Object.freeze([
         keyOf: (topic) => topic.id,
         // The topics view, where every topic is a card. A topic has no view of
         // its own to land on, so this is as close as a link gets — the reader
-        // arrives at the field with the name they searched for on it.
-        linkOf: () => thoughtsUrl(),
+        // arrives at the book whose field actually holds it, rather than
+        // whatever book their scope happened to be on.
+        linkOf: (topic) => thoughtsUrl(topic.bookId),
     },
     {
         key: 'scripture',

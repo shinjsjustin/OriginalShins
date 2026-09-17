@@ -1,0 +1,63 @@
+/* ─── BookGrid ────────────────────────────────────────────────────────────────
+   The 66-book canon as a grid, in whichever overlay the caller wraps it in.
+
+   Its own stylesheet rather than Analyze.css because it now has two callers on
+   two pages. CRA bundles every stylesheet globally, so borrowing `analyze-*`
+   here would work today and break silently the first time anything is
+   lazy-loaded.
+
+   Every rule below is ported from the `.analyze-grid--books` block it replaces,
+   so the Analyze modal looks exactly as it did. The three `--analyze-*` values
+   those rules read are inlined, because they were declared on `.analyze-page`
+   and this grid now renders outside it — a var() that resolves to nothing would
+   silently drop the border and the cell width. */
+
+.book-grid-section + .book-grid-section {
+  margin-top: var(--space-lg);
+}
+
+.book-grid-heading {
+  margin: 0 0 var(--space-sm);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  color: var(--ink-faint);
+}
+
+.book-grid {
+  display: grid;
+  gap: var(--space-xs);
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.book-grid-cell {
+  padding: var(--space-sm);
+  background-color: var(--paper-alt);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-base);
+  text-align: center;
+  transition: background-color 0.15s ease,
+              color 0.15s ease,
+              border-color 0.15s ease;
+}
+
+.book-grid-cell:hover {
+  background-color: var(--lapis);
+  color: var(--text-white);
+  border-color: var(--lapis);
+}
+
+.book-grid-cell--selected {
+  background-color: var(--lapis-deep);
+  color: var(--text-white);
+  border-color: var(--lapis-deep);
+  /* The plan's port of this rule dropped this line. The source rule,
+     .analyze-grid-cell--selected in Analyze.css, sets it — ChapterPicker
+     still uses that class today, so the effect is visible right next to
+     this one. Omitting it here would silently un-bold the selected book,
+     which is exactly the kind of drift this refactor must not introduce. */
+  font-weight: 600;
+}

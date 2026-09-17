@@ -391,8 +391,8 @@ const OrbitCanvas = ({ shown, isClosing, isPinned, onTogglePin }) => {
     )), [orbit, notes, canvas]);
 
     // Sanitized by DOMPurify inside renderMarkdown — the app's one renderer,
-    // shared with the note editor and the overview drawer, so a body is
-    // rendered the same way wherever it is read.
+    // shared with the note editor, so a body is rendered the same way wherever
+    // it is read.
     const renderedBody = useMemo(() => renderMarkdown(shown.idea.body), [shown.idea.body]);
 
     const ideaBox = ideaBoxFor(canvas);

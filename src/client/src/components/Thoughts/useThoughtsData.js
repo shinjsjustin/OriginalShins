@@ -176,8 +176,15 @@ const groupByNoteId = (passages) => passages.reduce((byNoteId, passage) => ({
     [passage.noteId]: [...(byNoteId[passage.noteId] || []), passage],
 }), {});
 
-const loadNotesForIdea = async (ideaId, signal) => {
-    if (ideaId === null) return [];
+// The open idea's notes, and the book the idea itself says it is in.
+//
+// The book comes free: this is the read that already fetches the idea, and it
+// is ownership-scoped rather than book-scoped, so it answers for an idea the
+// book in scope does not contain. The page uses it to follow the idea to its
+// own book — see Thoughts.js — which is why it is carried back rather than
+// dropped on the floor with the rest of the payload.
+const loadIdeaView = async (ideaId, signal) => {
+    if (ideaId === null) return { notes: [], ideaBookId: null };
 
     const payload = await fetchJson(`/ideas/${ideaId}`, { signal });
     const rows = (payload.idea && payload.idea.notes) || [];
@@ -194,27 +201,33 @@ const loadNotesForIdea = async (ideaId, signal) => {
 
     const passagesByNoteId = groupByNoteId(passagePayload.passages || []);
 
-    return details.map(detail => ({
-        ...detail.note,
-        passages: passagesByNoteId[detail.note.id] || [],
-    }));
+    return {
+        notes: details.map(detail => ({
+            ...detail.note,
+            passages: passagesByNoteId[detail.note.id] || [],
+        })),
+        ideaBookId: (payload.idea && payload.idea.bookId) || null,
+    };
 };
 
-const loadThoughts = async (ideaId, signal) => {
-    const [topicsPayload, ideasPayload, notes] = await Promise.all([
-        fetchJson(TOPICS_PATH, { signal }),
-        fetchJson(IDEAS_PATH, { signal }),
-        loadNotesForIdea(ideaId, signal),
+const loadThoughts = async (bookId, ideaId, signal) => {
+    const scope = `?book=${bookId}`;
+
+    const [topicsPayload, ideasPayload, ideaView] = await Promise.all([
+        fetchJson(`${TOPICS_PATH}${scope}`, { signal }),
+        fetchJson(`${IDEAS_PATH}${scope}`, { signal }),
+        loadIdeaView(ideaId, signal),
     ]);
 
     return {
         topics: topicsPayload.topics || [],
         ideas: ideasPayload.ideas || [],
-        notes,
+        notes: ideaView.notes,
+        ideaBookId: ideaView.ideaBookId,
     };
 };
 
-const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [] });
+const EMPTY = Object.freeze({ topics: [], ideas: [], notes: [], ideaBookId: null });
 
 // A topic's passages, fetched when its fan first opens rather than for every
 // topic when the view does.
@@ -257,29 +270,53 @@ const useTopicPassages = (revision) => {
 };
 
 /**
+ * @param bookId the book in scope, or null while it is still being resolved
  * @param ideaId the idea whose notes to load, or null in the topics view
  */
-const useThoughtsData = (ideaId = null) => {
+const useThoughtsData = (bookId = null, ideaId = null) => {
     const [data, setData] = useState(EMPTY);
     const [isLoading, setIsLoading] = useState(true);
+    // Which question `data` is an answer TO, rather than whether a request is in
+    // flight. A refetch after a save holds the same book's rows the whole time,
+    // and anything reading `isLoading` to decide whether the corpus is known
+    // would call it unknown once per write.
+    //
+    // Both halves of the question are kept together, in one value, because
+    // `data` answers them together: the book decides the topic and idea lists,
+    // and the idea decides the notes and `ideaBookId`. Held apart, a reader
+    // could take `ideaBookId` from a load the current `ideaId` never asked for
+    // — which is exactly what an `?idea=` dropped by a book change leaves
+    // behind. Pairing them here means there is nowhere to read one without the
+    // other, rather than a guard at each call site that has to remember to.
+    const [answers, setAnswers] = useState({ bookId: null, ideaId: null });
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
     const [revision, setRevision] = useState(0);
     const { passagesByTopicId, loadPassagesFor } = useTopicPassages(revision);
 
     useEffect(() => {
+        // Nothing to ask for until the scope is known — see useBookScope's
+        // `isResolving`. Staying in the loading state rather than fetching an
+        // unscoped list is what stops the page asking twice on every entry.
+        if (bookId === null) return undefined;
+
         const controller = new AbortController();
         setIsLoading(true);
 
-        loadThoughts(ideaId, controller.signal)
+        loadThoughts(bookId, ideaId, controller.signal)
             .then(loaded => {
                 setData(loaded);
                 setError('');
+                setAnswers({ bookId, ideaId });
             })
             .catch(err => {
                 if (err.name === 'AbortError') return;
                 setData(EMPTY);
                 setError(err.message);
+                // Answered too: a book that failed is a book this hook has
+                // finished answering for, and a reader left waiting on an
+                // answer that is never coming is the worse of the two.
+                setAnswers({ bookId, ideaId });
             })
             .finally(() => {
                 if (!controller.signal.aborted) {
@@ -288,7 +325,7 @@ const useThoughtsData = (ideaId = null) => {
             });
 
         return () => controller.abort();
-    }, [ideaId, revision]);
+    }, [bookId, ideaId, revision]);
 
     // Every single-request mutation is the same shape: run it, surface any
     // failure as a message the page can show, and on success bump the revision
@@ -398,7 +435,16 @@ const useThoughtsData = (ideaId = null) => {
         topics: data.topics,
         ideas: data.ideas,
         notes: data.notes,
+        // Only ever the OPEN idea's book. `data` still holds the last load's
+        // answer while the next one is in flight, and after a book change that
+        // answer is about an idea the URL no longer names — reported as the
+        // current one, it would send the page back to the book the reader just
+        // left. Unknown until the two agree is the honest answer.
+        ideaBookId: answers.ideaId === ideaId ? data.ideaBookId : null,
         isLoading,
+        // The book half alone: the topic and idea lists do not change when an
+        // idea opens, so a corpus read off them is still current.
+        settledBookId: answers.bookId,
         error,
         actionError,
         dismissActionError,

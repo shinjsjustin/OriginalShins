@@ -107,12 +107,15 @@ router.get('/unfiled', async (req, res) => {
 
 // GET /api/notes/:id — one note, with its complete reference and idea sets.
 //
-// The Overview page's drawer is what needs this. That page loads /api/overview,
-// which ships anchors and titles and deliberately not bodies: a body is the one
-// field with no bound on its length, and a few thousand of them would turn a
-// payload measured in hundreds of kilobytes into one measured in megabytes for
-// the sake of the one note the reader has just clicked. So the body is fetched
-// when a note is actually opened, which is the moment it is first wanted.
+// The Thoughts page's idea view is what needs this: opening an idea calls
+// useThoughtsData.loadNotesForIdea, which fetches each of the idea's notes in
+// full to draw its orbit. The list payloads that feed that view ship anchors
+// and titles and deliberately not bodies: a body is the one field with no
+// bound on its length, and a few thousand of them would turn a payload
+// measured in hundreds of kilobytes into one measured in megabytes for the
+// sake of the handful of notes one idea actually opens. So the body is
+// fetched here, one note at a time, when a note is actually opened, which is
+// the moment it is first wanted.
 //
 // Declared after /unfiled so the literal segment still wins, and before the
 // other /:id routes so the read sits beside them rather than under the writes.

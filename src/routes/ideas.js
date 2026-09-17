@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/db');
 
-const { parseRowId } = require('../lib/params');
+const { parseRowId, parseBookScope } = require('../lib/params');
 const {
     parseCreateIdea,
     parseUpdateIdea,
@@ -20,12 +20,20 @@ const {
 } = require('../lib/ideas');
 const { findPassagesForNotes } = require('../lib/passages');
 const { removePinsForItem } = require('../lib/pins');
-const { withTopics } = require('../lib/ideaTopics');
+const { hasTopicOutsideIdeaBook, withTopics } = require('../lib/ideaTopics');
 const { LINK_SPECS, MISSING_PARENT, replaceLinks } = require('../lib/links');
 const { TREE_SPECS, reorderMembers, moveMember, inTransaction } = require('../lib/ordering');
 const { respondToOrderingError } = require('./orderingErrors');
 
 const router = express.Router();
+
+// The refusal a cross-book link gets. 422 rather than 400: the body parsed and
+// named real rows, and what is wrong is the pairing itself — which is also
+// what lets the client say why, since its fetch wrapper maps a status to copy
+// rather than passing the server's own words through (see config/api.js).
+const CROSS_BOOK_STATUS = 422;
+
+const CROSS_BOOK_MESSAGE = 'A topic and an idea can only be linked when they are in the same book.';
 
 // Mounted behind isAuth, so req.user is always populated and every handler
 // takes its user id from the token rather than from the request.
@@ -35,12 +43,22 @@ const router = express.Router();
 // nothing here refuses to create, read or save one.
 
 // GET /api/ideas
-// Every idea the user has, each with its topics and how many notes it gathers.
-// This is what the note editor's multi-select and the management list both
-// read, so it carries enough to render either without a second request.
+// Every idea in the book `?book=` names, each with its topics and how many
+// notes it gathers — one payload serving the Thoughts canvas, which fans an
+// idea out under the topic it names. Unscoped it is Analyze's chapter
+// shortlist, which resolves the ideas imported into a chapter and so needs
+// every book's. Either way it carries enough to render without a second
+// request.
 router.get('/', async (req, res) => {
+    // Absent is legal and means every book. Present-but-nonsense is a 400
+    // rather than a silent whole-corpus read — see parseBookScope.
+    const { bookId, error } = parseBookScope(req.query.book);
+    if (error) {
+        return res.status(400).json({ error });
+    }
+
     try {
-        const ideas = await withTopics(req.user.id, await findIdeas(req.user.id));
+        const ideas = await withTopics(req.user.id, await findIdeas(req.user.id, bookId));
         res.status(200).json({ ideas });
     } catch (err) {
         console.error('GET /api/ideas error:', err);
@@ -56,9 +74,9 @@ router.get('/', async (req, res) => {
 // walks down from.
 //
 // A dedicated path rather than a flag on GET /api/ideas, because the two answer
-// different questions: the list endpoint serves the management page and the
-// note editor's multi-select, and both of them want every idea. Declared above
-// GET /:id so the literal segment is matched before the id pattern.
+// different questions: the list endpoint's callers want every idea in their
+// scope, filed or not. Declared above GET /:id so the literal segment is
+// matched before the id pattern.
 router.get('/unfiled', async (req, res) => {
     try {
         // No topics are attached: having none is what put these here.
@@ -139,9 +157,12 @@ router.get('/:id/passages', async (req, res) => {
     }
 });
 
-// POST /api/ideas — { title?, body? }
-// Both optional, exactly as for a note: the management UI creates an idea and
-// lets you fill it in, and topics are linked afterwards by PUT /:id/topics.
+// POST /api/ideas — { title?, body?, bookId }
+// Title and body are optional, exactly as for a note: the Thoughts page's
+// Create modal and Analyze's idea composer make the row and let you fill it in,
+// and topics are linked afterwards by PUT /:id/topics. `bookId` is not
+// optional — an idea belongs to exactly one book, with nothing above it to
+// fall back to.
 router.post('/', async (req, res) => {
     const parsed = parseCreateIdea(req.body);
     if (parsed.error) {
@@ -225,6 +246,12 @@ router.delete('/:id', async (req, res) => {
 // add-one/remove-one pair: the UI is a multi-select, and a full-set PUT is the
 // only shape that cannot leave the two out of step. An empty array files the
 // idea under nothing, which is legal.
+//
+// This is the endpoint that makes "a topic's ideas are always its own book's"
+// true rather than merely customary. The Thoughts panel filters its list to
+// the book on screen, but a filter is a convenience the page drops when it has
+// no book to filter against — so the rule is enforced here, where nothing can
+// route around it, and the client is left to report the refusal.
 router.put('/:id/topics', async (req, res) => {
     const ideaId = parseRowId(req.params.id);
     if (ideaId === null) {
@@ -240,6 +267,15 @@ router.put('/:id/topics', async (req, res) => {
     try {
         connection = await db.getConnection();
         await connection.beginTransaction();
+
+        // Asked before the ownership check writes anything, and inside the same
+        // transaction, so nothing can move between the question and the write.
+        // A topic that is not the caller's falls through this one and is
+        // refused below, where that answer belongs.
+        if (await hasTopicOutsideIdeaBook(connection, req.user.id, ideaId, parsed.value)) {
+            await connection.rollback();
+            return res.status(CROSS_BOOK_STATUS).json({ error: CROSS_BOOK_MESSAGE });
+        }
 
         // Ownership of the idea and of every topic id is checked inside the
         // transaction, so nothing can change between the check and the write.

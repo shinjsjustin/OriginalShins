@@ -4,11 +4,13 @@ import useCollection from './useCollection';
 
 // Every idea the user has, plus every write that can change one.
 //
-// This page uses two ends of it: the note editor needs the whole list to offer
-// as a multi-select, and the idea composer creates one. Renaming, filing and
-// deleting an idea happen on the Thoughts page, which has hooks of its own —
-// those writes are kept here because they are the same endpoints in the same
-// shape, and a hook that could only read would be the odd one out.
+// This page uses two ends of it: the chapter shortlist resolves the ideas
+// imported into a chapter against it — which is why the read is unscoped, since
+// an imported idea may belong to any book — and the idea composer creates one.
+// Renaming, filing and deleting an idea happen on the Thoughts page, which has
+// hooks of its own — those writes are kept here because they are the same
+// endpoints in the same shape, and a hook that could only read would be the odd
+// one out.
 //
 // It loads the whole list rather than a page of it because that is a picker's
 // worth of data: the plan's scale assumption is low thousands of notes with far

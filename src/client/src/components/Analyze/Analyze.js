@@ -12,7 +12,6 @@ import useActiveNote from './useActiveNote';
 import useSelectedVerses from './useSelectedVerses';
 import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
-import useTopics from './useTopics';
 import useChapterIdeas from './useChapterIdeas';
 import { collectChapterIdeas } from './chapterIdeas';
 import { describePosition } from './navigation';
@@ -53,15 +52,12 @@ const Analyze = () => {
     const { primary, compare, setPrimary, setCompare } = usePanelPositions(books, isRestoring);
     const notes = useNotes(primary);
 
-    // The ideas a note can be filed under, and the standalone ideas the notes
-    // panel lists. Loaded once for the page rather than per note: the editor
-    // opens on whichever note you click, and a picker that fetched its options
-    // on open would show an empty list for a moment every time.
+    // The whole corpus of ideas, unscoped, and the composer that adds one.
+    // Its one reader is the chapter shortlist below, which needs every book's
+    // ideas and not this chapter's: an idea imported into a chapter may have
+    // been written while reading another one. The note editor no longer takes
+    // this list — its picker asks for the book it is opened on, when it opens.
     const { ideas, createIdea } = useIdeas();
-
-    // The topics the importer's field of bubbles is built from. Read-only here
-    // — topics are made and filed on the Thoughts page.
-    const { topics } = useTopics();
 
     // The shortlist for the chapter the primary panel is showing. It takes
     // `primary` and not a position of its own, so moving that panel refetches
@@ -235,19 +231,20 @@ const Analyze = () => {
         }
     }, [notes, retain]);
 
-    // A new idea starts in the chapter it was started in. "+ New idea" sits in
-    // this panel, beside this passage, which says the idea belongs here as
-    // plainly as importing one does — and without the second call the button's
-    // whole result would disappear the moment it succeeded, into a corpus this
-    // panel no longer lists. The idea is created either way: a failed import
-    // costs the shortlist an entry, not the reader their idea.
+    // A new idea starts in the book and chapter it was started in. "+ New
+    // idea" sits in this panel, beside this passage, which says the idea
+    // belongs here as plainly as importing one does — and without the second
+    // call the button's whole result would disappear the moment it succeeded,
+    // into a corpus this panel no longer lists. The idea is created either
+    // way: a failed import costs the shortlist an entry, not the reader their
+    // idea.
     const handleCreateIdea = useCallback(async (body) => {
-        const created = await createIdea(body);
+        const created = await createIdea({ ...body, bookId: primary.bookId });
         if (created) {
             await importIdea(created.id);
         }
         return created;
-    }, [createIdea, importIdea]);
+    }, [createIdea, importIdea, primary.bookId]);
 
     const handleDeleteNote = useCallback(async (noteId) => {
         const removed = await notes.removeNote(noteId);
@@ -373,8 +370,6 @@ const Analyze = () => {
                             collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
                             notes={notes.notes}
                             unreferenced={notes.unreferenced}
-                            topics={topics}
-                            ideas={ideas}
                             chapterIdeas={chapterIdeaList}
                             importedIdeaIds={importedIdeas.map(idea => idea.id)}
                             isLoading={notes.isLoading}
