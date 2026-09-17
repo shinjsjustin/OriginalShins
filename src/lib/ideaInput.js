@@ -1,8 +1,11 @@
 // Validation for the JSON bodies the ideas API accepts.
 //
 // An idea is a note's shape one tier up: a title and a markdown body. It shares
-// the notes API's rule that everything is optional at creation, because the
-// management UI creates one and lets you fill it in afterwards.
+// the notes API's rule that the text is optional at creation, because the
+// places that create one — the Thoughts page's Create modal and Analyze's idea
+// composer — make the row first and let you fill it in afterwards. The book it
+// belongs to is the exception: that is required, since an idea has no
+// account-wide tier to fall back to.
 const {
     ok,
     fail,

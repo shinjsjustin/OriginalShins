@@ -12,8 +12,8 @@ const MESSAGE_BY_STATUS = {
     401: 'Your session has expired. Please log in again.',
     403: 'Your session is no longer valid. Please log in again.',
     404: 'We could not find that.',
-    // A topic slug is unique per user; the server rejects a repeat rather than
-    // quietly renaming one of them.
+    // A topic slug is unique per user per book; the server rejects a repeat
+    // within the same book rather than quietly renaming one of them.
     409: 'You already have one of those. Try a different name.',
     // The only 422 this API returns: PUT /api/ideas/:id/topics refusing to
     // link an idea to a topic in another book.

@@ -157,9 +157,12 @@ router.get('/:id/passages', async (req, res) => {
     }
 });
 
-// POST /api/ideas — { title?, body? }
-// Both optional, exactly as for a note: the management UI creates an idea and
-// lets you fill it in, and topics are linked afterwards by PUT /:id/topics.
+// POST /api/ideas — { title?, body?, bookId }
+// Title and body are optional, exactly as for a note: the Thoughts page's
+// Create modal and Analyze's idea composer make the row and let you fill it in,
+// and topics are linked afterwards by PUT /:id/topics. `bookId` is not
+// optional — an idea belongs to exactly one book, with nothing above it to
+// fall back to.
 router.post('/', async (req, res) => {
     const parsed = parseCreateIdea(req.body);
     if (parsed.error) {

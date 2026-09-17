@@ -41,8 +41,9 @@ const respondToWriteError = (res, err, context) => {
 };
 
 // GET /api/topics
-// Every topic with the size of what hangs beneath it, and the notes filed
-// directly under it.
+// Every topic in the book `?book=` names, with the size of what hangs beneath
+// it and the notes filed directly under it. Unscoped, it is every topic the
+// reader has.
 //
 // The notes ride along on the list rather than being a request per card: the
 // topics view draws every fan at once, so a per-topic endpoint would be one
@@ -170,9 +171,11 @@ router.get('/:id/passages', async (req, res) => {
     }
 });
 
-// POST /api/topics — { name, slug?, description? }
+// POST /api/topics — { name, slug?, description?, bookId }
 // The name is required because the slug is derived from it; the client sends
-// the slug it generated and the server derives it again regardless.
+// the slug it generated and the server derives it again regardless. `bookId` is
+// required too — a topic belongs to exactly one book, and its slug is only
+// unique within that book.
 router.post('/', async (req, res) => {
     const parsed = parseCreateTopic(req.body);
     if (parsed.error) {

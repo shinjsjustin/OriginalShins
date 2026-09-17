@@ -25,9 +25,9 @@ const toIdea = (row, extras = {}) => ({
 // Every idea the user has, with how many notes each one gathers.
 //
 // The count joins through to `notes` and re-checks user_id there. The link
-// table cannot hold a cross-user row today, but the count is what the
-// management UI shows and a wrong one would be invisible — so it is proven by
-// the query rather than by an argument about who could have written the link.
+// table cannot hold a cross-user row today, but the count is what an idea card
+// prints and a wrong one would be invisible — so it is proven by the query
+// rather than by an argument about who could have written the link.
 const findIdeas = async (userId, bookId = null) => {
     const scope = bookId === null ? '' : ' AND i.book_id = ?';
     const params = bookId === null ? [userId] : [userId, bookId];

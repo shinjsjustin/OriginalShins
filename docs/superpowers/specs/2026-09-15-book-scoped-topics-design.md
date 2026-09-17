@@ -210,10 +210,10 @@ Genesis is where the Analyze page opens in the same situation.
 This is the one place the page deliberately diverges from `showIdea`, which
 pushes.
 
-Opening an idea has no side effect, so back can undo it cleanly. Changing book
-clears the pinned set, and back cannot un-clear it. A history entry that
-restores `?book=40` over a pinned panel that is now empty is a back button
-lying about what it did, so there is no history entry.
+Opening an idea is somewhere the reader navigated to; the scope is not. Every
+entry to the page writes a `?book=` of its own — the seed included — so pushing
+would leave back stepping through book picks instead of leaving the page, with
+the picker itself one press away the whole time.
 
 ### The title block
 
@@ -474,7 +474,8 @@ Matthew shows what it showed before and Mark is empty.
 3. Delete `/overview`, client and server. Independent of everything above, and
    doing it early means the rest is written against a smaller tree.
 4. `BookGrid` extraction; `Analyze/BookPicker` rewired onto it.
-5. Thoughts: `useBookScope`, the title block, pin clearing, the empty state.
+5. Thoughts: `useBookScope`, the title block, the panel's book filter, the
+   empty state.
 6. Analyze: `useImportCorpus`, the picker's title block, `bookId` on the two
    create paths.
 7. Search links.

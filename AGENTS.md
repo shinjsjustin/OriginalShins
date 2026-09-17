@@ -558,12 +558,13 @@ directions from becoming a circular import.
 
 ### Slugs
 
-`topics.slug` is derived from the name and is unique per user
-(`UNIQUE (user_id, slug)`). The client derives it as you type (`Thoughts/slug.js`)
-and the server derives it again from what it receives (`src/lib/slug.js`) — the
-client's copy is a convenience for the form, never the authority. Uniqueness is
-enforced by the index and surfaced as a **409**, not by a read-then-write that
-two concurrent requests could both pass.
+`topics.slug` is derived from the name and is unique per user **per book**
+(`UNIQUE (user_id, book_id, slug)` — see [A topic and an idea belong to a
+book](#a-topic-and-an-idea-belong-to-a-book) for why). The client derives it as
+you type (`Thoughts/slug.js`) and the server derives it again from what it
+receives (`src/lib/slug.js`) — the client's copy is a convenience for the form,
+never the authority. Uniqueness is enforced by the index and surfaced as a
+**409**, not by a read-then-write that two concurrent requests could both pass.
 
 Renaming a topic does not silently re-slug it: a slug can already be in a saved
 URL, so changing it is an explicit act and the form sends both fields.
@@ -731,25 +732,28 @@ appears. That is one rule with three consequences worth stating outright:
 - Linking happens between pinned rows rather than on the cards. Two adjacent
   tiers in the panel, select them, press Link.
 
-### Three hooks, composed by the page
+### Four hooks, composed by the page
 
-`Thoughts.js` is a shell. It holds three hooks and joins them, and every piece
+`Thoughts.js` is a shell. It holds four hooks and joins them, and every piece
 below it reads state from there rather than fetching again:
 
 | Hook | Holds |
 |------|-------|
 | `useThoughtsView` | Which view is showing — reads and writes `?idea=` and nothing else |
-| `useThoughtsData` | The corpus: every topic, every idea, and the notes of whichever idea is open, plus every write the canvas and the panel can make |
+| `useBookScope` | Which book is showing — reads and writes `?book=`, seeding it when the URL names none (see [One book at a time](#one-book-at-a-time)) |
+| `useThoughtsData` | The corpus: that book's topics and ideas, and the notes of whichever idea is open, plus every write the canvas and the panel can make |
 | `usePins` | The pinned set |
 
-`useThoughtsData` takes the open idea's id, because that is what decides whether
-any notes are loaded at all; `usePins` knows nothing about the view or the book.
-None of the three knows about the others. Joining them is the page's job, and it
-is why the panel and the canvas cannot disagree: the panel's list is `usePins`'
-list read through the very arrays the canvas draws, so an item in one is an item
-in the other by construction. It also follows that the panel cannot say what it
-holds until the corpus has loaded — until then it says it is still loading
-rather than that nothing is pinned.
+`useThoughtsData` takes the book in scope and the open idea's id — between them
+they decide which lists are fetched and whether any notes are loaded at all —
+and `useBookScope` takes the idea's id too, since an open idea outranks a
+`?book=` that disagrees with it. `usePins` takes nothing and knows nothing about
+either. Each is handed what it needs rather than reaching for another; joining
+them is the page's job, and it is why the panel and the canvas cannot disagree:
+the panel's list is `usePins`' list read through the very arrays the canvas
+draws, so an item in one is an item in the other by construction. It also
+follows that the panel cannot say what it holds until the corpus has loaded —
+until then it says it is still loading rather than that nothing is pinned.
 
 The corpus is `GET /api/topics` + `GET /api/ideas` in parallel, and — in the
 idea view — `GET /api/ideas/:id` for which notes orbit in which order, then one
@@ -1025,7 +1029,7 @@ it right.
 |-------|----------|
 | Note | `/analyze?l=<book>.<chapter>&note=<id>` — the editor, at its first anchor |
 | Idea | `/thoughts?idea=<id>` — the idea view, its notes orbiting it |
-| Topic | `/thoughts` — the topics view, where every topic is a card |
+| Topic | `/thoughts?book=<book>` — the topics view, on the book whose field holds it |
 | Scripture | `/analyze?l=<book>.<chapter>` — the primary panel on that chapter |
 
 How many topics an idea is filed under does not change its link, and neither
@@ -1033,14 +1037,16 @@ does being filed under none. The tree this replaced could only reach an idea
 through a topic — or through the unfiled bucket — so both were special cases
 there; the idea view is reached by id, so neither is a case at all now.
 
-A topic gets the bare field because a topic has no view of its own to open. That
-is the honest limit of the link and not an oversight: adding a param that merely
-scrolled the field would be a second URL contract for a hover's worth of state.
+A topic gets a field rather than a view of its own, because a topic has no view
+of its own to open — but it names its book, so a Mark topic lands on Mark's
+field instead of wherever the reader's scope happened to be. That is the honest
+limit of the link and not an oversight: adding a param that merely scrolled the
+field would be a second URL contract for a hover's worth of state.
 
 Those URLs are built by two pure modules and not by the search page:
 `Analyze/analyzeUrl.js` owns every link **into** Analyze (the Thoughts note cards
-use it too), and `Thoughts/thoughtsUrl.js` owns `?idea=`. The page that reads a
-param owns the name of it.
+use it too), and `Thoughts/thoughtsUrl.js` owns `?idea=` and `?book=`. The page
+that reads a param owns the name of it.
 
 ### An idea that no longer exists
 

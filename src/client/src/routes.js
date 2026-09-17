@@ -49,7 +49,8 @@ const routes = [
     // The topic -> idea -> note hierarchy as one canvas: topic cards that fan
     // their ideas out on hover, an idea centred with its notes orbiting it, and
     // the pinned panel beside them where anything pinned is edited. Which of
-    // the two views is showing lives in the query string, e.g. /thoughts?idea=7
+    // the two views is showing lives in the query string, e.g. /thoughts?idea=7,
+    // and so does the one book it draws, e.g. /thoughts?book=41
     //
     // It replaced /ideas, /topics and /topics-tree, which were three pages over
     // the same two tiers — one to create, one to file, one to read. The server

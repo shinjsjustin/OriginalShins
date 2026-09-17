@@ -1,10 +1,10 @@
 // Validation for the JSON bodies the topics API accepts.
 //
 // A topic differs from a note and an idea in one way that matters: it has a
-// slug, and the slug is part of a UNIQUE (user_id, slug) key. So unlike a
-// title, a name cannot be blank — there would be nothing to derive an identity
-// from — and whatever slug the client sends is re-derived here before it is
-// written.
+// slug, and the slug is part of a UNIQUE (user_id, book_id, slug) key. So
+// unlike a title, a name cannot be blank — there would be nothing to derive an
+// identity from — and whatever slug the client sends is re-derived here before
+// it is written.
 const {
     ok,
     fail,
@@ -89,8 +89,10 @@ const parseCreateTopic = (payload) => {
 // PATCH /api/topics/:id — a partial update.
 //
 // Renaming does NOT silently re-slug: the slug may already be in a URL someone
-// saved, so changing it is an explicit act. The management UI sends both fields
-// when it wants both changed.
+// saved, so changing it is an explicit act, and a caller that wants both
+// changed sends both fields. None does today — the pinned panel's topic form
+// edits name and description only — so a topic keeps the slug it was created
+// with until something asks for a new one.
 //
 // PATCH deliberately does not accept bookId: moving a topic between books
 // would have to move or orphan the ideas filed under it, and that is its own
