@@ -48,9 +48,11 @@ test('findCurrentPassage returns null when the user is missing', async () => {
 });
 
 test('findCurrentPassage returns null when no primary is saved', async () => {
-    // INNER JOIN on books yields no row; guard also covers a row with null ids.
-    mock.method(db, 'execute', async () => [[{
-        book_id: null, book_name: null, chapter: null, saved_at: null,
-    }]]);
+    // The INNER JOIN on books and the IS NOT NULL filter are what yield no row.
+    const execute = mock.method(db, 'execute', async () => [[]]);
+
     assert.equal(await findCurrentPassage(7), null);
+    const [sql] = execute.mock.calls[0].arguments;
+    assert.match(sql, /JOIN books/);
+    assert.match(sql, /last_primary_chapter IS NOT NULL/);
 });

@@ -84,7 +84,7 @@ const findCurrentPassage = async (userId) => {
         [userId]
     );
 
-    if (rows.length === 0 || rows[0].book_id === null) return null;
+    if (rows.length === 0) return null;
     const row = rows[0];
     return {
         bookId: row.book_id,
