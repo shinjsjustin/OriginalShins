@@ -3,6 +3,8 @@ const db = require('../db/db');
 
 const { parseLocation } = require('../lib/locationInput');
 const { findLocation, saveLocation } = require('../lib/location');
+const { recordReadingDay } = require('../lib/readingDays');
+const { localDate, readingTimeZone } = require('../lib/readingDay');
 
 const router = express.Router();
 
@@ -75,6 +77,20 @@ router.put('/location', async (req, res) => {
         const saved = await saveLocation(req.user.id, parsed.value);
         if (!saved) {
             return res.status(404).json({ error: 'User not found' });
+        }
+
+        // The location is already saved, so a failed log must not fail the save.
+        const { primary } = parsed.value;
+        if (primary !== null) {
+            try {
+                await recordReadingDay(req.user.id, {
+                    readOn: localDate(new Date(), readingTimeZone()),
+                    bookId: primary.bookId,
+                    chapter: primary.chapter,
+                });
+            } catch (err) {
+                console.error('PUT /api/user/location reading day error:', err);
+            }
         }
 
         // The location as stored, so the client never has to guess what the
