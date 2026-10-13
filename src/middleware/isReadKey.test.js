@@ -3,8 +3,21 @@ const assert = require('node:assert');
 const isReadKey = require('./isReadKey');
 
 const KEY = 'secret-key';
+const ENV_NAMES = ['BOURNE_API_KEY', 'BOURNE_USER_ID'];
 
 function run(authorization, env = {}) {
+    const saved = ENV_NAMES.map((k) => [k, process.env[k]]);
+    try {
+        return runWithEnv(authorization, env);
+    } finally {
+        for (const [k, v] of saved) {
+            if (v === undefined) delete process.env[k];
+            else process.env[k] = v;
+        }
+    }
+}
+
+function runWithEnv(authorization, env) {
     process.env.BOURNE_API_KEY = KEY;
     process.env.BOURNE_USER_ID = '7';
     for (const [k, v] of Object.entries(env)) {
@@ -48,13 +61,11 @@ test('right key sets req.user to the numeric user id and calls next', () => {
 
 test('unset or empty key answers 503 even when the header matches', () => {
     for (const v of [undefined, '']) {
-        const { out } = run('Bearer ', { BOURNE_API_KEY: v });
+        const { out } = run(`Bearer ${KEY}`, { BOURNE_API_KEY: v });
         assert.strictEqual(out.status, 503);
         assert.ok(out.body.error);
         assert.strictEqual(out.nextCalled, false);
     }
-    const { out } = run('Bearer ', { BOURNE_API_KEY: '' });
-    assert.strictEqual(out.status, 503);
 });
 
 test('user id that is not a positive integer answers 503', () => {

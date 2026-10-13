@@ -16,10 +16,12 @@ const topicRoutes = require('./routes/topics');
 const chapterIdeaRoutes = require('./routes/chapterIdeas');
 const searchRoutes = require('./routes/search');
 const pinRoutes = require('./routes/pins');
+const { createBourneRouter } = require('./routes/bourne');
 // TODO: Import additional route files here as you build out the app:
 //   const itemRoutes = require('./routes/item');
 
 const isAuth = require('./middleware/isAuth');
+const isReadKey = require('./middleware/isReadKey');
 
 dotenv.config();
 
@@ -88,6 +90,9 @@ app.use('/api/search', isAuth, searchRoutes);
 
 // The Thoughts page's pinned set.
 app.use('/api/pins', isAuth, pinRoutes);
+
+// Bourne's read-only API, behind its own static key rather than a JWT.
+app.use('/api/bourne', isReadKey, createBourneRouter());
 // TODO: Add more protected route groups here:
 //   app.use('/api/items', isAuth, itemRoutes);
 
