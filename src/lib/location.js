@@ -56,7 +56,7 @@ const saveLocation = async (userId, { primary, compare, noteId }) => {
         `UPDATE admin
          SET last_primary_book_id = ?, last_primary_chapter = ?,
              last_compare_book_id = ?, last_compare_chapter = ?,
-             last_note_id = ?
+             last_note_id = ?, last_location_saved_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
             primary ? primary.bookId : null,
@@ -69,6 +69,29 @@ const saveLocation = async (userId, { primary, compare, noteId }) => {
     );
 
     return result.affectedRows > 0;
+};
+
+// The primary passage with its book's name and when it was saved, or null when
+// the user is missing or has no primary saved.
+const findCurrentPassage = async (userId) => {
+    const [rows] = await db.execute(
+        `SELECT a.last_primary_book_id AS book_id, b.name AS book_name,
+                a.last_primary_chapter AS chapter,
+                a.last_location_saved_at AS saved_at
+         FROM admin a
+         JOIN books b ON b.id = a.last_primary_book_id
+         WHERE a.id = ? AND a.last_primary_chapter IS NOT NULL`,
+        [userId]
+    );
+
+    if (rows.length === 0 || rows[0].book_id === null) return null;
+    const row = rows[0];
+    return {
+        bookId: row.book_id,
+        bookName: row.book_name,
+        chapter: row.chapter,
+        savedAt: row.saved_at,
+    };
 };
 
 // Called by DELETE /api/notes/:id, next to the pin cleanup and for the same
@@ -92,5 +115,6 @@ module.exports = {
     toLocation,
     findLocation,
     saveLocation,
+    findCurrentPassage,
     clearSavedNote,
 };
