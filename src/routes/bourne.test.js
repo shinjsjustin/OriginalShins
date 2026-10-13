@@ -94,3 +94,117 @@ test('the Bourne key sent through isAuth answers 403', async () => {
         assert.strictEqual(res.status, 403);
     }, (app) => app.get('/protected', isAuth, (req, res) => res.json({ ok: true })));
 });
+
+const HISTORY = { from: '2026-01-01', to: '2026-01-02', loggingBegan: null, days: [] };
+
+async function quietly(fn) {
+    const origError = console.error;
+    console.error = () => {};
+    try {
+        return await fn();
+    } finally {
+        console.error = origError;
+    }
+}
+
+test('GET /history reads the requested range in the reading zone for the key user', async () => {
+    const calls = [];
+    const deps = { findReadingHistory: async (id, args) => { calls.push([id, args]); return HISTORY; } };
+    const saved = process.env.READING_TIME_ZONE;
+    process.env.READING_TIME_ZONE = 'Asia/Tokyo';
+    try {
+        await withServer(deps, async (base) => {
+            const res = await fetch(`${base}/api/bourne/history?from=2026-01-01&to=2026-01-02`, bearer(KEY));
+            assert.strictEqual(res.status, 200);
+            assert.deepStrictEqual(await res.json(), HISTORY);
+            assert.deepStrictEqual(calls, [[7, { from: '2026-01-01', to: '2026-01-02', timeZone: 'Asia/Tokyo' }]]);
+        });
+    } finally {
+        if (saved === undefined) delete process.env.READING_TIME_ZONE;
+        else process.env.READING_TIME_ZONE = saved;
+    }
+});
+
+test('GET /history answers 400 for a bad range without reading', async () => {
+    let read = false;
+    await withServer({ findReadingHistory: async () => { read = true; } }, async (base) => {
+        const res = await fetch(`${base}/api/bourne/history?from=nope`, bearer(KEY));
+        assert.strictEqual(res.status, 400);
+        assert.ok((await res.json()).error);
+        assert.strictEqual(read, false);
+    });
+});
+
+test('GET /notes answers the page with its paging fields and converts since to an instant', async () => {
+    const calls = [];
+    const deps = {
+        findNotesForBourne: async (id, args) => { calls.push([id, args]); return { notes: [{ id: 1 }], hasMore: true }; },
+    };
+    const saved = process.env.READING_TIME_ZONE;
+    process.env.READING_TIME_ZONE = 'UTC';
+    try {
+        await withServer(deps, async (base) => {
+            const res = await fetch(`${base}/api/bourne/notes?since=2026-03-05&book=43&chapter=3&limit=10&offset=20`, bearer(KEY));
+            assert.strictEqual(res.status, 200);
+            assert.deepStrictEqual(await res.json(), { notes: [{ id: 1 }], hasMore: true, limit: 10, offset: 20 });
+            assert.strictEqual(calls[0][0], 7);
+            assert.deepStrictEqual(calls[0][1], {
+                sinceInstant: new Date('2026-03-05T00:00:00.000Z'),
+                bookId: 43,
+                chapter: 3,
+                limit: 10,
+                offset: 20,
+            });
+        });
+    } finally {
+        if (saved === undefined) delete process.env.READING_TIME_ZONE;
+        else process.env.READING_TIME_ZONE = saved;
+    }
+});
+
+test('GET /notes without since passes a null instant and the defaults', async () => {
+    const calls = [];
+    const deps = { findNotesForBourne: async (id, args) => { calls.push(args); return { notes: [], hasMore: false }; } };
+    await withServer(deps, async (base) => {
+        const res = await fetch(`${base}/api/bourne/notes`, bearer(KEY));
+        assert.strictEqual(res.status, 200);
+        assert.deepStrictEqual(await res.json(), { notes: [], hasMore: false, limit: 50, offset: 0 });
+        assert.strictEqual(calls[0].sinceInstant, null);
+    });
+});
+
+test('GET /notes answers 400 for bad params without reading', async () => {
+    let read = false;
+    await withServer({ findNotesForBourne: async () => { read = true; } }, async (base) => {
+        const res = await fetch(`${base}/api/bourne/notes?chapter=3`, bearer(KEY));
+        assert.strictEqual(res.status, 400);
+        assert.ok((await res.json()).error);
+        assert.strictEqual(read, false);
+    });
+});
+
+test('GET /history and /notes answer 500 when the read throws, 401 without the key', async () => {
+    const deps = {
+        findReadingHistory: async () => { throw new Error('db down'); },
+        findNotesForBourne: async () => { throw new Error('db down'); },
+    };
+    await withServer(deps, async (base) => {
+        for (const p of ['/history', '/notes']) {
+            const res = await quietly(() => fetch(`${base}/api/bourne${p}`, bearer(KEY)));
+            assert.strictEqual(res.status, 500, p);
+            assert.ok((await res.json()).error);
+            const bare = await fetch(`${base}/api/bourne${p}`);
+            assert.strictEqual(bare.status, 401, `${p} bare`);
+        }
+    });
+});
+
+test('POST /history and /notes still answer 405', async () => {
+    await withServer({}, async (base) => {
+        for (const p of ['/history', '/notes']) {
+            const res = await fetch(`${base}/api/bourne${p}`, { method: 'POST', ...bearer(KEY) });
+            assert.strictEqual(res.status, 405, p);
+            assert.strictEqual(res.headers.get('allow'), 'GET');
+        }
+    });
+});
