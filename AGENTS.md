@@ -26,7 +26,8 @@ BibleApp/
     │       ├── 006_reading_location.sql # where each reader left off
     │       ├── 007_chapter_ideas.sql# ideas filed against a chapter
     │       ├── 008_note_topics.sql # notes filed directly under a topic
-    │       └── 009_topic_books.sql # topics + ideas gain book_id; slug unique per (user, book)
+    │       ├── 009_topic_books.sql # topics + ideas gain book_id; slug unique per (user, book)
+    │       └── 010_reading_days.sql# reading_days log + admin.last_location_saved_at
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
@@ -39,6 +40,8 @@ BibleApp/
     │   ├── links.js                # note_ideas / idea_topics / note_topics: full-set replace
     │   ├── ordering.js             # sort_order + re-parenting (server-side only)
     │   ├── slug.js                 # Topic slug derivation + validation
+    │   ├── readingDay.js           # Pure: local YYYY-MM-DD for an instant; READING_TIME_ZONE
+    │   ├── readingDays.js          # reading_days write: one row per user, local day, chapter
     │   ├── textInput.js            # Shared body-validation primitives
     │   ├── noteInput.js            # Request-body validation for the notes API
     │   ├── ideaInput.js            # Request-body validation for the ideas API
@@ -61,7 +64,8 @@ BibleApp/
     │       ├── load-rows.js        # transactional clear-and-reload
     │       └── verify.js           # post-import count assertions
     ├── middleware/
-    │   └── isAuth.js               # JWT Bearer token validator
+    │   ├── isAuth.js               # JWT Bearer token validator
+    │   └── isReadKey.js            # Static read-key validator for /api/bourne
     └── routes/
         ├── auth.js                 # POST /api/auth/register, /api/auth/login
         ├── user.js                 # GET  /api/user/me  (protected)
@@ -74,6 +78,7 @@ BibleApp/
         ├── topics.js               # CRUD /api/topics (?book=, bookId required; list carries counts + direct notes)
         ├── search.js               # GET /api/search?q= (four groups)
         ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
+        ├── bourne.js               # GET-only /api/bourne (read key, not JWT)
         └── orderingErrors.js       # ordering results -> HTTP, shared by three routers
     └── client/                     # React app (Create React App)
         ├── package.json
@@ -279,6 +284,7 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/006_reading_location.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/007_chapter_ideas.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/008_note_topics.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/009_topic_books.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/010_reading_days.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
@@ -959,6 +965,39 @@ note results link to `/analyze?l=<book>.<chapter>&note=<id>` — see
 
 ---
 
+## Bourne read API
+
+`/api/bourne` is a read-only door for Bourne, a separate program. It is
+authenticated by a static key, not a JWT: `isReadKey` compares the Bearer token
+to `BOURNE_API_KEY` (timing-safe) and, on a match, sets `req.user` to
+`{ id: BOURNE_USER_ID }`, so every query behind it is scoped to that one account
+exactly as a logged-in request would be. Generate the key with
+`openssl rand -hex 32`; never commit it.
+
+- **Fails closed.** If the key is unset, or the user id is not a positive
+  integer, every request is **503**, read per request. Missing token is 401,
+  wrong token 403.
+- **GET only.** The router ends in a catch-all that answers any other method
+  with **405** and `Allow: GET`, so the read key can never reach a write. Later
+  routes are added above that catch-all.
+- **`isAuth` is untouched.** The mount in `server.js` sits above the SPA
+  `app.get('*')`; the key does not work on any other route.
+- **`GET /api/bourne/location`** answers `{ location }`, the saved Analyze
+  location from `src/lib/location.js`.
+
+### Reading days
+
+`PUT /api/user/location` is the only location writer. When its `primary` is not
+null, after the location is saved it logs the chapter in `reading_days`
+(migration `010_reading_days.sql`): one row per user, **local date**, book and
+chapter. Reopening a chapter the same day only bumps `last_opened_at`. The local
+date comes from `readingDay.js` in `READING_TIME_ZONE` (default
+`America/Los_Angeles`), not from UTC, so a late-evening read counts for the
+reader's own day. A failed log is written to the server log and does not fail
+the save. The same migration adds `admin.last_location_saved_at`.
+
+---
+
 ## Search
 
 `/search` — one box, four groups: notes, ideas and topics first, scripture
@@ -1157,8 +1196,15 @@ page pass while the query it sent was wrong — and the query is half of what th
 page does. It runs on fake timers, because the debounce is the other half:
 "five keystrokes, one request" is an assertion about time.
 
-The server has no test runner of its own — the root `package.json` has only
-`test:client`.
+```bash
+npm run test:server    # node --test over src/lib, src/routes, src/middleware
+```
+
+Server tests sit beside the code (`*.test.js`) and use the built-in `node:test`
+runner. `src/db/db.js` loads lazily, so no database is needed: tests replace
+`db.execute` with `mock.method(db, 'execute', ...)` and assert on the SQL and
+parameters it receives. Routers take their reads as injected deps
+(`createBourneRouter(deps)`) for the same reason.
 
 ---
 
