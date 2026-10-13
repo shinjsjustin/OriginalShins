@@ -12,3 +12,4 @@ build/
 .worktrees/
 .superpowers/
 coverage/
+.claude/settings.local.json

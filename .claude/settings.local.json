@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(/Users/justinshin/ComputerScience/Template/init.sh *)"
-    ]
-  }
-}
