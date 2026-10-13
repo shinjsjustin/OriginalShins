@@ -42,6 +42,9 @@ BibleApp/
     │   ├── slug.js                 # Topic slug derivation + validation
     │   ├── readingDay.js           # Pure: local YYYY-MM-DD for an instant; READING_TIME_ZONE
     │   ├── readingDays.js          # reading_days write: one row per user, local day, chapter
+    │   ├── readingHistory.js       # Bourne's history read: logged days, plus note-derived days before logging began
+    │   ├── bourneInput.js          # Query-string validation for /api/bourne/history and /notes
+    │   ├── bourneNotes.js          # Bourne's notes read: a page of notes with book, idea and topic names
     │   ├── textInput.js            # Shared body-validation primitives
     │   ├── noteInput.js            # Request-body validation for the notes API
     │   ├── ideaInput.js            # Request-body validation for the ideas API
@@ -982,8 +985,28 @@ exactly as a logged-in request would be. Generate the key with
   routes are added above that catch-all.
 - **`isAuth` is untouched.** The mount in `server.js` sits above the SPA
   `app.get('*')`; the key does not work on any other route.
-- **`GET /api/bourne/location`** answers `{ location }`, the saved Analyze
-  location from `src/lib/location.js`.
+- **`GET /api/bourne/location`** answers `{ location }`, where `location` is
+  `{ bookId, bookName, chapter, savedAt }` for the saved primary passage, or
+  `null` when none is saved. It is not the whole saved Analyze location: the
+  compare panel and the open note are left out.
+- **`GET /api/bourne/history`** answers the days read in a range. Params
+  (`src/lib/bourneInput.js`): `from` and `to`, both `YYYY-MM-DD` local dates.
+  `to` defaults to today and `from` to 29 days before `to` (the last 30 local
+  days); the span is at most 366 days inclusive. A malformed, repeated or
+  reversed param, or a longer span, is **400**. Answers
+  `{ from, to, loggingBegan, days }`, where `loggingBegan` is the first
+  `reading_days` date or `null`, and each day is
+  `{ date, source, chapters: [{ bookId, bookName, chapter }] }` in date order.
+  `source` is `"log"` for a `reading_days` day and `"notes"` for a derived one.
+- **`GET /api/bourne/notes`** answers a page of notes, most recently edited
+  first. Params: `since` (`YYYY-MM-DD`, notes updated on or after that local
+  day), `book` (book id), `chapter` (only valid with `book`, else **400**),
+  `limit` (default 50, max 200) and `offset` (default 0). Answers
+  `{ notes, hasMore, limit, offset }`. Each note is `{ id, title, body,
+  createdAt, updatedAt, references: [{ bookId, bookName, chapter, startVerse,
+  endVerse }], ideas: [{ id, title, topics: [{ id, name }] }], topics: [{ id,
+  name }] }`, where the note's own `topics` are the ones filed directly under it.
+  `book` and `chapter` keep notes with an anchor there.
 
 ### Reading days
 
@@ -995,6 +1018,14 @@ date comes from `readingDay.js` in `READING_TIME_ZONE` (default
 `America/Los_Angeles`), not from UTC, so a late-evening read counts for the
 reader's own day. A failed log is written to the server log and does not fail
 the save. The same migration adds `admin.last_location_saved_at`.
+
+**Days before logging began are derived.** `reading_days` only starts when the
+first reading is logged. For a history range reaching earlier than that first
+date (or when nothing is logged yet), `readingHistory.js` fills the gap with
+`source: "notes"` days: a day on which a note was created or updated, bucketed
+by `READING_TIME_ZONE` rather than UTC, listing the chapters the note anchors to
+(a note with no anchor still marks the day, with no chapters). On and after
+`loggingBegan` only the log is used, so the two sources never overlap.
 
 ---
 
