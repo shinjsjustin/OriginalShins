@@ -13,6 +13,7 @@
   "scripts": {
     "start": "node src/server.js",
     "client": "npm start --prefix src/client",
+    "test:server": "node --test \"src/lib/**/*.test.js\" \"src/routes/**/*.test.js\" \"src/middleware/**/*.test.js\"",
     "test:client": "CI=true npm test --prefix src/client --",
     "test:client:watch": "npm test --prefix src/client --",
     "import:scripture": "node src/scripts/import-scripture.js",
