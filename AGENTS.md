@@ -60,6 +60,8 @@ BibleApp/
     │   └── passages.js             # The scripture text behind a note's anchors (Thoughts page only)
     ├── scripts/
     │   ├── import-scripture.js     # CLI: npm run import:scripture
+    │   ├── icons/
+    │   │   └── make-icons.js       # CLI: writes the four home-screen icon PNGs into client/public
     │   └── scripture/
     │       ├── canon.js            # the 66-book canon (names, abbrevs, testament)
     │       ├── source.js           # download or read the source JSON
@@ -137,6 +139,9 @@ BibleApp/
                 │   ├── markdown.js         # marked + DOMPurify; list excerpts
                 │   ├── useBooks.js         # Loads /api/books once
                 │   ├── usePanelPositions.js# Reads/writes ?l= (primary) and ?r=
+                │   ├── usePhoneLayout.js   # Whether the viewport is phone-width (matchMedia, PHONE_QUERY)
+                │   ├── phonePanel.js       # Pure: nextPhonePanel, which panel a phone jump lands on
+                │   ├── PanelSwitcher.js    # Phone-only bottom bar: Compare | Passage | Notes
                 │   ├── useNotes.js         # The chapter's notes + every write
                 │   ├── useCollection.js    # One list + its fetch/revision plumbing
                 │   ├── useIdeas.js         # /api/ideas + PUT :id/topics
@@ -384,6 +389,27 @@ Every verse row carries `data-verse-index` with its gapless whole-Bible
 panel row and on each gutter marker: between them the two panels link to each
 other without either holding a ref into the other.
 
+### On a phone
+
+Below 600px (`PHONE_QUERY` in `usePhoneLayout.js`) the page shows **one panel at
+a time**. `PanelSwitcher`, a bar along the bottom, picks Compare, Passage or
+Notes; the collapse tabs and spines are not shown, since there is no room to
+push anything aside and the switcher already does that job.
+
+The panels that are not showing stay **mounted but hidden**, not unmounted. A
+note draft lives in the editor's state, so unmounting Notes on a switch to
+Passage would throw away what the reader had typed; hiding it keeps the draft.
+
+`nextPhonePanel` in `phonePanel.js` decides the jumps, so the page does not
+guess them in four places. Tapping a gutter marker, arriving with `?note=`,
+creating a note from a selection and adding a passage to a note all go to
+**Notes**, where the result is. Add passage goes to **Passage**, where the
+verses to pick are.
+
+jsdom has no `window.matchMedia`, so `usePhoneLayout` reports desktop when it is
+missing. Existing tests therefore stay on the desktop tree unless a test stubs
+`matchMedia` to ask for the phone one.
+
 ### Endpoints
 
 | Route | Returns |
@@ -393,6 +419,25 @@ other without either holding a ref into the other.
 
 Both routes reject a malformed `:bookId`/`:chapter` with 400 before touching the
 database, and answer a well-formed reference that does not exist with 404.
+
+---
+
+## Home-screen install
+
+The app can be added to an iPhone's home screen and opens without browser
+chrome. `src/client/public/manifest.json` and the iOS meta tags in
+`index.html` make that work: `start_url` is `/analyze`, the theme and
+background colour are `#0f131b`, and the page pads for the notch and home bar
+with `env(safe-area-inset-*)`.
+
+Four PNGs in `src/client/public/` are the icons: `apple-touch-icon.png`,
+`favicon.png`, `icon-192.png` and `icon-512.png`. They are a **placeholder** — an
+"OS" lettermark — drawn by `node src/scripts/icons/make-icons.js`. Rerun it to
+regenerate them; to ship a real icon, replace the four files with your own at
+the same names and sizes.
+
+iOS caches the icon when the app is added. After changing it, remove the app
+from the home screen and add it again.
 
 ---
 
