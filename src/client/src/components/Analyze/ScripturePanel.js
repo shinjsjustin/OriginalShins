@@ -26,6 +26,7 @@ const ScripturePanel = ({
     label,
     isPrimary = false,
     collapse = null,
+    isHidden = false,
     books,
     position,
     onChange,
@@ -90,7 +91,7 @@ const ScripturePanel = ({
     ].join(' ');
 
     return (
-        <section className={panelClassName} aria-label={label}>
+        <section className={panelClassName} aria-label={label} hidden={isHidden}>
             <PanelHeader label={label} title={heading} collapse={collapse} />
 
             <div className="analyze-panel-body" ref={bodyRef}>

@@ -33,6 +33,7 @@ const NotesPanel = ({
     position,
     onChange,
     collapse = null,
+    isHidden = false,
     notes,
     unreferenced,
     chapterIdeas,
@@ -108,7 +109,7 @@ const NotesPanel = ({
         && chapterIdeas.length === 0;
 
     return (
-        <section className="analyze-panel analyze-panel--side analyze-panel--notes" aria-label="Notes">
+        <section className="analyze-panel analyze-panel--side analyze-panel--notes" aria-label="Notes" hidden={isHidden}>
             <PanelHeader label="Notes & ideas" title={heading} collapse={collapse} />
 
             <div className="analyze-panel-body" ref={bodyRef}>

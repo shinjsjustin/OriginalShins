@@ -4,6 +4,9 @@ import Navbar from '../Navbar';
 import ScripturePanel from './ScripturePanel';
 import NotesPanel from './NotesPanel';
 import PanelSpine from './PanelSpine';
+import PanelSwitcher from './PanelSwitcher';
+import usePhoneLayout from './usePhoneLayout';
+import { DEFAULT_PHONE_PANEL, nextPhonePanel } from './phonePanel';
 import PendingSelectionTray from './PendingSelectionTray';
 import useBooks from './useBooks';
 import usePanelPositions from './usePanelPositions';
@@ -86,6 +89,15 @@ const Analyze = () => {
     // passage a shared link is about.
     const [collapsed, setCollapsed] = useState({ compare: false, notes: false });
 
+    // On a phone one panel shows at a time; the others stay mounted (hidden) so
+    // an unsaved note draft survives a switch.
+    const isPhone = usePhoneLayout();
+    const [phonePanel, setPhonePanel] = useState(DEFAULT_PHONE_PANEL);
+    const goToPhonePanel = useCallback(
+        event => setPhonePanel(current => nextPhonePanel(current, event)),
+        []
+    );
+
     const toggleCollapsed = useCallback((panel) => {
         setCollapsed(previous => ({ ...previous, [panel]: !previous[panel] }));
     }, []);
@@ -105,8 +117,9 @@ const Analyze = () => {
         const noteId = Number(requestedNoteId);
         if (Number.isInteger(noteId) && noteId > 0) {
             setActiveNoteId(noteId);
+            goToPhonePanel('openNote');
         }
-    }, [requestedNoteId]);
+    }, [requestedNoteId, goToPhonePanel]);
 
     // One basket of clicked verses for the whole page. It spans panels and
     // chapters, and it resolves itself: each verse went in with its printed
@@ -149,8 +162,9 @@ const Analyze = () => {
     // own would not change and the scroll effect would not re-run.
     const handleOpenNote = useCallback((noteId) => {
         setActiveNoteId(noteId);
+        goToPhonePanel('openNote');
         setScrollRequest(previous => ({ noteId, token: (previous ? previous.token : 0) + 1 }));
-    }, []);
+    }, [goToPhonePanel]);
 
     const handleCloseNote = useCallback(() => setActiveNoteId(null), []);
 
@@ -189,8 +203,9 @@ const Analyze = () => {
 
         retain(anchored || created);
         setActiveNoteId(created.id);
+        goToPhonePanel('noteCreated');
         clearSelection();
-    }, [notes, anchorAll, retain, clearSelection]);
+    }, [notes, anchorAll, retain, clearSelection, goToPhonePanel]);
 
     // Anchoring a note while reading a chapter it does not yet touch returns
     // the updated note before the list containing it reloads; retain it so the
@@ -204,7 +219,13 @@ const Analyze = () => {
         }
         clearSelection();
         setAddingToNoteId(null);
-    }, [anchorAll, retain, clearSelection]);
+        goToPhonePanel('addedToNote');
+    }, [anchorAll, retain, clearSelection, goToPhonePanel]);
+
+    const handleAddPassage = useCallback(noteId => {
+        setAddingToNoteId(noteId);
+        goToPhonePanel('addPassage');
+    }, [goToPhonePanel]);
 
     // Backing out leaves the basket standing: the verses were picked on
     // purpose, and they are still a perfectly good new note.
@@ -281,7 +302,7 @@ const Analyze = () => {
     const primaryLabel = 'Passage';
 
     return (
-        <div className="analyze-page">
+        <div className={isPhone ? 'analyze-page analyze-page--phone' : 'analyze-page'}>
             <Navbar />
 
             {error && (
@@ -315,7 +336,7 @@ const Analyze = () => {
                     />
 
                     <main className="analyze-panels">
-                    {collapsed.compare ? (
+                    {collapsed.compare && !isPhone ? (
                         <PanelSpine
                             side="left"
                             label={compareLabel}
@@ -325,7 +346,8 @@ const Analyze = () => {
                     ) : (
                         <ScripturePanel
                             label={compareLabel}
-                            collapse={{ side: 'left', onCollapse: () => toggleCollapsed('compare') }}
+                            collapse={isPhone ? null : { side: 'left', onCollapse: () => toggleCollapsed('compare') }}
+                            isHidden={isPhone && phonePanel !== 'compare'}
                             books={books}
                             position={compare}
                             onChange={setCompare}
@@ -344,6 +366,7 @@ const Analyze = () => {
                     <ScripturePanel
                         label={primaryLabel}
                         isPrimary
+                        isHidden={isPhone && phonePanel !== 'primary'}
                         books={books}
                         position={primary}
                         onChange={setPrimary}
@@ -355,7 +378,7 @@ const Analyze = () => {
                         onToggleVerse={togglePrimaryVerse}
                     />
 
-                    {collapsed.notes ? (
+                    {collapsed.notes && !isPhone ? (
                         <PanelSpine
                             side="right"
                             label="Notes"
@@ -367,7 +390,8 @@ const Analyze = () => {
                             books={books}
                             position={primary}
                             onChange={setPrimary}
-                            collapse={{ side: 'right', onCollapse: () => toggleCollapsed('notes') }}
+                            collapse={isPhone ? null : { side: 'right', onCollapse: () => toggleCollapsed('notes') }}
+                            isHidden={isPhone && phonePanel !== 'notes'}
                             notes={notes.notes}
                             unreferenced={notes.unreferenced}
                             chapterIdeas={chapterIdeaList}
@@ -389,13 +413,17 @@ const Analyze = () => {
                             onRemoveChapterIdea={removeImport}
                             onSaveNote={notes.updateNote}
                             onDeleteNote={handleDeleteNote}
-                            onAddPassage={setAddingToNoteId}
+                            onAddPassage={handleAddPassage}
                             onRemoveReference={notes.removeReference}
                             onSaveIdeas={handleSaveIdeas}
                             onSaveTopics={handleSaveTopics}
                         />
                     )}
                     </main>
+
+                    {isPhone && (
+                        <PanelSwitcher current={phonePanel} onSelect={setPhonePanel} />
+                    )}
                 </>
             )}
         </div>
