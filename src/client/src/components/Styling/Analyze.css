@@ -1158,3 +1158,86 @@
     --analyze-avatar-size:  30px;
   }
 }
+
+/* ─── Phone ──────────────────────────────────────────────────────────────────
+   One panel at a time (Analyze.js, PanelSwitcher). 600px matches PHONE_QUERY in
+   usePhoneLayout.js. Every phone rule lives here so desktop cannot change. */
+@media (max-width: 600px) {
+  .analyze-page {
+    --analyze-touch-target: 44px;
+    /* Room under the icon for the full-width selection tray. */
+    --analyze-phone-clearance: 104px;
+  }
+
+  .analyze-page--phone {
+    --analyze-navbar-clearance: calc(
+      var(--analyze-phone-clearance) + env(safe-area-inset-top)
+    );
+
+    height: 100vh;
+    height: 100dvh;
+    padding: var(--analyze-navbar-clearance) var(--space-sm)
+      calc(var(--analyze-touch-target) + env(safe-area-inset-bottom) + var(--space-md));
+    overflow-x: hidden;
+  }
+
+  .analyze-page--phone .analyze-panels {
+    gap: 0;
+  }
+
+  /* The 980px stack gives each panel 70vh; the one visible panel takes it all. */
+  .analyze-page--phone .analyze-panel {
+    flex: 1 1 auto;
+    height: auto;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .analyze-page--phone .analyze-panel[hidden] {
+    display: none;
+  }
+
+  .analyze-page--phone .analyze-selection-tray {
+    top: calc(
+      env(safe-area-inset-top) + var(--analyze-avatar-top) +
+        var(--analyze-avatar-size) + var(--space-sm)
+    );
+    left: var(--space-sm);
+    right: var(--space-sm);
+    transform: none;
+  }
+
+  .analyze-page--phone .analyze-footer-button {
+    min-height: var(--analyze-touch-target);
+  }
+
+  .analyze-switcher {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm)
+      calc(var(--space-xs) + env(safe-area-inset-bottom));
+    background-color: var(--ground);
+    border-top: var(--analyze-border-width) solid var(--ground-line);
+  }
+
+  .analyze-switcher-button {
+    flex: 1 1 0;
+    min-height: var(--analyze-touch-target);
+    background-color: var(--ground);
+    color: var(--on-ground-soft);
+    border: var(--analyze-border-width) solid var(--ground-line);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-base);
+  }
+
+  .analyze-switcher-button--current {
+    background-color: var(--ground-raised);
+    color: var(--gold-lit);
+    border-color: var(--gold-lit);
+  }
+}
