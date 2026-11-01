@@ -175,6 +175,42 @@ const Analyze = () => {
 
     const handleCloseNote = useCallback(() => setActiveNoteId(null), []);
 
+    // The reader's writes go through the page's useNotes, so each one bumps the
+    // revision that refetches the reader's chapter and the hidden panels'
+    // alike. The reader keeps its own selection; the page-wide basket is not
+    // involved.
+    const handleReaderHighlight = useCallback(
+        async reference => Boolean(await notes.createNote({ reference })),
+        [notes]
+    );
+
+    // Sequential, and stopping at the first failure so a half-removed plan is
+    // reported as not landed.
+    const handleReaderRemove = useCallback(async (plan) => {
+        for (const referenceId of plan.referenceIds) {
+            if (!await notes.removeReference(referenceId)) return false;
+        }
+        for (const noteId of plan.noteIds) {
+            if (!await notes.removeNote(noteId)) return false;
+        }
+        return true;
+    }, [notes]);
+
+    const handleReaderAddNote = useCallback(async (reference) => {
+        const created = await notes.createNote({ reference });
+        if (!created) return false;
+        retain(created);
+        setActiveNoteId(created.id);
+        goToPhonePanel('noteCreated');
+        closeReader();
+        return true;
+    }, [notes, retain, goToPhonePanel, closeReader]);
+
+    const handleReaderOpenNote = useCallback((noteId) => {
+        closeReader();
+        handleOpenNote(noteId);
+    }, [closeReader, handleOpenNote]);
+
     // Anchors are added one at a time: POST /notes takes a single reference,
     // and a selection with a gap in it is genuinely several anchors on one note.
     // Sequential rather than parallel so the note that comes back last is the
@@ -337,6 +373,12 @@ const Analyze = () => {
                             notesRevision={notes.revision}
                             onStep={handleStep}
                             onExit={closeReader}
+                            notes={notes.notes}
+                            actionError={notes.actionError}
+                            onHighlight={handleReaderHighlight}
+                            onRemoveHighlight={handleReaderRemove}
+                            onAddNote={handleReaderAddNote}
+                            onOpenNote={handleReaderOpenNote}
                         />
                     )}
 
