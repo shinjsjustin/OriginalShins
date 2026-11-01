@@ -89,16 +89,18 @@ const usePanelPositions = (books, isDeferred = false) => {
 
     // Each move pushes a history entry, so stepping through chapters is
     // reversible with the back button.
-    const setPosition = useCallback((param, position) => {
+    const setPosition = useCallback((param, position, options) => {
         setSearchParams(prev => {
             const next = new URLSearchParams(prev);
             next.set(param, formatPosition(position));
             return next;
-        });
+        }, options);
     }, [setSearchParams]);
 
+    // `options` goes to setSearchParams, so the reader can page with
+    // { replace: true } without filling history.
     const setPrimary = useCallback(
-        position => setPosition(PRIMARY_PARAM, position),
+        (position, options) => setPosition(PRIMARY_PARAM, position, options),
         [setPosition]
     );
     const setCompare = useCallback(

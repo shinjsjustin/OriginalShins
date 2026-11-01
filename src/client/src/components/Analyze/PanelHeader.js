@@ -8,7 +8,7 @@ import CollapseTab from './CollapseTab';
 // or the end of it depending on which edge the panel is against. Putting it in
 // the row rather than over it means it can never land on the heading, however
 // long the book name runs.
-const PanelHeader = ({ label, title, collapse = null }) => {
+const PanelHeader = ({ label, title, collapse = null, action = null }) => {
     const tab = collapse && (
         <CollapseTab side={collapse.side} label={label} onCollapse={collapse.onCollapse} />
     );
@@ -21,6 +21,8 @@ const PanelHeader = ({ label, title, collapse = null }) => {
                 <span className="analyze-panel-label">{label}</span>
                 <h2 className="analyze-panel-title">{title || ' '}</h2>
             </div>
+
+            {action}
 
             {collapse && collapse.side === 'right' && tab}
         </header>

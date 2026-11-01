@@ -17,7 +17,9 @@ import { useRestoreLocation, useRecordLocation } from './useSavedLocation';
 import useIdeas from './useIdeas';
 import useChapterIdeas from './useChapterIdeas';
 import { collectChapterIdeas } from './chapterIdeas';
-import { describePosition } from './navigation';
+import Reader from './Reader';
+import useReaderMode from './useReaderMode';
+import { describePosition, stepChapter } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';
 
@@ -54,6 +56,11 @@ const Analyze = () => {
     const { books, isLoading, error } = useBooks();
     const { primary, compare, setPrimary, setCompare } = usePanelPositions(books, isRestoring);
     const notes = useNotes(primary);
+    const { isReading, openReader, closeReader } = useReaderMode();
+    const handleStep = useCallback(
+        direction => setPrimary(stepChapter(books, primary, direction), { replace: true }),
+        [books, primary, setPrimary]
+    );
 
     // The whole corpus of ideas, unscoped, and the composer that adds one.
     // Its one reader is the chapter shortlist below, which needs every book's
@@ -303,7 +310,7 @@ const Analyze = () => {
 
     return (
         <div className={isPhone ? 'analyze-page analyze-page--phone' : 'analyze-page'}>
-            <Navbar />
+            {!isReading && <Navbar />}
 
             {error && (
                 <p className="analyze-message analyze-message--error" role="alert">
@@ -323,7 +330,17 @@ const Analyze = () => {
                         widget was pinned for. It hangs out of the flow in the
                         navbar clearance (see Analyze.css), so appearing does
                         not push the panels down. */}
-                    <PendingSelectionTray
+                    {isReading && (
+                        <Reader
+                            books={books}
+                            position={primary}
+                            notesRevision={notes.revision}
+                            onStep={handleStep}
+                            onExit={closeReader}
+                        />
+                    )}
+
+                    {!isReading && <PendingSelectionTray
                         books={books}
                         places={selectedPlaces}
                         references={selectionReferences}
@@ -333,9 +350,9 @@ const Analyze = () => {
                         onCancelAdd={handleCancelAdd}
                         onClearPlace={clearPlace}
                         onClearAll={clearSelection}
-                    />
+                    />}
 
-                    <main className="analyze-panels">
+                    <main className="analyze-panels" hidden={isReading}>
                     {collapsed.compare && !isPhone ? (
                         <PanelSpine
                             side="left"
@@ -376,6 +393,7 @@ const Analyze = () => {
                         onOpenNote={handleOpenNote}
                         selectedVerseIndexes={selectedVersesIn(primary)}
                         onToggleVerse={togglePrimaryVerse}
+                        onOpenReader={isPhone ? openReader : null}
                     />
 
                     {collapsed.notes && !isPhone ? (
@@ -421,7 +439,7 @@ const Analyze = () => {
                     )}
                     </main>
 
-                    {isPhone && (
+                    {isPhone && !isReading && (
                         <PanelSwitcher current={phonePanel} onSelect={setPhonePanel} />
                     )}
                 </>

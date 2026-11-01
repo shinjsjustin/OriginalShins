@@ -15,3 +15,7 @@ export const COMPARE_PARAM = 'r';
 // it back. Closing the editor does not reopen the note even though the param is
 // still in the URL.
 export const NOTE_PARAM = 'note';
+
+// Whether the full-screen reader is showing. Unlike ?note= this is state: the
+// reader is a place the reader is, so it is pushed on entry and Back leaves it.
+export const READER_PARAM = 'read';
