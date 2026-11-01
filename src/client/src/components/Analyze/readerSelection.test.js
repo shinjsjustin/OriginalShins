@@ -1,113 +1,159 @@
-import {
-    extendSelection,
-    isSelected,
-    selectionReference,
-    isBlankNote,
-    planRemoval,
-    formatCopyText,
-} from './readerSelection';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import Reader from './Reader';
+import { fetchJson } from '../../config/api';
+import { LONG_PRESS_MS } from './readerGestures';
 
-// WEB skips verse numbers: index 102 prints as verse 5, index 103 as verse 7.
-const verses = [
-    { verseIndex: 100, verse: 1, text: 'In the beginning.' },
-    { verseIndex: 101, verse: 2, text: 'The earth was formless.' },
-    { verseIndex: 102, verse: 5, text: 'God said.' },
-    { verseIndex: 103, verse: 7, text: 'There was light.' },
+jest.mock('../../config/api');
+
+const books = [{ id: 1, name: 'Genesis', chapterCount: 50, verseCounts: [] }];
+const payload = {
+    verses: [
+        { id: 1, verse: 1, verseIndex: 1, text: 'In the beginning' },
+        { id: 2, verse: 2, verseIndex: 2, text: 'The earth was formless' },
+        { id: 3, verse: 3, verseIndex: 3, text: 'God said' },
+    ],
+    references: [],
+};
+const notes = [
+    { id: 5, title: '', body: '', references: [{ id: 50, startIndex: 1, endIndex: 1 }] },
+    { id: 6, title: 'Kept', body: 'x', references: [{ id: 60, startIndex: 2, endIndex: 2 }] },
 ];
 
-describe('extendSelection', () => {
-    it.each([
-        [null, 101, { start: 101, end: 101 }],
-        [{ start: 101, end: 101 }, 101, null],
-        [{ start: 101, end: 101 }, 103, { start: 101, end: 103 }],
-        [{ start: 101, end: 101 }, 100, { start: 100, end: 101 }],
-        [{ start: 100, end: 102 }, 101, { start: 100, end: 102 }],
-        [{ start: 100, end: 102 }, 100, { start: 100, end: 102 }],
-    ])('%j + %i -> %j', (selection, verseIndex, expected) => {
-        expect(extendSelection(selection, verseIndex)).toEqual(expected);
-    });
+let props;
+const setup = async (extra = {}) => {
+    props = {
+        onStep: jest.fn(), onExit: jest.fn(), onHighlight: jest.fn(), onRemoveHighlight: jest.fn(),
+        onAddNote: jest.fn(), onOpenNote: jest.fn(), notes, ...extra,
+    };
+    const utils = render(
+        <Reader books={books} position={{ bookId: 1, chapter: 1 }} notesRevision={0} {...props} />
+    );
+    await screen.findByText('In the beginning');
+    const rows = utils.container.querySelectorAll('.analyze-reader-verse');
+    return { ...utils, rows, body: utils.container.querySelector('.analyze-reader-body') };
+};
 
-    it('does not mutate the selection', () => {
-        const selection = Object.freeze({ start: 101, end: 101 });
-        expect(extendSelection(selection, 103)).toEqual({ start: 101, end: 103 });
-    });
+const pt = (x = 500, y = 300) => ({ changedTouches: [{ clientX: x, clientY: y }] });
+const press = (row) => {
+    fireEvent.touchStart(row, pt());
+    act(() => { jest.advanceTimersByTime(LONG_PRESS_MS); });
+};
+
+beforeEach(() => {
+    jest.useFakeTimers();
+    fetchJson.mockReset();
+    fetchJson.mockResolvedValue(payload);
+    Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: jest.fn().mockResolvedValue() }, configurable: true });
+});
+afterEach(() => { jest.useRealTimers(); });
+
+test('long press selects the verse and shows the sheet', async () => {
+    const { rows } = await setup();
+    press(rows[1]);
+    expect(rows[1]).toHaveClass('analyze-reader-verse--selected');
+    expect(rows[0]).not.toHaveClass('analyze-reader-verse--selected');
+    expect(screen.getByRole('dialog', { name: 'Genesis 1:2' })).toBeInTheDocument();
 });
 
-describe('isSelected', () => {
-    it('is true only inside the range, inclusive', () => {
-        const selection = { start: 101, end: 103 };
-        expect([100, 101, 102, 103, 104].map((i) => isSelected(selection, i)))
-            .toEqual([false, true, true, true, false]);
-    });
-
-    it('is false with no selection', () => {
-        expect(isSelected(null, 101)).toBe(false);
-    });
+test('moving past the slop cancels the long press', async () => {
+    const { rows } = await setup();
+    fireEvent.touchStart(rows[1], pt());
+    fireEvent.touchMove(rows[1], pt(500, 340));
+    act(() => { jest.advanceTimersByTime(LONG_PRESS_MS); });
+    expect(rows[1]).not.toHaveClass('analyze-reader-verse--selected');
 });
 
-describe('selectionReference', () => {
-    it('reads printed verse numbers from the verses, not the indexes', () => {
-        expect(selectionReference({ bookId: 1, chapter: 1 }, verses, { start: 101, end: 103 }))
-            .toEqual({ bookId: 1, chapter: 1, startVerse: 2, endVerse: 7 });
-    });
-
-    it('uses one verse for both ends', () => {
-        expect(selectionReference({ bookId: 43, chapter: 3 }, verses, { start: 102, end: 102 }))
-            .toEqual({ bookId: 43, chapter: 3, startVerse: 5, endVerse: 5 });
-    });
+test('lifting before the delay cancels the long press', async () => {
+    const { rows } = await setup();
+    fireEvent.touchStart(rows[1], pt());
+    fireEvent.touchEnd(rows[1], pt());
+    act(() => { jest.advanceTimersByTime(LONG_PRESS_MS); });
+    expect(rows[1]).not.toHaveClass('analyze-reader-verse--selected');
 });
 
-describe('isBlankNote', () => {
-    it.each([
-        [{ title: null, body: null }, true],
-        [{ title: '', body: '' }, true],
-        [{ title: '  ', body: '\n\t' }, true],
-        [{ title: 'T', body: '' }, false],
-        [{ title: null, body: 'text' }, false],
-    ])('%j -> %s', (note, expected) => {
-        expect(isBlankNote(note)).toBe(expected);
-    });
+test('lifting after a fired press does not open the overlay or step', async () => {
+    const { rows, container } = await setup();
+    press(rows[1]);
+    fireEvent.touchEnd(rows[1], pt(950, 300));
+    expect(props.onStep).not.toHaveBeenCalled();
+    expect(container.querySelector('.analyze-reader-overlay')).toBeNull();
 });
 
-describe('planRemoval', () => {
-    const ref = (id, startIndex, endIndex) => ({ id, startIndex, endIndex });
-    const selection = { start: 101, end: 102 };
-
-    it('deletes a blank note whose every anchor overlaps', () => {
-        const notes = [{ id: 1, title: '', body: null, references: [ref(10, 100, 101), ref(11, 102, 105)] }];
-        expect(planRemoval(selection, notes))
-            .toEqual({ noteIds: [1], referenceIds: [], writtenNotes: [] });
-    });
-
-    it('deletes only overlapping anchors of a blank note with others', () => {
-        const notes = [{ id: 2, title: null, body: ' ', references: [ref(20, 101, 101), ref(21, 200, 201)] }];
-        expect(planRemoval(selection, notes))
-            .toEqual({ noteIds: [], referenceIds: [20], writtenNotes: [] });
-    });
-
-    it('lists written notes untouched, and ignores notes that do not overlap', () => {
-        const notes = [
-            { id: 3, title: 'Mine', body: '', references: [ref(30, 102, 102)] },
-            { id: 4, title: '', body: '', references: [ref(40, 103, 110)] },
-        ];
-        expect(planRemoval(selection, notes))
-            .toEqual({ noteIds: [], referenceIds: [], writtenNotes: [{ id: 3, title: 'Mine' }] });
-    });
-
-    it('treats ranges touching only at the edge as overlapping', () => {
-        const notes = [{ id: 5, title: '', body: '', references: [ref(50, 90, 101)] }];
-        expect(planRemoval(selection, notes).noteIds).toEqual([5]);
-    });
+test('tapping a verse number selects that verse, then taps extend the range', async () => {
+    const { rows } = await setup();
+    fireEvent.click(rows[0].querySelector('.analyze-reader-verse-number'));
+    expect(rows[0]).toHaveClass('analyze-reader-verse--selected');
+    fireEvent.click(rows[2].querySelector('.analyze-reader-verse-text'), { clientX: 950 });
+    expect(rows[1]).toHaveClass('analyze-reader-verse--selected');
+    expect(rows[2]).toHaveClass('analyze-reader-verse--selected');
+    expect(props.onStep).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Genesis 1:1–3' })).toBeInTheDocument();
 });
 
-describe('formatCopyText', () => {
-    it('joins verse text and ends with a ranged reference', () => {
-        expect(formatCopyText('Genesis', 1, verses, { start: 102, end: 103 }))
-            .toBe('God said. There was light.\nGenesis 1:5-7');
-    });
+test('a tap with no selection on a verse still uses the tap zones', async () => {
+    const { rows } = await setup();
+    fireEvent.click(rows[1].querySelector('.analyze-reader-verse-text'), { clientX: 950 });
+    expect(props.onStep).toHaveBeenCalledWith(1);
+});
 
-    it('prints a single verse without a range', () => {
-        expect(formatCopyText('Genesis', 1, verses, { start: 100, end: 100 }))
-            .toBe('In the beginning.\nGenesis 1:1');
-    });
+test('Done clears the selection', async () => {
+    const { rows } = await setup();
+    press(rows[0]);
+    fireEvent.click(screen.getByText('Done'));
+    expect(rows[0]).not.toHaveClass('analyze-reader-verse--selected');
+    expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+test('changing chapter clears the selection', async () => {
+    const { rows, rerender } = await setup();
+    press(rows[0]);
+    rerender(<Reader books={books} position={{ bookId: 1, chapter: 2 }} notesRevision={0} {...props} />);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+});
+
+test('Highlight and Add note pass the selected reference and clear on success', async () => {
+    const { rows } = await setup();
+    props.onHighlight.mockResolvedValue(true);
+    props.onAddNote.mockResolvedValue(false);
+    press(rows[0]);
+    fireEvent.click(screen.getByText('Add note'));
+    expect(props.onAddNote).toHaveBeenCalledWith({ bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 });
+    await act(async () => {});
+    expect(rows[0]).toHaveClass('analyze-reader-verse--selected');
+    fireEvent.click(screen.getByText('Highlight'));
+    expect(props.onHighlight).toHaveBeenCalledWith({ bookId: 1, chapter: 1, startVerse: 1, endVerse: 1 });
+    await waitFor(() => expect(rows[0]).not.toHaveClass('analyze-reader-verse--selected'));
+});
+
+test('Remove highlight passes the removal plan', async () => {
+    const { rows } = await setup();
+    props.onRemoveHighlight.mockResolvedValue(true);
+    press(rows[0]);
+    fireEvent.click(screen.getByText('Remove highlight'));
+    expect(props.onRemoveHighlight).toHaveBeenCalledWith({ noteIds: [5], referenceIds: [], writtenNotes: [] });
+    await waitFor(() => expect(rows[0]).not.toHaveClass('analyze-reader-verse--selected'));
+});
+
+test('Open in Analyze hands over the written note', async () => {
+    const { rows } = await setup();
+    press(rows[1]);
+    fireEvent.click(screen.getByText('Open in Analyze'));
+    expect(props.onOpenNote).toHaveBeenCalledWith(6);
+});
+
+test('Copy verse writes the formatted text to the clipboard', async () => {
+    const { rows } = await setup();
+    press(rows[0]);
+    fireEvent.click(screen.getByText('Copy verse'));
+    await act(async () => {});
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('In the beginning\nGenesis 1:1');
+});
+
+test('Copy verse shows the text when the clipboard is unavailable', async () => {
+    const { rows } = await setup();
+    navigator.clipboard.writeText.mockRejectedValue(new Error('denied'));
+    press(rows[0]);
+    fireEvent.click(screen.getByText('Copy verse'));
+    expect(await screen.findByText(/In the beginning\s+Genesis 1:1/)).toHaveClass('analyze-reader-copy-text');
 });
