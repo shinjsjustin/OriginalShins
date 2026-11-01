@@ -1167,6 +1167,8 @@
   --reader-line-height: 1.7;
   --reader-overlay-button-height: 44px;
   --reader-header-fade: 4s;
+  /* Lets the last verse scroll above an open sheet. */
+  --reader-sheet-clearance: 280px;
 
   position: fixed;
   inset: 0;
@@ -1201,7 +1203,7 @@
   max-width: var(--reader-measure);
   margin: 0 auto;
   padding: var(--space-md) var(--space-md)
-    calc(var(--space-xl) + env(safe-area-inset-bottom));
+    calc(var(--reader-sheet-clearance) + env(safe-area-inset-bottom));
   font-family: var(--font-scripture);
   font-size: var(--reader-text-size);
   line-height: var(--reader-line-height);
@@ -1221,6 +1223,88 @@
 
 .analyze-reader-verse.analyze-verse--tint-2 {
   background: var(--note-tint-2);
+}
+
+/* Lapis wash and edge over the gold tint, so a selected verse still reads as
+   selected where a note is already anchored. */
+.analyze-reader-verse.analyze-reader-verse--selected,
+.analyze-reader-verse.analyze-reader-verse--selected.analyze-verse--tint-1,
+.analyze-reader-verse.analyze-reader-verse--selected.analyze-verse--tint-2 {
+  background: var(--select-tint);
+  box-shadow: inset 3px 0 0 var(--select-edge);
+}
+
+.analyze-reader-verse--selected .analyze-reader-verse-number {
+  color: var(--lapis-strong);
+}
+
+.analyze-reader-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-md)
+    calc(var(--space-md) + env(safe-area-inset-bottom));
+  background: var(--paper-alt);
+  color: var(--ink);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-md);
+}
+
+.analyze-reader-sheet-title {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-sm);
+  font-weight: normal;
+  color: var(--ink-faint);
+}
+
+.analyze-reader-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.analyze-reader-sheet button {
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--font-base);
+}
+
+.analyze-reader-sheet button:disabled {
+  color: var(--ink-faint);
+}
+
+.analyze-reader-sheet > p,
+.analyze-reader-sheet-written {
+  font-size: var(--font-sm);
+  color: var(--ink-faint);
+}
+
+.analyze-reader-sheet-written ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analyze-reader-sheet-written li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+/* The one place native selection is on: Copy verse's fallback text. */
+.analyze-reader-copy-text {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .analyze-reader-verse-number {
