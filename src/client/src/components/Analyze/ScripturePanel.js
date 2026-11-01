@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import PanelFooter from './PanelFooter';
 import VerseRow from './VerseRow';
 import PanelHeader from './PanelHeader';
-import { fetchJson } from '../../config/api';
+import useChapter from './useChapter';
 import { buildHighlightIndex } from './highlights';
 import { isVerseSelected } from './selectionRuns';
 import { describePosition } from './navigation';
@@ -37,35 +37,11 @@ const ScripturePanel = ({
     selectedVerseIndexes,
     onToggleVerse,
 }) => {
-    const [chapterData, setChapterData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
     const bodyRef = useRef(null);
 
     const { bookId, chapter } = position;
 
-    useEffect(() => {
-        const controller = new AbortController();
-        setIsLoading(true);
-
-        fetchJson(`/chapter/${bookId}/${chapter}`, { signal: controller.signal })
-            .then(data => {
-                setChapterData(data);
-                setError('');
-            })
-            .catch(err => {
-                if (err.name === 'AbortError') return;
-                setChapterData(null);
-                setError(err.message);
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) {
-                    setIsLoading(false);
-                }
-            });
-
-        return () => controller.abort();
-    }, [bookId, chapter, notesRevision]);
+    const { chapterData, isLoading, error } = useChapter(position, notesRevision);
 
     // A new chapter starts at its first verse, not wherever the last one was
     // scrolled to. Guarded on the position rather than on chapterData so a
