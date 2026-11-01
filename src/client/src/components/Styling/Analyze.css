@@ -1159,6 +1159,115 @@
   }
 }
 
+/* ─── Reader ─────────────────────────────────────────────────────────────────
+   Full-screen reading view (Reader.js). Not width-scoped: it opens on desktop
+   too. It sits over the panels, which stay mounted beneath it. */
+.analyze-reader {
+  --reader-measure: 34em;
+  --reader-line-height: 1.7;
+  --reader-overlay-button-height: 44px;
+  --reader-header-fade: 4s;
+
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.analyze-reader-header {
+  margin: 0;
+  padding: calc(var(--space-sm) + env(safe-area-inset-top)) var(--space-md) var(--space-sm);
+  font-size: var(--font-sm);
+  font-weight: normal;
+  color: var(--ink-faint);
+  text-align: center;
+  animation: analyze-reader-header-fade var(--reader-header-fade) ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes analyze-reader-header-fade {
+  0%, 60% { opacity: 1; }
+  100%    { opacity: 0; }
+}
+
+.analyze-reader-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--reader-measure);
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-md)
+    calc(var(--space-xl) + env(safe-area-inset-bottom));
+  font-family: var(--font-scripture);
+  font-size: var(--reader-text-size);
+  line-height: var(--reader-line-height);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.analyze-reader-verse {
+  border-radius: var(--radius-sm);
+}
+
+.analyze-reader-verse.analyze-verse--tint-1 {
+  background: var(--note-tint-1);
+}
+
+.analyze-reader-verse.analyze-verse--tint-2 {
+  background: var(--note-tint-2);
+}
+
+.analyze-reader-verse-number {
+  margin-right: var(--space-xs);
+  font-family: var(--font-family);
+  font-size: var(--font-sm);
+  vertical-align: super;
+  color: var(--ink-faint);
+}
+
+.analyze-reader-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: env(safe-area-inset-top) calc(var(--space-sm) + env(safe-area-inset-right))
+    0 calc(var(--space-sm) + env(safe-area-inset-left));
+  background: var(--paper-alt);
+  border-bottom: 1px solid var(--paper-line);
+  color: var(--ink);
+}
+
+.analyze-reader-overlay button {
+  min-height: var(--reader-overlay-button-height);
+  min-width: var(--reader-overlay-button-height);
+  padding: 0 var(--space-md);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--font-base);
+}
+
+.analyze-reader-overlay button:disabled {
+  color: var(--ink-faint);
+}
+
+.analyze-reader-overlay-title {
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--ink-faint);
+}
+
 /* ─── Phone ──────────────────────────────────────────────────────────────────
    One panel at a time (Analyze.js, PanelSwitcher). 600px matches PHONE_QUERY in
    usePhoneLayout.js. Every phone rule lives here so desktop cannot change. */
@@ -1183,6 +1292,10 @@
 
   .analyze-page--phone .analyze-panels {
     gap: 0;
+  }
+
+  .analyze-page--phone .analyze-panel-action {
+    min-height: var(--analyze-touch-target);
   }
 
   /* The 980px stack gives each panel 70vh; the one visible panel takes it all. */
