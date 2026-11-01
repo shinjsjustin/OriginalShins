@@ -148,7 +148,17 @@ BibleApp/
                 │   ├── useChapterIdeas.js  # /api/chapter-ideas + its import/remove writes
                 │   ├── useActiveNote.js    # Which note the editor is showing
                 │   ├── useSelectedVerses.js# The page's one verse selection
-                │   └── useSavedLocation.js # Reads the saved location on arrival, writes it as the reader moves
+                │   ├── useSavedLocation.js # Reads the saved location on arrival, writes it as the reader moves
+                │   ├── readerGestures.js   # Pure: classifyTouch, tapZone, exceedsSlop and the gesture constants
+                │   ├── readerTextSize.js   # Pure: the allowed text sizes and the localStorage read/clamp
+                │   ├── readerSelection.js  # Pure: reader selection and removal rules, which anchors Remove may delete
+                │   ├── useReaderTextSize.js# The reader's text size, persisted in localStorage
+                │   ├── useWakeLock.js      # Holds the screen awake while the reader is open; no-op where unsupported
+                │   ├── useChapterScroll.js # Remembers each chapter's scroll position for the session
+                │   ├── useChapter.js       # Loads one chapter's payload; refetches when notes revision bumps
+                │   ├── useReaderMode.js    # Reads/writes ?read=1: open pushes, close drops the param
+                │   ├── Reader.js           # The full-screen reader: gestures, selection, text size
+                │   └── ReaderSheet.js      # The reader's bottom sheet: the four selection actions
                 ├── Thoughts/           # /thoughts — the three tiers as one canvas, scoped to one book
                 │   ├── Thoughts.js         # Page shell; owns which card is selected
                 │   ├── TopBar.js           # Reset View, the two Create buttons, the crumb
@@ -409,6 +419,38 @@ verses to pick are.
 jsdom has no `window.matchMedia`, so `usePhoneLayout` reports desktop when it is
 missing. Existing tests therefore stay on the desktop tree unless a test stubs
 `matchMedia` to ask for the phone one.
+
+### Full-screen reader
+
+On a phone only, a **Full screen** button opens the primary chapter as a
+distraction-free reader (`Reader.js`). It sets `?read=1` (`useReaderMode.js`).
+Opening **pushes** a history entry, so Back leaves the reader; moving between
+chapters inside it **replaces** the entry. **Exit** drops `?read` and lands on
+the same chapter in the normal page.
+
+Gestures are judged by `readerGestures.js`. Vertical scrolling is native
+(`touch-action: pan-y`); nothing tracks a touch in progress except the
+long-press cancel. A finished touch is a tap (within `TAP_SLOP_PX` and
+`TAP_MAX_MS`), a horizontal swipe (previous/next chapter), or nothing. A tap in
+the outer 20% of the width steps a chapter (`tapZone`); a tap in the middle
+does not. Holding past `LONG_PRESS_MS` starts a selection. Rows carry
+`data-verse-index`.
+
+Text size is kept in `localStorage` (`readerTextSize.js`, `useReaderTextSize.js`).
+Scroll position is remembered per chapter for the session only
+(`useChapterScroll.js`). `useWakeLock.js` keeps the screen on while reading and
+does nothing where the Wake Lock API is unsupported.
+
+A selection starts with a long-press on a verse or a tap on its verse number;
+further taps extend the range. The selection opens `ReaderSheet.js` with four
+actions: **Highlight**, **Remove highlight**, **Add note** and **Copy verse**.
+
+**A highlight is an untitled, empty note's anchor.** There is no highlights
+table; the existing `note_references` highlight rendering draws it. **Remove
+highlight** deletes only the anchors of blank notes (and a blank note left
+anchorless). It never touches a written note; the sheet offers to open such a
+note in Analyze instead. Writes go through `useNotes`, whose revision bump
+refetches the chapter via `useChapter`.
 
 ### Endpoints
 
