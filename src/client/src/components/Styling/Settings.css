@@ -39,7 +39,7 @@
 
 .settings-heading {
   margin: 0;
-  color: var(--text-white);
+  color: var(--text-primary);
   font-size: var(--font-lg);
 }
 
@@ -94,6 +94,12 @@
 
 .settings-button--quiet {
   background-color: var(--bg-alt);
+  color: var(--text-primary);
+  border: var(--settings-border-width) solid var(--text-muted);
+}
+
+.settings-button--quiet:hover:not(:disabled) {
+  background-color: var(--bg-input);
 }
 
 .settings-error {
@@ -114,7 +120,7 @@
 
 .settings-secret-title {
   margin: 0;
-  color: var(--text-white);
+  color: var(--text-primary);
 }
 
 .settings-secret-value {
@@ -162,7 +168,7 @@
 }
 
 .settings-key-name {
-  color: var(--text-white);
+  color: var(--text-primary);
   font-size: var(--font-base);
 }
 

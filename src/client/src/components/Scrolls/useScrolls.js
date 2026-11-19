@@ -12,7 +12,9 @@ const useScrolls = () => {
 
     useEffect(() => {
         const controller = new AbortController();
-        setIsLoading(true);
+        // Only the first load shows loading; a reload swaps the list in place
+        // so an open scroll is not hidden behind a "Loading…" line.
+        if (revision === 0) setIsLoading(true);
         fetchJson('/scrolls', { signal: controller.signal })
             .then((data) => {
                 setScrolls(sortNewestFirst(data.scrolls));

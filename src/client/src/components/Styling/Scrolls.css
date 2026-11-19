@@ -25,7 +25,7 @@
   background: none;
   border: none;
   padding: var(--space-xs);
-  color: var(--text-white);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -63,7 +63,7 @@
 
 .scrolls-block-reference {
   margin: 0 0 var(--space-xs);
-  color: var(--text-white);
+  color: var(--text-primary);
   font-weight: bold;
 }
 

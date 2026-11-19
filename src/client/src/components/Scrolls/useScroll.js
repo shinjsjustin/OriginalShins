@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJson } from '../../config/api';
 
 // One scroll with its blocks. saveAnswer resolves true or false so the caller
 // can keep a draft on failure; errors are worded here, not by fetchJson.
-const useScroll = (id) => {
+// onAnswerSaved runs after a save lands, so a host can refresh its summary.
+const useScroll = (id, { onAnswerSaved } = {}) => {
     const [scroll, setScroll] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const onSavedRef = useRef(onAnswerSaved);
+    onSavedRef.current = onAnswerSaved;
 
     useEffect(() => {
         const controller = new AbortController();
@@ -37,6 +40,7 @@ const useScroll = (id) => {
                 ...current,
                 blocks: current.blocks.map((b) => (b.id === block.id ? block : b)),
             }));
+            if (onSavedRef.current) onSavedRef.current(block);
             return true;
         } catch {
             setError('Could not save your answer.');

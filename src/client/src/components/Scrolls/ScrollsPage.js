@@ -58,7 +58,13 @@ const ScrollsPage = () => {
                                         {` · ${new Date(scroll.createdAt).toLocaleDateString()}`}
                                     </span>
                                 </button>
-                                {isOpen && <ScrollView scrollId={scroll.id} onDeleted={handleDeleted} />}
+                                {isOpen && (
+                                    <ScrollView
+                                        scrollId={scroll.id}
+                                        onDeleted={handleDeleted}
+                                        onAnswerSaved={reload}
+                                    />
+                                )}
                             </li>
                         );
                     })}

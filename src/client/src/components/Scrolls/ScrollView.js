@@ -6,8 +6,8 @@ import { fetchJson } from '../../config/api';
 
 // One scroll's blocks, with answers and delete. Takes an id rather than a
 // scroll so Analyze can embed it.
-const ScrollView = ({ scrollId, onDeleted }) => {
-    const { scroll, isLoading, error, saveAnswer } = useScroll(scrollId);
+const ScrollView = ({ scrollId, onDeleted, onAnswerSaved }) => {
+    const { scroll, isLoading, error, saveAnswer } = useScroll(scrollId, { onAnswerSaved });
     const [deleteError, setDeleteError] = React.useState(null);
 
     const handleDelete = async () => {

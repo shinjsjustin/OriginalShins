@@ -22,7 +22,7 @@ const WAIT_TIMEOUT_MS = 10000;
 const POLL_MS = 50;
 const SECONDS_PER_DAY = 86400;
 
-// Steps: { click: sel } | { type: [sel, text] } | { wait: sel }.
+// Steps: { click: sel } | { type: [sel, text] } | { wait: sel } | { waitText: [sel, text] }.
 // Each phase is a table of states; P3 adds its own key.
 const PHASES = {
     p2: [
@@ -47,6 +47,7 @@ const PHASES = {
                 { type: ['.scrolls-answer-input', 'Because new life is given, not earned.'] },
                 { click: '.scrolls-answer-actions button' },
                 { wait: '.scrolls-status' },
+                { waitText: ['.scrolls-row[aria-expanded="true"] .scrolls-row-meta', '2 of 2 answered'] },
             ],
         },
     ],
@@ -74,8 +75,11 @@ const CONTENT_TYPES = {
     '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.map': 'application/json',
 };
 
+// Resolves to { server, reset }. reset() restores the fixtures, so a write made
+// in one shot (a saved answer) never leaks into the next viewport's shot.
 const startServer = (buildDir, port) => {
-    const api = createFixtureApi();
+    let api = createFixtureApi();
+    const reset = () => { api = createFixtureApi(); };
     const server = http.createServer((req, res) => {
         const { pathname } = new URL(req.url, 'http://localhost');
         if (pathname.startsWith('/api/')) {
@@ -95,7 +99,7 @@ const startServer = (buildDir, port) => {
         res.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(file)] || 'application/octet-stream' });
         fs.createReadStream(file).pipe(res);
     });
-    return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+    return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve({ server, reset })));
 };
 
 const buildClient = (buildDir, port) => {
@@ -166,8 +170,19 @@ const waitFor = async (cdp, sessionId, selector) => {
     throw new Error(`timed out waiting for ${selector}`);
 };
 
+const waitForText = async (cdp, sessionId, selector, text) => {
+    const deadline = Date.now() + WAIT_TIMEOUT_MS;
+    const probe = `(document.querySelector(${JSON.stringify(selector)}) || {}).textContent || ''`;
+    while (Date.now() < deadline) {
+        if ((await evaluate(cdp, sessionId, probe)).includes(text)) return;
+        await sleep(POLL_MS);
+    }
+    throw new Error(`timed out waiting for "${text}" in ${selector}`);
+};
+
 const runStep = async (cdp, sessionId, step) => {
     if (step.wait) return waitFor(cdp, sessionId, step.wait);
+    if (step.waitText) return waitForText(cdp, sessionId, ...step.waitText);
     if (step.click) {
         await waitFor(cdp, sessionId, step.click);
         return evaluate(cdp, sessionId, `document.querySelector(${JSON.stringify(step.click)}).click()`);
@@ -223,11 +238,13 @@ const main = async () => {
     let failures = 0;
     try {
         buildClient(path.join(workDir, 'build'), port);
-        server = await startServer(path.join(workDir, 'build'), port);
+        const started = await startServer(path.join(workDir, 'build'), port);
+        server = started.server;
         browser = await launchChrome(await freePort(), path.join(workDir, 'profile'));
         for (const state of states) {
             for (const viewportName of Object.keys(VIEWPORTS)) {
                 try {
+                    started.reset();
                     await shoot(browser.cdp, `http://127.0.0.1:${port}`, state, viewportName, outDir);
                     console.log(`ok   ${state.name}-${viewportName}`);
                 } catch (err) {

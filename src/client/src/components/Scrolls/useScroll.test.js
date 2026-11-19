@@ -60,6 +60,25 @@ describe('useScrolls', () => {
         expect(result.current.error).toBe('Could not delete the scroll.');
     });
 
+    it('useScrolls reload refetches without dropping the list into loading', async () => {
+        let answered = 0;
+        handler = () => reply(200, {
+            scrolls: [{ ...SUMMARY(1, '2026-01-01'), questionCount: 2, answeredCount: answered }],
+        });
+        const { result } = renderHook(() => useScrolls());
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        answered = 1;
+        const loadingSeen = [];
+        act(() => { result.current.reload(); });
+        loadingSeen.push(result.current.isLoading);
+        await waitFor(() => expect(result.current.scrolls[0].answeredCount).toBe(1));
+
+        expect(calls.filter((c) => c.method === 'GET')).toHaveLength(2);
+        expect(loadingSeen).toEqual([false]);
+        expect(result.current.isLoading).toBe(false);
+    });
+
     it('useScrolls reports its own error when the load fails', async () => {
         handler = () => reply(500, {});
         const { result } = renderHook(() => useScrolls());
@@ -106,6 +125,23 @@ describe('useScroll', () => {
         expect(put.body).toBe(JSON.stringify({ answer: 'Because' }));
         expect(ok).toBe(true);
         expect(result.current.scroll.blocks).toEqual([saved, { id: 10, kind: 'note' }]);
+    });
+
+    it('useScroll calls onAnswerSaved after a save lands, and not after a failure', async () => {
+        let status = 200;
+        handler = (url, opts) => (opts.method === 'PUT'
+            ? reply(status, { block: { ...Q, answer: { text: 'Yes' } } })
+            : reply(200, { scroll: { id: 4, blocks: [Q] } }));
+        const onAnswerSaved = jest.fn();
+        const { result } = renderHook(() => useScroll(4, { onAnswerSaved }));
+        await waitFor(() => expect(result.current.scroll).not.toBeNull());
+
+        await act(async () => { await result.current.saveAnswer(9, 'Yes'); });
+        expect(onAnswerSaved).toHaveBeenCalledTimes(1);
+
+        status = 500;
+        await act(async () => { await result.current.saveAnswer(9, 'No'); });
+        expect(onAnswerSaved).toHaveBeenCalledTimes(1);
     });
 
     it('useScroll saveAnswer resolves false with its own error and leaves the block', async () => {
