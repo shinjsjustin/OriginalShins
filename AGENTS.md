@@ -1461,7 +1461,8 @@ node src/client/scripts/render-shots.js p2
 ```
 
 Takes headless screenshots of the Settings and Scrolls pages at phone and
-desktop sizes; the shots land in the phase's `shots_dir`. It serves a client
+desktop sizes; the shots land in `render-shots/<phase>/` at the repo root
+(git-ignored), named `<state>-<phone|desktop>.png`. It serves a client
 build against a **fixture API** with a fake token, not the live server, so it
 proves layout and not the server.
 
