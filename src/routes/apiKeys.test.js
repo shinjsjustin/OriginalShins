@@ -105,3 +105,25 @@ test('every handler answers 500 when a dep throws', async () => {
         });
     });
 });
+
+test('POST / behind a body parser mounted first, as server.js does, still creates the key', async () => {
+    const bodyParser = require('body-parser');
+    const deps = {
+        generateKey: () => ({ secret: 'scr_cafe', hash: 'h', hint: 'cafe' }),
+        insertKey: async () => 3,
+        listKeys: async () => [{ id: 3, name: 'Laptop', hint: 'cafe', created_at: CREATED, last_used_at: null }],
+    };
+    const app = express();
+    app.use(bodyParser.json());
+    app.use('/api/keys', (req, res, next) => { req.user = { id: 7 }; next(); }, createApiKeysRouter(deps));
+    const server = await new Promise((resolve) => { const s = app.listen(0, () => resolve(s)); });
+    try {
+        const res = await post(`http://127.0.0.1:${server.address().port}/api/keys`, { name: 'Laptop' });
+        assert.strictEqual(res.status, 201);
+        const json = await res.json();
+        assert.strictEqual(json.secret, 'scr_cafe');
+        assert.strictEqual(json.key.id, 3);
+    } finally {
+        await new Promise((resolve) => server.close(resolve));
+    }
+});
