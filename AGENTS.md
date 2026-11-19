@@ -27,7 +27,8 @@ BibleApp/
     │       ├── 007_chapter_ideas.sql# ideas filed against a chapter
     │       ├── 008_note_topics.sql # notes filed directly under a topic
     │       ├── 009_topic_books.sql # topics + ideas gain book_id; slug unique per (user, book)
-    │       └── 010_reading_days.sql# reading_days log + admin.last_location_saved_at
+    │       ├── 010_reading_days.sql# reading_days log + admin.last_location_saved_at
+    │       └── 011_scrolls.sql     # api_keys, scrolls, scroll_chapters, scroll_blocks
     ├── lib/                        # Query + validation modules the routes share
     │   ├── params.js               # Positive-integer parsing, canon bounds
     │   ├── chapters.js             # Chapter lookup + a chapter's verses
@@ -45,6 +46,11 @@ BibleApp/
     │   ├── readingHistory.js       # Bourne's history read: logged days, plus note-derived days before logging began
     │   ├── bourneInput.js          # Query-string validation for /api/bourne/history and /notes
     │   ├── bourneNotes.js          # Bourne's notes read: a page of notes with book, idea and topic names
+    │   ├── apiKeys.js              # api_keys: generate scr_ keys, hash-lookup, list, delete, last-used touch
+    │   ├── apiKeyInput.js          # Body validation for POST /api/keys (the key's name)
+    │   ├── scrollInput.js          # Body validation for scrolls: passage, blocks, title and answer
+    │   ├── scrolls.js              # scrolls reads/writes, all scoped by user_id; the one-per-chapter 409
+    │   ├── scrollsOpenApi.js       # Builds the OpenAPI document served at /api/agent/openapi.json
     │   ├── textInput.js            # Shared body-validation primitives
     │   ├── noteInput.js            # Request-body validation for the notes API
     │   ├── ideaInput.js            # Request-body validation for the ideas API
@@ -70,7 +76,8 @@ BibleApp/
     │       └── verify.js           # post-import count assertions
     ├── middleware/
     │   ├── isAuth.js               # JWT Bearer token validator
-    │   └── isReadKey.js            # Static read-key validator for /api/bourne
+    │   ├── isReadKey.js            # Static read-key validator for /api/bourne
+    │   └── isScrollKey.js          # Per-user scr_ key validator for /api/agent
     └── routes/
         ├── auth.js                 # POST /api/auth/register, /api/auth/login
         ├── user.js                 # GET  /api/user/me  (protected)
@@ -84,6 +91,9 @@ BibleApp/
         ├── search.js               # GET /api/search?q= (four groups)
         ├── pins.js                 # GET/POST/DELETE /api/pins (+ DELETE /all)
         ├── bourne.js               # GET-only /api/bourne (read key, not JWT)
+        ├── apiKeys.js              # GET/POST/DELETE /api/keys (JWT; the secret is shown once)
+        ├── scrolls.js              # /api/scrolls: the site's read, answer and delete (JWT)
+        ├── agent.js                # /api/agent: the AI's scroll writes (scr_ key) + the public OpenAPI doc
         └── orderingErrors.js       # ordering results -> HTTP, shared by three routers
     └── client/                     # React app (Create React App)
         ├── package.json
@@ -303,6 +313,10 @@ mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/007_chapter_ideas.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/008_note_topics.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/009_topic_books.sql
 mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/010_reading_days.sql
+
+# 011 adds four tables. On the live database, take a backup FIRST:
+mysqldump -u "$DB_USER" -p "$DB_NAME" > backup-before-011.sql
+mysql -u "$DB_USER" -p "$DB_NAME" < src/db/migrations/011_scrolls.sql
 
 # 2. Import the text
 npm run import:scripture                        # World English Bible (default)
@@ -1113,6 +1127,104 @@ date (or when nothing is logged yet), `readingHistory.js` fills the gap with
 by `READING_TIME_ZONE` rather than UTC, listing the chapters the note anchors to
 (a note with no anchor still marks the day, with no chapters). On and after
 `loggingBegan` only the log is used, so the two sources never overlap.
+
+---
+
+## Scrolls
+
+A scroll is a private study document over one book's passage range
+(`bookId`, `startChapter:startVerse` to `endChapter:endVerse`). The user's own
+AI writes it as an ordered list of **blocks**; the user reads it on the site and
+answers the questions in it. The app calls no AI itself: the AI comes in through
+`/api/agent` with a key the user made.
+
+Block kinds: `note`, `question`, `reference` (the only kind that may carry a
+`reference` of `{ bookId, chapter, startVerse, endVerse }`) and `idea`. Bodies are
+markdown, up to 20,000 characters, and render through `markdown.js` like every
+other body, so nothing from a block skips the sanitizer. A call appends 1 to 100
+blocks.
+
+### Tables (migration `011_scrolls.sql`)
+
+| Table | Holds |
+|-------|-------|
+| `api_keys` | One row per key: `name`, `key_hash`, `hint`, `last_used_at` |
+| `scrolls` | The title and passage range, per `user_id` |
+| `scroll_chapters` | One row per chapter the passage touches |
+| `scroll_blocks` | The blocks, ordered by `position`, with `answer` on questions |
+
+Back up with `mysqldump` before applying it to the live database.
+
+### One scroll per chapter
+
+`scroll_chapters` has `UNIQUE (user_id, book_id, chapter)`. That index is the
+rule: no chapter belongs to two of a user's scrolls. It is a unique index and
+not a read-then-write so two concurrent creates cannot both pass. A create that
+trips it answers **409** with `Chapter already has a scroll: <title>` and a
+`conflict` object naming the scroll in the way, so the AI can append to that one
+instead. `GET /api/scrolls/covering?book=&chapter=` is the site's way to ask
+which scroll holds a chapter.
+
+### Keys
+
+A key looks like `scr_...`. Only its SHA-256 hash and a 4-character `hint` are
+stored, so a database leak yields nothing usable and the hint is all the key list
+can show. `POST /api/keys` returns the `secret` **once**; nothing stored can
+reproduce it. A key is revoked by deleting it, and `last_used_at` is touched on
+each use, without failing the request if that write fails.
+
+`isScrollKey` guards `/api/agent` only. `isAuth` still accepts JWTs only, so a
+`scr_` key is 403 everywhere else, and a JWT is 403 on `/api/agent`. This door is
+separate from Bourne's: it has no environment key and so no fail-closed 503.
+
+### Answers
+
+Only a `question` takes an answer, via the site: `PUT .../answer` on anything
+else is **422**. Once a question has an answer the AI may not edit or delete that
+block: `PATCH` and `DELETE` on it answer **409** `Question already answered`, so
+the user's words cannot be pulled out from under them. The AI also has no scroll
+delete; only the user can remove a whole scroll.
+
+### `/api/agent` (scr_ key)
+
+| Route | Does |
+|-------|------|
+| `GET /openapi.json` | The OpenAPI description. **Public, no key.** |
+| `GET /scrolls?book=&chapter=` | The key owner's scrolls; `chapter` needs `book` |
+| `POST /scrolls` | Create with a passage and blocks; 201, or 409 on a chapter clash |
+| `GET /scrolls/:id` | One scroll with its blocks |
+| `PATCH /scrolls/:id` | Change the title |
+| `POST /scrolls/:id/blocks` | Append blocks; 201 with the scroll |
+| `PATCH /scrolls/:id/blocks/:blockId` | Edit a block; 409 if answered |
+| `DELETE /scrolls/:id/blocks/:blockId` | Remove a block; 204, or 409 if answered |
+
+A block id is checked against the scroll in the URL, so a block of another
+scroll is a 404 through this one.
+
+`GET /api/agent/openapi.json` is the public description of this API, built from
+the request's own host by `scrollsOpenApi.js`. It is what a future GPT Action
+would import, which is why it needs no key; the Action supplies the key as a
+Bearer token.
+
+### `/api/scrolls` (JWT)
+
+| Route | Does |
+|-------|------|
+| `GET /` | Every scroll of the caller |
+| `GET /covering?book=&chapter=` | `{ scroll }` for the one covering that chapter, or `null` |
+| `GET /:id` | One scroll with its blocks |
+| `PUT /:id/blocks/:blockId/answer` | `{ answer }`; saves the user's answer; answers `{ block }` |
+| `DELETE /:id` | Deletes the scroll, its chapters and blocks; 204 |
+
+No site route edits or deletes a block: users answer, the AI writes.
+
+### `/api/keys` (JWT)
+
+| Route | Does |
+|-------|------|
+| `GET /` | The caller's keys: `id`, `name`, `hint`, `createdAt`, `lastUsedAt` |
+| `POST /` | `{ name }`; 201 with `{ key, secret }`, the secret shown once |
+| `DELETE /:id` | Revokes; 204, or 404 for a key that is not the caller's |
 
 ---
 
