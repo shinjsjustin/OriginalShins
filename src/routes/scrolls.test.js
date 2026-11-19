@@ -140,3 +140,17 @@ test('a lib throw answers 500', async () => {
         assert.strictEqual((await fetch(base)).status, 500);
     });
 });
+
+test('PUT answer with an empty string clears the answer to null, as the client sends it', async () => {
+    const saved = [];
+    const deps = {
+        findScroll: async () => SCROLL,
+        saveAnswer: async (...a) => { saved.push(a); return true; },
+    };
+    await withServer(deps, async (base) => {
+        const res = await put(`${base}/4/blocks/9/answer`, { answer: '' });
+        assert.strictEqual(res.status, 200);
+        assert.deepStrictEqual(await res.json(), { block: QUESTION });
+        assert.deepStrictEqual(saved, [[7, 9, null]]);
+    });
+});
