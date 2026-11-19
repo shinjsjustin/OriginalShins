@@ -9,6 +9,7 @@ const { isDuplicateSlugError: isDuplicateEntry } = require('./topics');
 const MISSING = 'missing';
 const ANSWERED = 'answered';
 const NOT_QUESTION = 'not-question';
+const NOT_REFERENCE = 'not-reference';
 
 const NULL_REFERENCE = [null, null, null, null];
 
@@ -256,15 +257,34 @@ const updateBlock = async (userId, blockId, { kind, body, reference }) => {
         sets.push('sb.ref_book_id = ?', 'sb.ref_chapter = ?', 'sb.ref_start_verse = ?', 'sb.ref_end_verse = ?');
         params.push(...referenceParams(kind !== undefined && kind !== 'reference' ? null : reference));
     }
+    // A reference with no kind change may only anchor a block that already is one.
+    const kindGuard = reference !== undefined && kind === undefined;
 
     const [result] = await db.execute(
         `UPDATE scroll_blocks sb
          JOIN scrolls s ON s.id = sb.scroll_id
          SET ${sets.join(', ')}
-         WHERE sb.id = ? AND s.user_id = ? AND sb.answer IS NULL`,
+         WHERE sb.id = ? AND s.user_id = ? AND sb.answer IS NULL${kindGuard ? " AND sb.kind = 'reference'" : ''}`,
         [...params, blockId, userId]
     );
-    return result.affectedRows > 0 ? true : explainRefusal(userId, blockId, ANSWERED);
+    if (result.affectedRows > 0) {
+        return true;
+    }
+    return kindGuard ? explainKindRefusal(userId, blockId) : explainRefusal(userId, blockId, ANSWERED);
+};
+
+// Why a kind-guarded update matched nothing: missing, answered, or not a reference.
+const explainKindRefusal = async (userId, blockId) => {
+    const [rows] = await db.execute(
+        `SELECT sb.id, sb.kind, sb.answer IS NOT NULL AS answered FROM scroll_blocks sb
+         JOIN scrolls s ON s.id = sb.scroll_id
+         WHERE sb.id = ? AND s.user_id = ?`,
+        [blockId, userId]
+    );
+    if (rows.length === 0) {
+        return MISSING;
+    }
+    return Number(rows[0].answered) ? ANSWERED : NOT_REFERENCE;
 };
 
 const deleteBlock = async (userId, blockId) => {
@@ -316,6 +336,7 @@ module.exports = {
     MISSING,
     ANSWERED,
     NOT_QUESTION,
+    NOT_REFERENCE,
     createScroll,
     findScrolls,
     findScroll,

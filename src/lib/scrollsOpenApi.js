@@ -160,13 +160,13 @@ const paths = () => ({
     '/scrolls/{id}/blocks/{blockId}': {
         patch: {
             operationId: 'updateBlock',
-            description: 'Change the kind, body or reference of a block. Send at least one. A question that has an answer cannot change.',
+            description: 'Change the kind, body or reference of a block. Send at least one. A reference must be sent with kind "reference". A question that has an answer cannot change.',
             parameters: [SCROLL_ID, BLOCK_ID],
             requestBody: body({
                 type: 'object',
                 properties: { kind: { type: 'string', enum: KINDS }, body: { type: 'string' }, reference: { type: 'object' } },
             }),
-            responses: { 200: scrollReply('The updated scroll.'), 400: BAD_INPUT, 404: NOT_FOUND, 409: ANSWERED },
+            responses: { 200: scrollReply('The updated scroll.'), 400: BAD_INPUT, 404: NOT_FOUND, 409: ANSWERED, 422: { description: 'Only reference blocks take a reference.' } },
         },
         delete: {
             operationId: 'deleteBlock',

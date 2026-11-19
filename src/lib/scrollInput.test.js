@@ -148,7 +148,10 @@ test('parseBlockPatch accepts any partial field and rejects an empty patch', () 
     assert.deepEqual(parseBlockPatch({ body: 'new' }).value, { body: 'new' });
     assert.deepEqual(parseBlockPatch({ kind: 'idea' }).value, { kind: 'idea' });
     const reference = { bookId: 1, chapter: 1, startVerse: 1, endVerse: 2 };
-    assert.deepEqual(parseBlockPatch({ reference }).value, { reference });
+    assert.deepEqual(parseBlockPatch({ kind: 'reference', reference }).value, { kind: 'reference', reference });
+    // the parser cannot see the stored block, so a reference must name its kind
+    assert.match(parseBlockPatch({ reference }).error, /reference/);
+    assert.match(parseBlockPatch({ body: 'b', reference }).error, /reference/);
     assert.match(parseBlockPatch({}).error, /at least one/);
     assert.match(parseBlockPatch({ kind: 'bad' }).error, /kind/);
     assert.match(parseBlockPatch({ body: '' }).error, /body/);

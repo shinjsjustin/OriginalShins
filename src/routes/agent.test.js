@@ -242,6 +242,21 @@ test('PATCH and DELETE of an answered block answer 409', async () => {
     });
 });
 
+test('PATCH block: a reference without kind reference is 400, a non-reference block is 422', async () => {
+    const { NOT_REFERENCE } = require('../lib/scrolls');
+    const reference = { bookId: 43, chapter: 3, startVerse: 16, endVerse: 17 };
+    const writes = [];
+    const deps = { updateBlock: async (...a) => { writes.push(a); return NOT_REFERENCE; }, findScroll: async () => SCROLL };
+    await withServer(deps, async (base) => {
+        assert.strictEqual((await send(base, 'PATCH', '/scrolls/3/blocks/11', { reference })).status, 400);
+        assert.strictEqual((await send(base, 'PATCH', '/scrolls/3/blocks/11', { kind: 'note', reference })).status, 400);
+        assert.deepStrictEqual(writes, []);
+        const res = await send(base, 'PATCH', '/scrolls/3/blocks/11', { body: 'x' });
+        assert.strictEqual(res.status, 422);
+        assert.deepStrictEqual(await res.json(), { error: 'Only reference blocks take a reference' });
+    });
+});
+
 test('block routes answer 404 for a missing scroll, a block of another scroll, or a missing block', async () => {
     const { MISSING } = require('../lib/scrolls');
     const writes = [];

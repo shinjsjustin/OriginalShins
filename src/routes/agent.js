@@ -112,6 +112,7 @@ const createAgentRouter = (deps = {}) => {
 
         const result = await d.updateBlock(req.user.id, req.blockId, parsed.value);
         if (result === d.ANSWERED) return answered(res);
+        if (result === d.NOT_REFERENCE) return res.status(422).json({ error: 'Only reference blocks take a reference' });
         if (result !== true) return notFound(res);
         res.status(200).json({ scroll: await d.findScroll(req.user.id, req.scrollId) });
     }));

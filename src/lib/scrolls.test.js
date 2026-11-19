@@ -229,10 +229,19 @@ test('updateBlock is guarded by answer IS NULL and reports missing, answered or 
     await updateBlock(3, 8, { kind: 'note' });
     assert.deepEqual(exec.mock.calls[2].arguments[1], ['note', null, null, null, null, 8, 3]);
 
+    // a reference with no kind may only land on a block that is already a reference
+    await updateBlock(3, 8, { reference: { bookId: 1, chapter: 2, startVerse: 3, endVerse: 4 } });
+    assert.match(exec.mock.calls[3].arguments[0], /sb\.kind = 'reference'/);
+    assert.deepEqual(exec.mock.calls[3].arguments[1], [1, 2, 3, 4, 8, 3]);
+
     let existing = [[{ id: 8 }]];
     exec.mock.mockImplementation(async (sql) =>
         /^\s*UPDATE/.test(sql) ? [{ affectedRows: 0 }] : existing);
     assert.equal(await updateBlock(3, 8, { body: 'x' }), 'answered');
+    existing = [[{ id: 8, kind: 'note', answered: 0 }]];
+    assert.equal(await updateBlock(3, 8, { reference: { bookId: 1, chapter: 2, startVerse: 3, endVerse: 4 } }), 'not-reference');
+    existing = [[{ id: 8, kind: 'reference', answered: 1 }]];
+    assert.equal(await updateBlock(3, 8, { reference: { bookId: 1, chapter: 2, startVerse: 3, endVerse: 4 } }), 'answered');
     existing = [[]];
     assert.equal(await updateBlock(3, 8, { body: 'x' }), 'missing');
 });

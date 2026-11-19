@@ -211,8 +211,10 @@ const parseBlockPatch = (body) => {
         value.body = parsed.value;
     }
     if (body.reference !== undefined) {
-        if (value.kind !== undefined && value.kind !== 'reference') {
-            return fail('reference is only allowed on a reference block');
+        // The stored block's kind is unknown here, so a reference must arrive
+        // with kind 'reference' to keep anchors on reference blocks only.
+        if (value.kind !== 'reference') {
+            return fail('reference is only allowed with kind reference');
         }
         const reference = parseReference(body.reference);
         if (reference.error) {

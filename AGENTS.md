@@ -1195,7 +1195,7 @@ delete; only the user can remove a whole scroll.
 | `GET /scrolls/:id` | One scroll with its blocks |
 | `PATCH /scrolls/:id` | Change the title |
 | `POST /scrolls/:id/blocks` | Append blocks; 201 with the scroll |
-| `PATCH /scrolls/:id/blocks/:blockId` | Edit a block; 409 if answered |
+| `PATCH /scrolls/:id/blocks/:blockId` | Edit a block; 409 if answered. A `reference` must come with `kind: "reference"` (else 400), and a reference-only patch to a non-reference block is 422 |
 | `DELETE /scrolls/:id/blocks/:blockId` | Remove a block; 204, or 409 if answered |
 
 A block id is checked against the scroll in the URL, so a block of another
