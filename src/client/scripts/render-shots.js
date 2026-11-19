@@ -22,8 +22,12 @@ const WAIT_TIMEOUT_MS = 10000;
 const POLL_MS = 50;
 const SECONDS_PER_DAY = 86400;
 
+// A step with phoneOnly: true is skipped on the desktop viewport.
 // Steps: { click: sel } | { type: [sel, text] } | { wait: sel } | { waitText: [sel, text] }.
 // Each phase is a table of states; P3 adds its own key.
+// The left slot is hidden on a phone until the switcher's Compare is pressed.
+const OPEN_LEFT_SLOT_ON_PHONE = { click: '.analyze-switcher-button:first-child', phoneOnly: true };
+
 const PHASES = {
     p2: [
         { name: 'settings-keys', url: '/settings', steps: [{ wait: '.settings-key' }] },
@@ -49,6 +53,23 @@ const PHASES = {
                 { wait: '.scrolls-status' },
                 { waitText: ['.scrolls-row[aria-expanded="true"] .scrolls-row-meta', '2 of 2 answered'] },
             ],
+        },
+    ],
+    p3: [
+        {
+            name: 'analyze-scrolls-covering',
+            url: '/analyze?l=43.3&r=40.1&side=scrolls',
+            steps: [OPEN_LEFT_SLOT_ON_PHONE, { wait: '.analyze-scrolls-panel .scrolls-block' }],
+        },
+        {
+            name: 'analyze-scrolls-list',
+            url: '/analyze?l=1.1&r=40.1&side=scrolls',
+            steps: [OPEN_LEFT_SLOT_ON_PHONE, { wait: '.analyze-scrolls-panel .scrolls-row' }],
+        },
+        {
+            name: 'analyze-compare',
+            url: '/analyze?l=43.3&r=40.1',
+            steps: [OPEN_LEFT_SLOT_ON_PHONE, { wait: '.analyze-left-switch' }],
         },
     ],
 };
@@ -81,13 +102,13 @@ const startServer = (buildDir, port) => {
     let api = createFixtureApi();
     const reset = () => { api = createFixtureApi(); };
     const server = http.createServer((req, res) => {
-        const { pathname } = new URL(req.url, 'http://localhost');
+        const { pathname, search } = new URL(req.url, 'http://localhost');
         if (pathname.startsWith('/api/')) {
             const chunks = [];
             req.on('data', (chunk) => chunks.push(chunk));
             req.on('end', () => {
                 const raw = Buffer.concat(chunks).toString();
-                const { status, body } = api(req.method, pathname.slice('/api'.length), raw ? JSON.parse(raw) : undefined);
+                const { status, body } = api(req.method, pathname.slice('/api'.length) + search, raw ? JSON.parse(raw) : undefined);
                 res.writeHead(status, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(body));
             });
@@ -206,7 +227,7 @@ const shoot = async (cdp, origin, state, viewportName, outDir) => {
             source: `localStorage.setItem('token', ${JSON.stringify(unsignedToken())});`,
         }, sessionId);
         await cdp.send('Page.navigate', { url: `${origin}${state.url}` }, sessionId);
-        for (const step of state.steps) await runStep(cdp, sessionId, step);
+        for (const step of state.steps.filter((s) => !s.phoneOnly || viewportName === 'phone')) await runStep(cdp, sessionId, step);
         await sleep(300);
 
         const height = await evaluate(cdp, sessionId, 'Math.ceil(document.documentElement.scrollHeight)');

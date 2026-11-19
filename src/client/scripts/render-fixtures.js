@@ -1,7 +1,43 @@
 // Canned API answers for the headless render script. Stateful only where a
 // state needs it: saving an answer is echoed back and kept for the next read.
 
-const FIXTURE_BOOKS = { JOHN: 43, PSALMS: 19, ROMANS: 45 };
+const FIXTURE_BOOKS = { GENESIS: 1, MATTHEW: 40, JOHN: 43, PSALMS: 19, ROMANS: 45 };
+
+// Analyze reads the canon for its pickers and panel titles; a few books do.
+const chaptersOf = (counts) => counts.map((verseCount, i) => ({ number: i + 1, verseCount }));
+const BOOKS = [
+    { id: 1, name: 'Genesis', abbrev: 'Gen', testament: 'OT', canonicalOrder: 1, chapters: chaptersOf([5, 5, 5]) },
+    { id: 19, name: 'Psalms', abbrev: 'Ps', testament: 'OT', canonicalOrder: 19, chapters: chaptersOf(Array(23).fill(6)) },
+    { id: 40, name: 'Matthew', abbrev: 'Matt', testament: 'NT', canonicalOrder: 40, chapters: chaptersOf([6, 6, 6]) },
+    { id: 43, name: 'John', abbrev: 'John', testament: 'NT', canonicalOrder: 43, chapters: chaptersOf([6, 6, 8, 6]) },
+    { id: 45, name: 'Romans', abbrev: 'Rom', testament: 'NT', canonicalOrder: 45, chapters: chaptersOf([5, 5, 5, 5, 5]) },
+].map((book) => ({ ...book, chapterCount: book.chapters.length }));
+
+const VERSE_TEXTS = [
+    'In the beginning was the Word, and the Word was with God.',
+    'He came to Jesus by night and said to him, Rabbi, we know that you are a teacher come from God.',
+    'The wind blows where it wishes, and you hear its sound.',
+    'For God so loved the world, that he gave his only Son.',
+    'Whoever believes in him is not condemned.',
+];
+
+const chapterPayload = (book, number) => {
+    const chapter = book.chapters[number - 1];
+    const before = BOOKS.slice(0, BOOKS.indexOf(book)).reduce((n, b) => n + b.chapters.reduce((m, c) => m + c.verseCount, 0), 0)
+        + book.chapters.slice(0, number - 1).reduce((n, c) => n + c.verseCount, 0);
+    const verses = Array.from({ length: chapter.verseCount }, (_, i) => ({
+        id: before + i + 1,
+        verseIndex: before + i + 1,
+        verse: i + 1,
+        text: VERSE_TEXTS[i % VERSE_TEXTS.length],
+    }));
+    return {
+        book: { id: book.id, name: book.name },
+        chapter: { number, verseCount: chapter.verseCount, startIndex: before + 1, endIndex: before + verses.length },
+        verses,
+        references: [],
+    };
+};
 
 const keys = [
     { id: 1, name: 'My GPT', hint: 'a1b2', createdAt: '2026-10-02T15:04:00.000Z', lastUsedAt: '2026-11-17T09:30:00.000Z' },
@@ -78,6 +114,29 @@ const createFixtureApi = () => {
         if (method === 'POST' && path === '/keys') {
             return { status: 201, body: { key: { ...keys[0], id: 3, name: body.name }, secret: NEW_KEY_SECRET } };
         }
+        if (method === 'GET' && path === '/books') return { status: 200, body: { books: BOOKS } };
+
+        const chapterMatch = path.match(/^\/chapter\/(\d+)\/(\d+)$/);
+        if (method === 'GET' && chapterMatch) {
+            const book = BOOKS.find((b) => b.id === Number(chapterMatch[1]));
+            const number = Number(chapterMatch[2]);
+            return book && number >= 1 && number <= book.chapterCount
+                ? { status: 200, body: chapterPayload(book, number) }
+                : { status: 404, body: { error: 'Chapter not found' } };
+        }
+        if (method === 'GET' && path.startsWith('/notes?')) return { status: 200, body: { notes: [], unreferenced: [] } };
+        if (method === 'GET' && path === '/ideas') return { status: 200, body: { ideas: [] } };
+        if (method === 'GET' && path.startsWith('/chapter-ideas?')) return { status: 200, body: { ideas: [] } };
+        if (path === '/user/location') return { status: 200, body: { location: null } };
+
+        const coveringMatch = path.match(/^\/scrolls\/covering\?book=(\d+)&chapter=(\d+)$/);
+        if (method === 'GET' && coveringMatch) {
+            const [bookId, chapter] = [Number(coveringMatch[1]), Number(coveringMatch[2])];
+            const covering = scrolls.find(({ passage }) => passage.bookId === bookId
+                && passage.startChapter <= chapter && chapter <= passage.endChapter);
+            return { status: 200, body: { scroll: covering ? toSummary(covering) : null } };
+        }
+
         if (method === 'GET' && path === '/scrolls') return { status: 200, body: { scrolls: scrolls.map(toSummary) } };
 
         const scrollMatch = path.match(/^\/scrolls\/(\d+)$/);
