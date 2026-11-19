@@ -8,6 +8,8 @@ import PostRegisterPage from './components/Authentication/PostRegisterPage';
 import Analyze from './components/Analyze/Analyze';
 import SearchPage from './components/Search/SearchPage';
 import Thoughts from './components/Thoughts/Thoughts';
+import ScrollsPage from './components/Scrolls/ScrollsPage';
+import Settings from './components/Settings/Settings';
 
 import ProtectedRoute from './config/ProtectedRoute';
 import UnprotectedRoute from './config/UnprotectedRoute';
@@ -56,6 +58,13 @@ const routes = [
     // the same two tiers — one to create, one to file, one to read. The server
     // routes they ran on are unchanged and this page runs on them.
     { path: '/thoughts', element: <ProtectedRoute><Thoughts /></ProtectedRoute> },
+
+    // The AI-written study documents, read and answered here. Which scroll is
+    // open lives in the query string, e.g. /scrolls?scroll=3
+    { path: '/scrolls', element: <ProtectedRoute><ScrollsPage /></ProtectedRoute> },
+
+    // Account settings: the API keys the user's AI writes scrolls with.
+    { path: '/settings', element: <ProtectedRoute><Settings /></ProtectedRoute> },
 
     // Anything else, including /dashboard — the page that used to sit between
     // the login and the work. Without this the router matches nothing and

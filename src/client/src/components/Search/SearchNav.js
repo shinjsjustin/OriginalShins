@@ -10,6 +10,7 @@ const SECTION_LINKS = [
     { path: '/thoughts', label: 'Thoughts' },
     { path: '/search', label: 'Search' },
     { path: '/analyze', label: 'Analyze' },
+    { path: '/scrolls', label: 'Scrolls' },
 ];
 
 const SearchNav = ({ current }) => (
