@@ -1438,3 +1438,40 @@
     border-color: var(--gold-lit);
   }
 }
+
+/* The left slot's Compare | Scrolls switch. */
+.analyze-left-switch {
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.analyze-left-switch button {
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border: 0;
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.analyze-left-switch button[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--text-white);
+}
+
+.analyze-scrolls-panel .analyze-panel-body {
+  padding: var(--space-sm);
+}
+
+.analyze-scrolls-panel .analyze-panel-action {
+  margin-bottom: var(--space-sm);
+}
+
+@media (max-width: 600px) {
+  .analyze-left-switch button {
+    min-height: 40px;
+  }
+}

@@ -284,6 +284,15 @@ const scopedList = (url, kind) => {
 // Records every request so the tests can assert on the exact body a click sent.
 let requests;
 
+const scrollSummary = {
+    id: 5,
+    title: 'Shepherd study',
+    createdAt: '2026-01-02T00:00:00Z',
+    questionCount: 0,
+    answeredCount: 0,
+    passage: { bookId: 43, bookName: 'John', startChapter: 10, startVerse: 1, endChapter: 10, endVerse: null },
+};
+
 const handleRequest = (url, options = {}) => {
     const method = options.method || 'GET';
     const body = options.body ? JSON.parse(options.body) : undefined;
@@ -399,6 +408,13 @@ const handleRequest = (url, options = {}) => {
         return noContent();
     }
 
+    if (/\/scrolls\/covering\?/.test(url)) {
+        return jsonResponse({ scroll: null });
+    }
+    if (/\/scrolls$/.test(url)) {
+        return jsonResponse({ scrolls: [scrollSummary] });
+    }
+
     return notFound();
 };
 
@@ -470,6 +486,10 @@ const renderAnalyzeWithHistory = (initialEntry = '/analyze') => {
 const panel = (name) => screen.getByRole('region', { name });
 
 // Waits for both scripture panels to have painted their chapter text.
+const waitForPanels2 = async () => {
+    await waitFor(() => expect(screen.getByRole('region', { name: 'Scrolls' })).toBeInTheDocument());
+};
+
 const waitForPanels = async () => {
     await waitFor(() => {
         expect(panel('Passage').querySelectorAll('.analyze-verse').length).toBeGreaterThan(0);
@@ -794,6 +814,40 @@ describe('Collapsing the side panels', () => {
         // Which panels are open is how one reader has arranged the room, not
         // part of the passage a shared link is about.
         expect(screen.getByTestId('search').textContent).toBe('?l=1.1&r=40.1');
+    });
+});
+
+describe('The left slot', () => {
+    test('shows Compare and asks for no scrolls until Scrolls is chosen', async () => {
+        await renderAnalyze();
+        await waitForPanels();
+
+        expect(requestsMatching(request => request.url.includes('/scrolls'))).toHaveLength(0);
+        expect(within(panel('Compare')).getByRole('button', { name: 'Compare' }))
+            .toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('Scrolls swaps the compare panel for the list, and Compare swaps it back', async () => {
+        await renderAnalyze();
+        await waitForPanels();
+
+        await clickAndSettle(within(panel('Compare')).getByRole('button', { name: 'Scrolls' }));
+
+        expect(screen.getByTestId('search').textContent).toContain('side=scrolls');
+        expect(screen.queryByRole('region', { name: 'Compare' })).toBeNull();
+        await waitFor(() => expect(within(panel('Scrolls')).getByText('Shepherd study')).toBeInTheDocument());
+        expect(within(panel('Scrolls')).getByText('John 10')).toBeInTheDocument();
+
+        await clickAndSettle(within(panel('Scrolls')).getByRole('button', { name: 'Compare' }));
+        await waitFor(() => expect(titleOf('Compare')).toBe('Matthew 1'));
+    });
+
+    test('a collapsed Scrolls panel leaves a spine named Scrolls', async () => {
+        await renderAnalyze('/analyze?l=1.1&r=40.1&side=scrolls');
+        await waitForPanels2();
+
+        await clickAndSettle(within(panel('Scrolls')).getByRole('button', { name: 'Hide Scrolls' }));
+        expect(screen.getByRole('button', { name: 'Show Scrolls' })).toBeInTheDocument();
     });
 });
 

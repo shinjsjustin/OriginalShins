@@ -4,6 +4,9 @@ import Navbar from '../Navbar';
 import ScripturePanel from './ScripturePanel';
 import NotesPanel from './NotesPanel';
 import PanelSpine from './PanelSpine';
+import ScrollsPanel from './ScrollsPanel';
+import LeftPanelSwitch from './LeftPanelSwitch';
+import useLeftPanel from './useLeftPanel';
 import PanelSwitcher from './PanelSwitcher';
 import usePhoneLayout from './usePhoneLayout';
 import { DEFAULT_PHONE_PANEL, nextPhonePanel } from './phonePanel';
@@ -22,6 +25,7 @@ import useReaderMode from './useReaderMode';
 import { describePosition, stepChapter } from './navigation';
 import { NOTE_PARAM } from './panelParams';
 import '../Styling/Analyze.css';
+import '../Styling/Scrolls.css';
 
 // The Analyze page: one passage in the centre with a second to compare it
 // against on the left and everything written about it on the right.
@@ -341,7 +345,12 @@ const Analyze = () => {
         isPaused: isPreparing,
     });
 
-    const compareLabel = 'Compare';
+    const { side, showScrolls, showCompare } = useLeftPanel();
+    const isScrollsSide = side === 'scrolls';
+    const leftSwitch = (
+        <LeftPanelSwitch side={side} onShowCompare={showCompare} onShowScrolls={showScrolls} />
+    );
+    const compareLabel = isScrollsSide ? 'Scrolls' : 'Compare';
     const primaryLabel = 'Passage';
 
     return (
@@ -399,12 +408,21 @@ const Analyze = () => {
                         <PanelSpine
                             side="left"
                             label={compareLabel}
-                            caption={describePosition(books, compare)}
+                            caption={describePosition(books, isScrollsSide ? primary : compare)}
                             onExpand={() => toggleCollapsed('compare')}
+                        />
+                    ) : isScrollsSide ? (
+                        <ScrollsPanel
+                            position={primary}
+                            books={books}
+                            collapse={isPhone ? null : { side: 'left', onCollapse: () => toggleCollapsed('compare') }}
+                            isHidden={isPhone && phonePanel !== 'compare'}
+                            switcher={leftSwitch}
                         />
                     ) : (
                         <ScripturePanel
                             label={compareLabel}
+                            headerAction={leftSwitch}
                             collapse={isPhone ? null : { side: 'left', onCollapse: () => toggleCollapsed('compare') }}
                             isHidden={isPhone && phonePanel !== 'compare'}
                             books={books}

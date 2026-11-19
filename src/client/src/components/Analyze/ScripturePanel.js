@@ -37,6 +37,7 @@ const ScripturePanel = ({
     selectedVerseIndexes,
     onToggleVerse,
     onOpenReader = null,
+    headerAction = null,
 }) => {
     const bodyRef = useRef(null);
 
@@ -70,10 +71,15 @@ const ScripturePanel = ({
     return (
         <section className={panelClassName} aria-label={label} hidden={isHidden}>
             <PanelHeader label={label} title={heading} collapse={collapse}
-                action={onOpenReader && (
-                    <button type="button" className="analyze-panel-action" onClick={onOpenReader}>
-                        Full screen
-                    </button>
+                action={(headerAction || onOpenReader) && (
+                    <>
+                        {headerAction}
+                        {onOpenReader && (
+                            <button type="button" className="analyze-panel-action" onClick={onOpenReader}>
+                                Full screen
+                            </button>
+                        )}
+                    </>
                 )}
             />
 
