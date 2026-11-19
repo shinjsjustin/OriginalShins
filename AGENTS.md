@@ -97,6 +97,8 @@ BibleApp/
         └── orderingErrors.js       # ordering results -> HTTP, shared by three routers
     └── client/                     # React app (Create React App)
         ├── package.json
+        ├── scripts/
+        │   └── render-shots.js     # CLI: headless screenshots of a build against a fixture API
         ├── .env.example            # REACT_APP_URL
         └── src/
             ├── index.js            # ReactDOM root + App + BrowserRouter
@@ -200,6 +202,17 @@ BibleApp/
                 │   ├── useCanvasSize.js    # The measured pixel size a layout is given
                 │   ├── useImportCorpus.js  # The import picker's own book-scoped topics + ideas read
                 │   └── Bubbles.css         # The overlay shell + cluster geometry; cards styled by Thoughts.css
+                ├── Settings/           # /settings — the API keys the user's AI writes scrolls with
+                │   ├── Settings.js         # Page: create a key, see its secret once, revoke
+                │   └── useApiKeys.js       # /api/keys list, create and delete
+                ├── Scrolls/            # /scrolls — the AI-written study documents
+                │   ├── ScrollsPage.js      # Page shell: the list, newest first, one open inline
+                │   ├── ScrollView.js       # One scroll with its blocks; takes a scrollId so Analyze can host it later
+                │   ├── ScrollBlock.js      # One block; a question carries the answer box and Save
+                │   ├── scrollModel.js      # Pure: labels and shaping for scrolls and blocks
+                │   ├── useScrolls.js       # GET /api/scrolls
+                │   ├── useScroll.js        # One scroll + saving an answer
+                │   └── useOpenScroll.js    # Reads/writes ?scroll= — which scroll is open
                 ├── Search/             # /search — one box across all four tiers
                 │   ├── SearchPage.js       # Page shell: the input and the states
                 │   ├── SearchGroup.js      # One heading + its rows, all links
@@ -214,6 +227,8 @@ BibleApp/
                     ├── Books.css       # BookGrid's own rules, ported from Analyze.css's book-picker block
                     ├── Analyze.css     # Analyze page panels, footers, modals
                     ├── Search.css      # Search page: the box, the nav, the result groups
+                    ├── Settings.css    # Settings page: key form, key list, the one-time secret
+                    ├── Scrolls.css     # Scrolls page: the list, the open scroll, the block kinds
                     └── Thoughts.css    # The canvas, the cards, the fan and orbit, the pinned panel
 ```
 
@@ -1226,6 +1241,19 @@ No site route edits or deletes a block: users answer, the AI writes.
 | `POST /` | `{ name }`; 201 with `{ key, secret }`, the secret shown once |
 | `DELETE /:id` | Revokes; 204, or 404 for a key that is not the caller's |
 
+### On the site
+
+- `/scrolls` lists the caller's scrolls, newest first. `?scroll=<id>` opens one
+  inline; `useOpenScroll` owns that param like `useThoughtsView` owns `?idea=`.
+  Opening pushes, so Back closes it, and a value that is not a positive integer
+  means nothing is open rather than an error.
+- A question is answered in its box and saved with **Save**. Saving a blank
+  answer clears it.
+- `ScrollView` takes a `scrollId` rather than reading the URL, so Analyze can
+  host it later without changes.
+- `/settings` creates keys, shows the secret once, and revokes a key. Delete and
+  revoke use the two-press `ConfirmButton`.
+
 ---
 
 ## Search
@@ -1425,6 +1453,17 @@ group has to rank a title hit above a body hit. A fixed payload would let the
 page pass while the query it sent was wrong — and the query is half of what that
 page does. It runs on fake timers, because the debounce is the other half:
 "five keystrokes, one request" is an assertion about time.
+
+### Render shots
+
+```bash
+node src/client/scripts/render-shots.js p2
+```
+
+Takes headless screenshots of the Settings and Scrolls pages at phone and
+desktop sizes; the shots land in the phase's `shots_dir`. It serves a client
+build against a **fixture API** with a fake token, not the live server, so it
+proves layout and not the server.
 
 ```bash
 npm run test:server    # node --test over src/lib, src/routes, src/middleware
