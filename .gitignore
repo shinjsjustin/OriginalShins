@@ -13,3 +13,4 @@ build/
 .superpowers/
 coverage/
 .claude/settings.local.json
+render-shots/
