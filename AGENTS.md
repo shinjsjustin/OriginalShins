@@ -154,6 +154,11 @@ BibleApp/
                 │   ├── usePhoneLayout.js   # Whether the viewport is phone-width (matchMedia, PHONE_QUERY)
                 │   ├── phonePanel.js       # Pure: nextPhonePanel, which panel a phone jump lands on
                 │   ├── PanelSwitcher.js    # Phone-only bottom bar: Compare | Passage | Notes
+                │   ├── leftPanel.js        # Pure: parseLeftPanel (?side= value) and scrollsPanelView (covering scroll, else list)
+                │   ├── useLeftPanel.js     # Reads/writes ?side=; both writes replace history
+                │   ├── useCoveringScroll.js# GET /api/scrolls/covering for the centre chapter; no request while disabled
+                │   ├── ScrollsPanel.js     # The left slot's Scrolls side: the covering scroll, else the list
+                │   ├── LeftPanelSwitch.js  # Compare | Scrolls toggle for the left slot
                 │   ├── useNotes.js         # The chapter's notes + every write
                 │   ├── useCollection.js    # One list + its fetch/revision plumbing
                 │   ├── useIdeas.js         # /api/ideas + PUT :id/topics
@@ -207,7 +212,7 @@ BibleApp/
                 │   └── useApiKeys.js       # /api/keys list, create and delete
                 ├── Scrolls/            # /scrolls — the AI-written study documents
                 │   ├── ScrollsPage.js      # Page shell: the list, newest first, one open inline
-                │   ├── ScrollView.js       # One scroll with its blocks; takes a scrollId so Analyze can host it later
+                │   ├── ScrollView.js       # One scroll with its blocks; takes a scrollId so Analyze can host it
                 │   ├── ScrollBlock.js      # One block; a question carries the answer box and Save
                 │   ├── scrollModel.js      # Pure: labels and shaping for scrolls and blocks
                 │   ├── useScrolls.js       # GET /api/scrolls
@@ -448,6 +453,24 @@ verses to pick are.
 jsdom has no `window.matchMedia`, so `usePhoneLayout` reports desktop when it is
 missing. Existing tests therefore stay on the desktop tree unless a test stubs
 `matchMedia` to ask for the phone one.
+
+### The left panel holds Compare or Scrolls
+
+`?side=scrolls` (`SIDE_PARAM` in `panelParams.js`) swaps the left slot from the
+compare passage to the Scrolls panel. `useLeftPanel` reads and writes it, and
+both writes **replace** history: the slot is how the reader has arranged the
+room, not somewhere they navigated to. No `?side=` means Compare, and `?r=` is
+kept while Scrolls shows, so switching back returns to the same compare
+passage. The saved location is untouched.
+
+Scrolls opens the scroll covering the centre chapter, asked of
+`GET /api/scrolls/covering` by `useCoveringScroll`; with none, it shows the
+list. A scroll picked from the list opens in place and stays until the centre
+chapter changes. `leftPanel.js` decides which of those to show.
+`ScrollsPanel` hosts `ScrollView` unchanged.
+
+On a phone the switcher's Compare slot holds the same switch
+(`LeftPanelSwitch`), so Compare and Scrolls share that one slot.
 
 ### Full-screen reader
 
@@ -1249,8 +1272,8 @@ No site route edits or deletes a block: users answer, the AI writes.
   means nothing is open rather than an error.
 - A question is answered in its box and saved with **Save**. Saving a blank
   answer clears it.
-- `ScrollView` takes a `scrollId` rather than reading the URL, so Analyze can
-  host it later without changes.
+- `ScrollView` takes a `scrollId` rather than reading the URL, so Analyze now
+  hosts it in its left panel (`?side=scrolls`) without changes.
 - `/settings` creates keys, shows the secret once, and revokes a key. Delete and
   revoke use the two-press `ConfirmButton`.
 
