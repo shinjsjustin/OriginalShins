@@ -1,0 +1,114 @@
+/* /scrolls: the list and the expanded scroll. Tokens only; the page shell
+   comes from Search.css. */
+
+.scrolls-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.scrolls-item {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+}
+
+.scrolls-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--space-xs);
+  color: var(--text-white);
+  cursor: pointer;
+}
+
+.scrolls-row-title {
+  font-size: var(--font-md);
+}
+
+.scrolls-row-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+
+.scrolls-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-xs);
+}
+
+.scrolls-block {
+  background-color: var(--bg-alt);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.scrolls-block-kind {
+  margin: 0 0 var(--space-xs);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  text-transform: uppercase;
+}
+
+.scrolls-block-reference {
+  margin: 0 0 var(--space-xs);
+  color: var(--text-white);
+  font-weight: bold;
+}
+
+.scrolls-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.scrolls-answer-input {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  font-size: var(--font-base);
+  font-family: inherit;
+}
+
+.scrolls-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.scrolls-status {
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.scrolls-status--error,
+.scrolls-message--error {
+  color: var(--color-danger);
+}
+
+.scrolls-message {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.scrolls-delete {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
