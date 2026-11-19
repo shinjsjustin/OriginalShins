@@ -17,6 +17,9 @@ const chapterIdeaRoutes = require('./routes/chapterIdeas');
 const searchRoutes = require('./routes/search');
 const pinRoutes = require('./routes/pins');
 const { createBourneRouter } = require('./routes/bourne');
+const { createApiKeysRouter } = require('./routes/apiKeys');
+const { createScrollsRouter } = require('./routes/scrolls');
+const { createAgentRouter } = require('./routes/agent');
 // TODO: Import additional route files here as you build out the app:
 //   const itemRoutes = require('./routes/item');
 
@@ -93,6 +96,12 @@ app.use('/api/pins', isAuth, pinRoutes);
 
 // Bourne's read-only API, behind its own static key rather than a JWT.
 app.use('/api/bourne', isReadKey, createBourneRouter());
+
+// Scrolls: the site's side behind a JWT, the AI's side behind a per-user API
+// key checked inside the agent router, so it takes no isAuth.
+app.use('/api/keys', isAuth, createApiKeysRouter());
+app.use('/api/scrolls', isAuth, createScrollsRouter());
+app.use('/api/agent', createAgentRouter());
 // TODO: Add more protected route groups here:
 //   app.use('/api/items', isAuth, itemRoutes);
 
