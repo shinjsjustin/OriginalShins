@@ -154,3 +154,20 @@ test('PUT answer with an empty string clears the answer to null, as the client s
         assert.deepStrictEqual(saved, [[7, 9, null]]);
     });
 });
+
+test('the covering URL the client sends works through the router mounted as server.js does', async () => {
+    const bodyParser = require('body-parser');
+    const app = express();
+    app.use(bodyParser.json());
+    app.use((req, res, next) => { req.user = { id: 7 }; next(); });
+    app.use('/api/scrolls', createScrollsRouter({ findScrolls: async () => [SUMMARY] }));
+    const server = await new Promise((resolve) => { const s = app.listen(0, () => resolve(s)); });
+    try {
+        // The path useCoveringScroll passes to fetchJson, under the /api base.
+        const res = await fetch(`http://127.0.0.1:${server.address().port}/api/scrolls/covering?book=43&chapter=3`);
+        assert.strictEqual(res.status, 200);
+        assert.deepStrictEqual(await res.json(), { scroll: SUMMARY });
+    } finally {
+        await new Promise((resolve) => server.close(resolve));
+    }
+});
